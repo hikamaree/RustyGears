@@ -15,25 +15,35 @@ use tobj;
 use super::mesh::{ Mesh, Texture, Vertex };
 use super::shader::Shader;
 
-#[derive(Default)]
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub textures_loaded: Vec<Texture>,
     directory: String,
+    position: Vector3<f32>
 }
 
 impl Model {
-    pub fn new(path: &str) -> Model {
+    fn default() -> Self {
+        Self {
+            meshes: Vec::default(),
+            textures_loaded: Vec::default(),
+            directory: String::default(),
+            position: vec3(0.0, 0.0, 0.0)
+        }
+    }
+
+    pub fn new(path: &str, position: Vector3<f32>) -> Model {
         let mut model = Model::default();
         model.loadModel(path);
+        model.position = position;
         model
     }
 
-    pub fn Draw(&self, shader: &Shader, position: Vector3<f32>) {
-        let mmodel = Matrix4::from_translation(position);
-        unsafe {
-            shader.setMat4(c_str!("model"), &mmodel);
+    pub fn Draw(&self, shader: &Shader) {
+        let mmodel = Matrix4::from_translation(self.position);
+        shader.setMat4(c_str!("model"), &mmodel);
 
+        unsafe {
             for mesh in &self.meshes {
                 mesh.Draw(shader);
             }

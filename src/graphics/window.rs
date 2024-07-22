@@ -49,6 +49,11 @@ impl Window {
         self.window_handle.swap_buffers();
     }
 
+    pub fn get_size(&self) -> (u32, u32) {
+        let (width, height) = self.window_handle.get_framebuffer_size();
+        (width as u32, height as u32)
+    }
+
     pub fn clear(r: f32, g: f32, b: f32, a: f32) {
         unsafe {
             gl::ClearColor(r, g, b, a);

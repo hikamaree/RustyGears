@@ -1,17 +1,8 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_snake_case)]
-
-extern crate gl;
-use std::ffi::CStr;
-
 use rusty_gears::*;
-
-
-use cgmath::{Matrix4, vec3,  Deg, perspective, Point3};
-
 
 const SCR_WIDTH: u32 = 1280;
 const SCR_HEIGHT: u32 = 720;
+
 
 pub fn main() {
     let mut camera = Camera {
@@ -19,33 +10,36 @@ pub fn main() {
         ..Camera::default()
     };
 
-    let mut lastX: f32 = SCR_WIDTH as f32 / 2.0;
-    let mut lastY: f32 = SCR_HEIGHT as f32 / 2.0;
+    let mut last_x: f32 = SCR_WIDTH as f32 / 2.0;
+    let mut last_y: f32 = SCR_HEIGHT as f32 / 2.0;
 
     let mut window = Window::new(SCR_WIDTH, SCR_HEIGHT, "RustyGears");
 
     let shader = Shader::new("shaders/vertex_shader.vs", "shaders/fragment_shader.fs");
+    let depth_shader = Shader::new("shaders/depth_shader.vs", "shaders/depth_shader.fs");
 
-    let cube = Model::new("resources/models/block/block.obj");
+    let ambient_light = AmbientLight::new(vec3(0.2, 0.2, 0.2), 1.0);
+    let light_source = LightSource::new(vec3(1.2, 1.0, 2.0), vec3(1.0, 1.0, 1.0), 1.0);
+
+    let cube = Model::new("resources/models/block/block.obj", vec3(0.0, 0.0, 0.0));
+
+    let mut scene = Scene::new();
+    scene.add_model(cube);
+    scene.add_light_source(light_source);
+    scene.set_ambient_light(ambient_light);
+
+    let shadow_map = ShadowMap::new(scene.light_sources.len());
 
     while !window.should_close() {
-        window.process_events(&mut lastX, &mut lastY, &mut camera);
-
-        window.process_input(&mut camera);
+        let (width, height) = window.get_size();
 
         Window::clear(0.2, 0.2, 0.2, 1.0);
+        window.process_events(&mut last_x, &mut last_y, &mut camera);
+        window.process_input(&mut camera);
 
-        unsafe {
-            shader.useProgram();
+        scene.render_depth_map(&depth_shader, &shadow_map);
 
-            let projection: Matrix4<f32> = perspective(Deg(camera.Zoom), SCR_WIDTH as f32 / SCR_HEIGHT as f32 , 0.1, 100.0);
-            shader.setMat4(c_str!("projection"), &projection);
-
-            let view = camera.GetViewMatrix();
-            shader.setMat4(c_str!("view"), &view);
-
-            cube.Draw(&shader, vec3(0.0, 0.0, 0.0));
-        }
+        scene.render(&shader, &camera, &shadow_map.textures, width, height);
 
         window.update();
     }
