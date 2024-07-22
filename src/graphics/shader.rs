@@ -102,20 +102,22 @@ impl Shader {
             gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut success);
             if success != gl::TRUE as GLint {
                 gl::GetShaderInfoLog(shader, 1024, ptr::null_mut(), infoLog.as_mut_ptr() as *mut GLchar);
+                let log = CStr::from_ptr(infoLog.as_ptr());
                 println!("ERROR::SHADER_COMPILATION_ERROR of type: {}\n{}\n \
                           -- --------------------------------------------------- -- ",
                           type_,
-                          str::from_utf8(&infoLog).unwrap());
+                          log.to_string_lossy());
             }
 
         } else {
             gl::GetProgramiv(shader, gl::LINK_STATUS, &mut success);
             if success != gl::TRUE as GLint {
                 gl::GetProgramInfoLog(shader, 1024, ptr::null_mut(), infoLog.as_mut_ptr() as *mut GLchar);
+                let log = CStr::from_ptr(infoLog.as_ptr());
                 println!("ERROR::PROGRAM_LINKING_ERROR of type: {}\n{}\n \
                           -- --------------------------------------------------- -- ",
                           type_,
-                          str::from_utf8(&infoLog).unwrap());
+                          log.to_string_lossy());
             }
         }
     }
