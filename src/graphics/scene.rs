@@ -6,6 +6,7 @@ pub struct Scene {
     pub ambient_light: Option<AmbientLight>,
     pub light_sources: Vec<LightSource>,
     pub light_space_matrices: Vec<Matrix4<f32>>,
+    pub shadow_map: ShadowMap
 }
 
 impl Scene {
@@ -15,6 +16,7 @@ impl Scene {
             ambient_light: None,
             light_sources: Vec::new(),
             light_space_matrices: Vec::new(),
+            shadow_map: ShadowMap::new(0)
         }
     }
 
@@ -29,6 +31,7 @@ impl Scene {
     pub fn add_light_source(&mut self, light_source: LightSource) {
         self.light_sources.push(light_source);
         self.light_space_matrices.push(Matrix4::identity());
+        self.shadow_map = ShadowMap::new(self.light_sources.len());
     }
 
     pub fn update_light_space_matrices(&mut self) {
@@ -56,15 +59,15 @@ impl Scene {
     }
 
 
-    pub fn render_depth_map(&mut self, depth_shader: &Shader, shadow_map: &ShadowMap) {
+    pub fn render_depth_map(&mut self, depth_shader: &Shader) {
         self.update_light_space_matrices();
         unsafe {
             gl::Viewport(0, 0, 1024, 1024);
         }
         for (i, light_space_matrix) in self.light_space_matrices.iter().enumerate() {
             unsafe {
-                gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_map.fbo);
-                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, shadow_map.textures[i], 0);
+                gl::BindFramebuffer(gl::FRAMEBUFFER, self.shadow_map.fbo);
+                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, self.shadow_map.textures[i], 0);
                 gl::Clear(gl::DEPTH_BUFFER_BIT);
             }
             depth_shader.useProgram();
@@ -77,14 +80,14 @@ impl Scene {
         }
     }
 
-    pub fn render(&self, shader: &Shader, camera: &Camera, shadow_map_textures: &[u32], scr_width: u32, scr_height: u32) {
+    pub fn render(&self, shader: &Shader, camera: &Camera, (width, height): (u32, u32)) {
         unsafe {
-            gl::Viewport(0, 0, scr_width as i32, scr_height as i32);
+            gl::Viewport(0, 0, width as i32, height as i32);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
         shader.useProgram();
 
-        let projection: Matrix4<f32> = perspective(Deg(camera.Zoom), scr_width as f32 / scr_height as f32, 0.1, 100.0);
+        let projection: Matrix4<f32> = perspective(Deg(camera.Zoom), width as f32 / height as f32, 0.1, 100.0);
         shader.setMat4(c_str!("projection"), &projection);
 
         let view = camera.GetViewMatrix();
@@ -97,7 +100,7 @@ impl Scene {
             let uniform_name = CString::new(format!("shadowMaps[{}]", i)).unwrap();
             unsafe {
                 gl::ActiveTexture(gl::TEXTURE1 + i as u32);
-                gl::BindTexture(gl::TEXTURE_2D, shadow_map_textures[i]);
+                gl::BindTexture(gl::TEXTURE_2D, self.shadow_map.textures[i]);
             }
             shader.setInt(&uniform_name, 1 + i as i32);
         }

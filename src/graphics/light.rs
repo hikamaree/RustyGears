@@ -66,31 +66,32 @@ impl ShadowMap {
         };
 
         unsafe {
-            gl::GenFramebuffers(1, &mut shadow_map.fbo);
+            if num_light_sources > 0 {
+                gl::GenFramebuffers(1, &mut shadow_map.fbo);
 
-            for _ in 0..num_light_sources {
-                let mut texture: u32 = 0;
-                gl::GenTextures(1, &mut texture);
-                gl::BindTexture(gl::TEXTURE_2D, texture);
-                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH_COMPONENT as i32, shadow_map.width,
-                    shadow_map.height, 0, gl::DEPTH_COMPONENT, gl::FLOAT, std::ptr::null(),);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_BORDER as i32);
-                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_BORDER as i32);
-                let border_color: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-                gl::TexParameterfv(gl::TEXTURE_2D, gl::TEXTURE_BORDER_COLOR, border_color.as_ptr());
+                for _ in 0..num_light_sources {
+                    let mut texture: u32 = 0;
+                    gl::GenTextures(1, &mut texture);
+                    gl::BindTexture(gl::TEXTURE_2D, texture);
+                    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH_COMPONENT as i32, shadow_map.width,
+                        shadow_map.height, 0, gl::DEPTH_COMPONENT, gl::FLOAT, std::ptr::null(),);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_BORDER as i32);
+                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_BORDER as i32);
+                    let border_color: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+                    gl::TexParameterfv(gl::TEXTURE_2D, gl::TEXTURE_BORDER_COLOR, border_color.as_ptr());
 
-                shadow_map.textures.push(texture);
+                    shadow_map.textures.push(texture);
+                }
+
+                gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_map.fbo);
+                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, shadow_map.textures[0], 0);
+                gl::DrawBuffer(gl::NONE);
+                gl::ReadBuffer(gl::NONE);
+                gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
             }
-
-            gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_map.fbo);
-            gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, shadow_map.textures[0], 0);
-            gl::DrawBuffer(gl::NONE);
-            gl::ReadBuffer(gl::NONE);
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
         }
-
         shadow_map
     }
 }
