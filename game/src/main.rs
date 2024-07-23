@@ -17,18 +17,25 @@ pub fn main() {
     let shader = Shader::new("shaders/vertex_shader.vs", "shaders/fragment_shader.fs");
     let depth_shader = Shader::new("shaders/depth_shader.vs", "shaders/depth_shader.fs");
 
-    let ambient_light = AmbientLight::new(vec3(0.2, 0.2, 0.2), 1.0);
-    let light_source = LightSource::new(vec3(1.2, 1.0, 2.0), vec3(0.0, 1.0, 1.0), 2.0);
+    let ambient_light = AmbientLight::new(vec3(0.2, 0.2, 0.2), 1.5);
+    let light_source1 = LightSource::new(vec3(2.0, 2.0, 2.0), vec3(1.0, 1.0, 1.0), 1.0);
+    let light_source2 = LightSource::new(vec3(-2.0, -2.0, -2.0), vec3(1.0, 1.0, 1.0), 1.0);
 
-    let cube = Model::new("resources/models/block/block.obj", vec3(0.0, 0.0, 0.0));
+    let big_block = Model::new("resources/models/big_block/big_block.obj", vec3(0.0, 0.0, 0.0));
+    let ball = Model::new("resources/models/ball/ball.obj", vec3(0.0, 0.0, 0.0));
+
+    let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.1);
 
     let mut scene = Scene::new();
-    scene.add_model(cube);
-    scene.add_light_source(light_source);
+    scene.add_model(big_block);
+    scene.add_model(ball);
+    scene.add_light_source(light_source1);
+    scene.add_light_source(light_source2);
     scene.set_ambient_light(ambient_light);
+    scene.set_fog(fog);
 
     while !window.should_close() {
-        Window::clear(0.2, 0.2, 0.2, 1.0);
+        Window::clear(0.1, 0.1, 0.1, 1.0);
         window.process_events(&mut last_x, &mut last_y, &mut camera);
         window.process_input(&mut camera);
 

@@ -6,7 +6,8 @@ pub struct Scene {
     pub ambient_light: Option<AmbientLight>,
     pub light_sources: Vec<LightSource>,
     pub light_space_matrices: Vec<Matrix4<f32>>,
-    pub shadow_map: ShadowMap
+    pub shadow_map: ShadowMap,
+    pub fog: Option<Fog>,
 }
 
 impl Scene {
@@ -16,7 +17,8 @@ impl Scene {
             ambient_light: None,
             light_sources: Vec::new(),
             light_space_matrices: Vec::new(),
-            shadow_map: ShadowMap::new(0)
+            shadow_map: ShadowMap::new(0),
+            fog: None,
         }
     }
 
@@ -26,6 +28,10 @@ impl Scene {
 
     pub fn set_ambient_light(&mut self, ambient_light: AmbientLight) {
         self.ambient_light = Some(ambient_light);
+    }
+
+    pub fn set_fog(&mut self, fog: Fog) {
+        self.fog = Some(fog);
     }
 
     pub fn add_light_source(&mut self, light_source: LightSource) {
@@ -55,9 +61,11 @@ impl Scene {
             for (i, light_source) in self.light_sources.iter().enumerate() {
                 light_source.apply(shader, i);
             }
+            if let Some(fog) = &self.fog {
+                fog.apply(shader);
+            }
         }
     }
-
 
     pub fn render_depth_map(&mut self, depth_shader: &Shader) {
         self.update_light_space_matrices();

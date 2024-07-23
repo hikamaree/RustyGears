@@ -1,4 +1,5 @@
 pub mod camera;
+pub mod fog;
 pub mod light;
 pub mod macros;
 pub mod mesh;
@@ -9,6 +10,7 @@ pub mod utils;
 pub mod window;
 
 pub use camera::*;
+pub use fog::*;
 pub use light::*;
 pub use mesh::*;
 pub use model::*;
