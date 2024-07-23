@@ -5,7 +5,3 @@ edition = "2021"
 
 [dependencies]
 rusty_gears = { path = "../" }
-glfw = "0.45.0"
-gl = "0.14.0"
-cgmath = "0.18.0"
-image = "0.19.0"
