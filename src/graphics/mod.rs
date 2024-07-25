@@ -1,7 +1,8 @@
+pub mod macros;
+
 pub mod camera;
 pub mod fog;
 pub mod light;
-pub mod macros;
 pub mod mesh;
 pub mod model;
 pub mod scene;
@@ -19,5 +20,5 @@ pub use shader::*;
 pub use utils::*;
 pub use window::*;
 
-pub use std::ffi::CStr;
 pub use cgmath::*;
+

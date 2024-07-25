@@ -1,5 +1,4 @@
-use cgmath::Vector3;
-use crate::{Shader, c_str};
+use super::*;
 use std::ffi::CStr;
 
 pub struct Fog {

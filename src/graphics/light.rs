@@ -2,6 +2,7 @@ use cgmath::*;
 use super::shader::*;
 use crate::*;
 use std::ffi::CString;
+use std::ffi::CStr;
 
 pub struct AmbientLight {
     pub color: Vector3<f32>,

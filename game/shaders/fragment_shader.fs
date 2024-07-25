@@ -6,6 +6,7 @@ in vec2 TexCoords;
 in vec4 FragPosLightSpace;
 in vec3 Normal;
 in vec3 FragPos;
+in vec4 Color;
 
 uniform sampler2D texture_diffuse1;
 uniform sampler2D shadowMaps[5];
@@ -52,7 +53,14 @@ void main() {
         lighting += (1.0 - shadow) * diffuse;
     }
 
-    vec3 color = lighting * texture(texture_diffuse1, TexCoords).rgb;
+	vec3 color = Color.rgb;
+    if (texture(texture_diffuse1, TexCoords).rgb != vec3(1.0, 1.0, 1.0)) {
+        color *= texture(texture_diffuse1, TexCoords).rgb;
+    }
+
+	color *= lighting;
+
+
 
     // Apply fog
     float distance = length(FragPos);
@@ -60,5 +68,5 @@ void main() {
     fogFactor = clamp(fogFactor, 0.0, 1.0);
     vec3 finalColor = mix(fog.color, color, fogFactor);
 
-    FragColor = vec4(finalColor, 1.0);
+    FragColor = vec4(finalColor, Color.a);
 }

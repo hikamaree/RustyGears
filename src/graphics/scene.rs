@@ -1,5 +1,6 @@
 use super::*;
 use std::ffi::CString;
+use std::ffi::CStr;
 
 pub struct Scene {
     pub models: Vec<Model>,

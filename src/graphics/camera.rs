@@ -9,21 +9,13 @@ type Point3 = cgmath::Point3<f32>;
 type Vector3 = cgmath::Vector3<f32>;
 type Matrix4 = cgmath::Matrix4<f32>;
 
-#[derive(PartialEq, Clone, Copy)]
-pub enum Camera_Movement {
-    FORWARD,
-    BACKWARD,
-    LEFT,
-    RIGHT,
-}
-use self::Camera_Movement::*;
-
 const YAW: f32 = -90.0;
 const PITCH: f32 = 0.0;
-const SPEED: f32 = 2.5;
+const SPEED: f32 = 4.0;
 const SENSITIVTY: f32 = 0.1;
 const ZOOM: f32 = 45.0;
 
+#[derive(Clone, Copy)]
 pub struct Camera {
     pub Position: Point3,
     pub Front: Vector3,
@@ -35,6 +27,8 @@ pub struct Camera {
     pub MovementSpeed: f32,
     pub MouseSensitivity: f32,
     pub Zoom: f32,
+    last_x: f32,
+    last_y: f32,
 }
 
 impl Default for Camera {
@@ -50,6 +44,8 @@ impl Default for Camera {
             MovementSpeed: SPEED,
             MouseSensitivity: SENSITIVTY,
             Zoom: ZOOM,
+            last_x: 0.0,
+            last_y: 0.0,
         };
         camera.updateCameraVectors();
         camera
@@ -61,25 +57,32 @@ impl Camera {
         Matrix4::look_at_rh(self.Position, self.Position + self.Front, self.Up)
     }
 
-    pub fn ProcessKeyboard(&mut self, direction: Camera_Movement, deltaTime: f32) {
-        let velocity = self.MovementSpeed * deltaTime;
-        if direction == FORWARD {
-            self.Position += self.Front * velocity;
-        }
-        if direction == BACKWARD {
-            self.Position += -(self.Front * velocity);
-        }
-        if direction == LEFT {
-            self.Position += -(self.Right * velocity);
-        }
-        if direction == RIGHT {
-            self.Position += self.Right * velocity;
-        }
+    pub fn move_forward(&mut self, delta_time: f32) {
+        let velocity = self.MovementSpeed * delta_time;
+        self.Position += self.Front * velocity;
     }
 
-    pub fn ProcessMouseMovement(&mut self, mut xoffset: f32, mut yoffset: f32, constrainPitch: bool) {
-        xoffset *= self.MouseSensitivity;
-        yoffset *= self.MouseSensitivity;
+    pub fn move_backward(&mut self, delta_time: f32) {
+        let velocity = self.MovementSpeed * delta_time;
+        self.Position += -(self.Front * velocity);
+    }
+
+    pub fn move_left(&mut self, delta_time: f32) {
+        let velocity = self.MovementSpeed * delta_time;
+        self.Position += -(self.Right * velocity);
+    }
+
+    pub fn move_right(&mut self, delta_time: f32) {
+        let velocity = self.MovementSpeed * delta_time;
+        self.Position += self.Right * velocity;
+    }
+
+    pub fn rotate(&mut self, xpos: f32, ypos: f32, constrainPitch: bool) {
+        let xoffset = (xpos - self.last_x) * self.MouseSensitivity;
+        let yoffset = (self.last_y - ypos) * self.MouseSensitivity;
+
+        self.last_x = xpos;
+        self.last_y = ypos;
 
         self.Yaw += xoffset;
         self.Pitch += yoffset;
@@ -96,7 +99,7 @@ impl Camera {
         self.updateCameraVectors();
     }
 
-    pub fn ProcessMouseScroll(&mut self, yoffset: f32) {
+    pub fn zoom(&mut self, yoffset: f32) {
         if self.Zoom >= 1.0 && self.Zoom <= 45.0 {
             self.Zoom -= yoffset;
         }
@@ -119,3 +122,4 @@ impl Camera {
         self.Up = self.Right.cross(self.Front).normalize();
     }
 }
+
