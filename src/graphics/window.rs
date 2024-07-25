@@ -1,13 +1,15 @@
-use glfw::{Action, Context, Key, WindowEvent};
+use glfw::{Context, WindowEvent};
 use std::sync::mpsc::Receiver;
-use super::camera::*;
-use super::camera::Camera_Movement::*;
+use super::utils::*;
 
 pub struct Window {
     glfw: glfw::Glfw,
     window_handle: glfw::Window,
     events: Receiver<(f64, WindowEvent)>,
-    last_frame: f32
+    last_frame: f32,
+    pub delta_time: f32,
+    cursor_pos: (f64, f64),
+    scroll_offset: (f64, f64),
 }
 
 impl Window {
@@ -26,17 +28,26 @@ impl Window {
         window.set_cursor_mode(glfw::CursorMode::Disabled);
         gl::load_with(|s| window.get_proc_address(s) as *const _);
 
-        let last_frame: f32 = 0.0;
-
         unsafe { 
             gl::Enable(gl::DEPTH_TEST);
+            /*
+               gl::Enable(gl::MULTISAMPLE);
+               gl::Enable(gl::BLEND);
+               gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+               gl::Enable(gl::STENCIL_TEST);
+               gl::StencilFunc(gl::ALWAYS, 1, 0xFF);
+               gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);
+               */
         }
 
         Window {
             glfw,
             window_handle: window,
             events,
-            last_frame
+            last_frame: 0.0,
+            delta_time: 0.0,
+            cursor_pos: (0.0, 0.0),
+            scroll_offset: (0.0, 0.0),
         }
     }
 
@@ -45,6 +56,25 @@ impl Window {
     }
 
     pub fn update(&mut self) {
+        let current_frame = self.glfw.get_time() as f32;
+        self.delta_time = current_frame - self.last_frame;
+        self.last_frame = current_frame;
+
+        for (_, event) in glfw::flush_messages(&self.events) {
+            match event {
+                WindowEvent::FramebufferSize(width, height) => {
+                    unsafe { gl::Viewport(0, 0, width, height) }
+                }
+                WindowEvent::CursorPos(xpos, ypos) => {
+                    self.cursor_pos = (xpos, ypos);
+                }
+                WindowEvent::Scroll(xoffset, yoffset) => {
+                    self.scroll_offset = (xoffset, yoffset);
+                }
+                _ => {}
+            }
+        }
+
         self.glfw.poll_events();
         self.window_handle.swap_buffers();
     }
@@ -61,52 +91,20 @@ impl Window {
         }
     }
 
-    pub fn process_input(&mut self, camera: &mut Camera) {
-        let current_frame = self.glfw.get_time() as f32;
-        let delta_time = current_frame - self.last_frame;
-        self.last_frame = current_frame;
-
-
-        if self.window_handle.get_key(Key::Escape) == Action::Press {
-            self.window_handle.set_should_close(true)
-        }
-
-        if self.window_handle.get_key(Key::W) == Action::Press {
-            camera.ProcessKeyboard(FORWARD, delta_time);
-        }
-        if self.window_handle.get_key(Key::S) == Action::Press {
-            camera.ProcessKeyboard(BACKWARD, delta_time);
-        }
-        if self.window_handle.get_key(Key::A) == Action::Press {
-            camera.ProcessKeyboard(LEFT, delta_time);
-        }
-        if self.window_handle.get_key(Key::D) == Action::Press {
-            camera.ProcessKeyboard(RIGHT, delta_time);
-        }
-    }
-
-    pub fn process_events(&self, last_x: &mut f32, last_y: &mut f32, camera: &mut Camera) {
-        for (_, event) in glfw::flush_messages(&self.events) {
-            match event {
-                glfw::WindowEvent::FramebufferSize(width, height) => {
-                    unsafe { gl::Viewport(0, 0, width, height) }
-                }
-                glfw::WindowEvent::CursorPos(xpos, ypos) => {
-                    let (xpos, ypos) = (xpos as f32, ypos as f32);
-
-                    let xoffset = xpos - *last_x;
-                    let yoffset = *last_y - ypos;
-
-                    *last_x = xpos;
-                    *last_y = ypos;
-
-                    camera.ProcessMouseMovement(xoffset, yoffset, true);
-                }
-                glfw::WindowEvent::Scroll(_xoffset, yoffset) => {
-                    camera.ProcessMouseScroll(yoffset as f32);
-                }
-                _ => {}
+    pub fn key_pressed (&self, key: char) -> bool {
+        if let Some(glfw_key) = char_to_glfw_key(key) {
+            if self.window_handle.get_key(glfw_key) == glfw::Action::Press {
+                return true;
             }
         }
+        false
+    }
+
+    pub fn get_cursor_pos(&self) -> (f64, f64) {
+        self.cursor_pos
+    }
+
+    pub fn get_scroll_offset(&self) -> (f64, f64) {
+        self.scroll_offset
     }
 }

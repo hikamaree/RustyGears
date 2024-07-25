@@ -7,7 +7,7 @@ use std::mem::size_of;
 use std::os::raw::c_void;
 use std::ptr;
 
-use cgmath::{ Vector3, Vector2 };
+use cgmath::{ Vector4, Vector3, Vector2 };
 use cgmath::prelude::*;
 use gl;
 
@@ -20,6 +20,7 @@ pub struct Vertex {
     pub TexCoords: Vector2<f32>,
     pub Tangent: Vector3<f32>,
     pub Bitangent: Vector3<f32>,
+    pub Color: Vector4<f32>
 }
 
 impl Default for Vertex {
@@ -30,6 +31,7 @@ impl Default for Vertex {
             TexCoords: Vector2::zero(),
             Tangent: Vector3::zero(),
             Bitangent: Vector3::zero(),
+            Color: Vector4::zero(),
         }
     }
 }
@@ -128,6 +130,8 @@ impl Mesh {
         gl::VertexAttribPointer(3, 3, gl::FLOAT, gl::FALSE, size, offset_of!(Vertex, Tangent) as *const c_void);
         gl::EnableVertexAttribArray(4);
         gl::VertexAttribPointer(4, 3, gl::FLOAT, gl::FALSE, size, offset_of!(Vertex, Bitangent) as *const c_void);
+        gl::EnableVertexAttribArray(5);
+        gl::VertexAttribPointer(5, 3, gl::FLOAT, gl::FALSE, size, offset_of!(Vertex, Color) as *const c_void);
 
         gl::BindVertexArray(0);
     }

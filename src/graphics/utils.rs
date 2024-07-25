@@ -44,3 +44,46 @@ pub fn loadTexture(path: &str) -> u32 {
     }
     textureID
 }
+
+
+pub fn char_to_glfw_key(c: char) -> Option<glfw::Key> {
+    match c.to_ascii_uppercase() {
+        'A' => Some(glfw::Key::A),
+        'B' => Some(glfw::Key::B),
+        'C' => Some(glfw::Key::C),
+        'D' => Some(glfw::Key::D),
+        'E' => Some(glfw::Key::E),
+        'F' => Some(glfw::Key::F),
+        'G' => Some(glfw::Key::G),
+        'H' => Some(glfw::Key::H),
+        'I' => Some(glfw::Key::I),
+        'J' => Some(glfw::Key::J),
+        'K' => Some(glfw::Key::K),
+        'L' => Some(glfw::Key::L),
+        'M' => Some(glfw::Key::M),
+        'N' => Some(glfw::Key::N),
+        'O' => Some(glfw::Key::O),
+        'P' => Some(glfw::Key::P),
+        'Q' => Some(glfw::Key::Q),
+        'R' => Some(glfw::Key::R),
+        'S' => Some(glfw::Key::S),
+        'T' => Some(glfw::Key::T),
+        'U' => Some(glfw::Key::U),
+        'V' => Some(glfw::Key::V),
+        'W' => Some(glfw::Key::W),
+        'X' => Some(glfw::Key::X),
+        'Y' => Some(glfw::Key::Y),
+        'Z' => Some(glfw::Key::Z),
+        '0' => Some(glfw::Key::Num0),
+        '1' => Some(glfw::Key::Num1),
+        '2' => Some(glfw::Key::Num2),
+        '3' => Some(glfw::Key::Num3),
+        '4' => Some(glfw::Key::Num4),
+        '5' => Some(glfw::Key::Num5),
+        '6' => Some(glfw::Key::Num6),
+        '7' => Some(glfw::Key::Num7),
+        '8' => Some(glfw::Key::Num8),
+        '9' => Some(glfw::Key::Num9),
+        _ => None,
+    }
+}

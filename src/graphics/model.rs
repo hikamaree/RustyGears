@@ -5,7 +5,7 @@ use std::os::raw::c_void;
 use std::path::Path;
 use std::ffi::CStr;
 
-use cgmath::{vec2, vec3, Vector3, Matrix4};
+use cgmath::{vec2, vec3, vec4, Vector3, Matrix4};
 use gl;
 use image;
 use image::DynamicImage::*;
@@ -66,12 +66,27 @@ impl Model {
 
             let (p, n, t) = (&mesh.positions, &mesh.normals, &mesh.texcoords);
             for i in 0..num_vertices {
+                let position = vec3(p[i*3], p[i*3+1], p[i*3+2]);
+
+                let normal = if n.len() > i*3+2 {
+                    vec3(n[i*3], n[i*3+1], n[i*3+2])
+                } else {
+                    vec3(0.0, 0.0, 0.0)
+                };
+
+                let texcoords = if t.len() > i*2+1 {
+                    vec2(t[i*2], t[i*2+1])
+                } else {
+                    vec2(0.0, 0.0)
+                };
+
                 vertices.push(Vertex {
-                    Position:  vec3(p[i*3], p[i*3+1], p[i*3+2]),
-                    Normal:    vec3(n[i*3], n[i*3+1], n[i*3+2]),
-                    TexCoords: vec2(t[i*2], t[i*2+1]),
+                    Position: position,
+                    Normal: normal,
+                    TexCoords: texcoords,
+                    Color: vec4(1.0, 1.0, 1.0, 1.0),
                     ..Vertex::default()
-                })
+                });
             }
 
             let mut textures = Vec::new();
@@ -81,6 +96,10 @@ impl Model {
                 if !material.diffuse_texture.is_empty() {
                     let texture = self.loadMaterialTexture(&material.diffuse_texture, "texture_diffuse");
                     textures.push(texture);
+                } else {
+                    for vertex in vertices.iter_mut() {
+                        vertex.Color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
+                    }
                 }
                 if !material.specular_texture.is_empty() {
                     let texture = self.loadMaterialTexture(&material.specular_texture, "texture_specular");
