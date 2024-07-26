@@ -30,14 +30,6 @@ impl Window {
 
         unsafe { 
             gl::Enable(gl::DEPTH_TEST);
-            /*
-               gl::Enable(gl::MULTISAMPLE);
-               gl::Enable(gl::BLEND);
-               gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-               gl::Enable(gl::STENCIL_TEST);
-               gl::StencilFunc(gl::ALWAYS, 1, 0xFF);
-               gl::StencilOp(gl::KEEP, gl::KEEP, gl::REPLACE);
-               */
         }
 
         Window {

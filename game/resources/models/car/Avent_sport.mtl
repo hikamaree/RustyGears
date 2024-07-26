@@ -392,6 +392,7 @@ illum 2
 Ka 0 0 0
 Ks 0.2 0.2 0.2
 Kd 0 0 0
+Bump 0 0 0
 newmtl voz
 Kd 0.8 0.8 0.8
 Ns 256

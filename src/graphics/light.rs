@@ -43,55 +43,47 @@ impl LightSource {
 
     pub fn create_light_space_matrix(&self) -> Matrix4<f32> {
         let near_plane = 1.0;
-        let far_plane = 7.5;
+        let far_plane = 100.0;
         let light_projection = ortho(-10.0, 10.0, -10.0, 10.0, near_plane, far_plane);
-        let light_view = Matrix4::look_at_rh(Point3::from_vec(self.position), Point3::new(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
-        light_projection * light_view
+        let light_view = Matrix4::look_at_rh(Point3::from_vec(self.position), Point3::new(0.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0));
+        let light_space_matrix = light_projection * light_view;
+        light_space_matrix
     }
 }
 
 pub struct ShadowMap {
     pub fbo: u32,
     pub textures: Vec<u32>,
-    pub width: i32,
-    pub height: i32
 }
 
 impl ShadowMap {
     pub fn new(num_light_sources: usize) -> ShadowMap {
         let mut shadow_map = ShadowMap {
             fbo: 0,
-            textures: Vec::with_capacity(num_light_sources),
-            width: 1024,
-            height: 1024,
+            textures: vec![0; num_light_sources],
         };
 
+
         unsafe {
-            if num_light_sources > 0 {
-                gl::GenFramebuffers(1, &mut shadow_map.fbo);
+            gl::GenFramebuffers(1, &mut shadow_map.fbo);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_map.fbo);
 
-                for _ in 0..num_light_sources {
-                    let mut texture: u32 = 0;
-                    gl::GenTextures(1, &mut texture);
-                    gl::BindTexture(gl::TEXTURE_2D, texture);
-                    gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH_COMPONENT as i32, shadow_map.width,
-                        shadow_map.height, 0, gl::DEPTH_COMPONENT, gl::FLOAT, std::ptr::null(),);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_BORDER as i32);
-                    gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_BORDER as i32);
-                    let border_color: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
-                    gl::TexParameterfv(gl::TEXTURE_2D, gl::TEXTURE_BORDER_COLOR, border_color.as_ptr());
-
-                    shadow_map.textures.push(texture);
-                }
-
-                gl::BindFramebuffer(gl::FRAMEBUFFER, shadow_map.fbo);
-                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, shadow_map.textures[0], 0);
-                gl::DrawBuffer(gl::NONE);
-                gl::ReadBuffer(gl::NONE);
-                gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            for i in 0..num_light_sources {
+                gl::GenTextures(1, &mut shadow_map.textures[i]);
+                gl::BindTexture(gl::TEXTURE_2D, shadow_map.textures[i]);
+                gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH_COMPONENT32 as i32, 1024, 1024, 0, gl::DEPTH_COMPONENT, gl::FLOAT, std::ptr::null());
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_BORDER as i32);
+                gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_BORDER as i32);
+                let border_color = [1.0, 1.0, 1.0, 1.0];
+                gl::TexParameterfv(gl::TEXTURE_2D, gl::TEXTURE_BORDER_COLOR, border_color.as_ptr());
+                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, shadow_map.textures[i], 0);
             }
+
+            gl::DrawBuffer(gl::NONE);
+            gl::ReadBuffer(gl::NONE);
+            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
         }
         shadow_map
     }
