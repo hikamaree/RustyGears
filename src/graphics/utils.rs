@@ -45,7 +45,6 @@ pub fn loadTexture(path: &str) -> u32 {
     textureID
 }
 
-
 pub fn char_to_glfw_key(c: char) -> Option<glfw::Key> {
     match c.to_ascii_uppercase() {
         'A' => Some(glfw::Key::A),

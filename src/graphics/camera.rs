@@ -27,8 +27,8 @@ pub struct Camera {
     pub MovementSpeed: f32,
     pub MouseSensitivity: f32,
     pub Zoom: f32,
-    last_x: f32,
-    last_y: f32,
+    pub last_x: f32,
+    pub last_y: f32,
 }
 
 impl Default for Camera {

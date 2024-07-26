@@ -70,17 +70,16 @@ impl Scene {
 
     pub fn render_depth_map(&mut self, depth_shader: &Shader) {
         self.update_light_space_matrices();
-        unsafe {
-            gl::Viewport(0, 0, 1024, 1024);
-        }
         for (i, light_space_matrix) in self.light_space_matrices.iter().enumerate() {
             unsafe {
                 gl::BindFramebuffer(gl::FRAMEBUFFER, self.shadow_map.fbo);
-                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, self.shadow_map.textures[i], 0);
+                gl::Viewport(0, 0, 1024, 1024);
                 gl::Clear(gl::DEPTH_BUFFER_BIT);
+                gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, self.shadow_map.textures[i], 0);
             }
             depth_shader.useProgram();
             depth_shader.setMat4(c_str!("lightSpaceMatrix"), light_space_matrix);
+
             self.draw(depth_shader);
 
             unsafe {
@@ -96,12 +95,6 @@ impl Scene {
         }
         shader.useProgram();
 
-        let projection: Matrix4<f32> = perspective(Deg(camera.Zoom), width as f32 / height as f32, 0.1, 100.0);
-        shader.setMat4(c_str!("projection"), &projection);
-
-        let view = camera.GetViewMatrix();
-        shader.setMat4(c_str!("view"), &view);
-
         for (i, light_space_matrix) in self.light_space_matrices.iter().enumerate() {
             let uniform_name = CString::new(format!("lightSpaceMatrices[{}]", i)).unwrap();
             shader.setMat4(&uniform_name, light_space_matrix);
@@ -113,6 +106,14 @@ impl Scene {
             }
             shader.setInt(&uniform_name, 1 + i as i32);
         }
+
+        let projection: Matrix4<f32> = perspective(Deg(camera.Zoom), width as f32 / height as f32, 0.1, 100.0);
+        shader.setMat4(c_str!("projection"), &projection);
+
+        let view = camera.GetViewMatrix();
+        shader.setMat4(c_str!("view"), &view);
+
+        shader.setVector3(c_str!("cameraPosition"), &camera.Position.to_vec());
 
         self.apply_lights(shader);
         self.draw(shader);
