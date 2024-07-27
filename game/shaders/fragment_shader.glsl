@@ -31,8 +31,7 @@ struct Fog {
 uniform Fog fog;
 
 uniform vec3 cameraPosition;
-
-
+uniform int lightSourceNum;
 
 float ShadowCalculation(vec4 fragPosLightSpace, int lightIndex) {
     vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
@@ -50,7 +49,7 @@ float ShadowCalculation(vec4 fragPosLightSpace, int lightIndex) {
     for (int x = -1; x <= 1; ++x) {
         for (int y = -1; y <= 1; ++y) {
             float pcfDepth = texture(shadowMaps[lightIndex], projCoords.xy + vec2(x, y) * texelSize).r;
-            shadowSum += currentDepth - bias > pcfDepth ? 0.5 : 0.0;
+            shadowSum += currentDepth - bias > pcfDepth ? 1.0 : 0.0;
         }
     }
     shadow = shadowSum / 9.0;
@@ -65,7 +64,7 @@ void main() {
 	vec3 norm = normalize(Normal);
 	vec3 lighting = ambient;
 
-	for (int i = 0; i < 10; ++i) {
+	for (int i = 0; i < lightSourceNum; ++i) {
 		vec3 lightDir = normalize(lightSources[i].position - FragPos);
         float diff = max(dot(norm, lightDir), 0.0);
         vec3 diffuse = lightSources[i].color * diff * lightSources[i].intensity;
@@ -78,7 +77,7 @@ void main() {
 	color *= lighting;
 
 	float distance = length(cameraPosition - FragPos);
-	float fogFactor = exp(-fog.density * distance);
+	float fogFactor = 1.0 / (1.0 + fog.density * distance * distance);
 	fogFactor = clamp(fogFactor, 0.0, 1.0);
 	vec3 finalColor = mix(fog.color, color, fogFactor);
 

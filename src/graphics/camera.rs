@@ -9,7 +9,10 @@ type Point3 = cgmath::Point3<f32>;
 type Vector3 = cgmath::Vector3<f32>;
 type Matrix4 = cgmath::Matrix4<f32>;
 
-const YAW: f32 = -90.0;
+use core::cell::RefCell;
+use std::rc::Rc;
+
+const YAW: f32 = 0.0;
 const PITCH: f32 = 0.0;
 const SPEED: f32 = 4.0;
 const SENSITIVTY: f32 = 0.1;
@@ -30,6 +33,8 @@ pub struct Camera {
     pub last_x: f32,
     pub last_y: f32,
 }
+
+pub type CameraRef = Rc<RefCell<Camera>>;
 
 impl Default for Camera {
     fn default() -> Camera {
@@ -53,6 +58,10 @@ impl Default for Camera {
 }
 
 impl Camera {
+    pub fn create() -> CameraRef {
+        Rc::new(RefCell::new(Camera::default()))
+    }
+
     pub fn GetViewMatrix(&self) -> Matrix4 {
         Matrix4::look_at_rh(self.Position, self.Position + self.Front, self.Up)
     }
@@ -87,6 +96,8 @@ impl Camera {
         self.Yaw += xoffset;
         self.Pitch += yoffset;
 
+        self.Yaw %= 360.0;
+
         if constrainPitch {
             if self.Pitch > 89.0 {
                 self.Pitch = 89.0;
@@ -120,6 +131,12 @@ impl Camera {
         self.Front = front.normalize();
         self.Right = self.Front.cross(self.WorldUp).normalize();
         self.Up = self.Right.cross(self.Front).normalize();
+    }
+
+    pub fn print(&self) {
+        println!("Position {:?}", self.Position);
+        println!("Yaw {}", self.Yaw);
+        println!("Pitch {}", self.Pitch);
     }
 }
 
