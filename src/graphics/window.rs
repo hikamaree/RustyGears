@@ -1,6 +1,7 @@
 use glfw::{Context, WindowEvent};
 use std::sync::mpsc::Receiver;
 use super::utils::*;
+use super::scene::*;
 
 pub struct Window {
     glfw: glfw::Glfw,
@@ -10,6 +11,7 @@ pub struct Window {
     pub delta_time: f32,
     cursor_pos: (f64, f64),
     scroll_offset: (f64, f64),
+    pub scene: SceneRef,
 }
 
 impl Window {
@@ -28,7 +30,7 @@ impl Window {
         window.set_cursor_mode(glfw::CursorMode::Disabled);
         gl::load_with(|s| window.get_proc_address(s) as *const _);
 
-        unsafe { 
+        unsafe {
             gl::Enable(gl::DEPTH_TEST);
         }
 
@@ -40,7 +42,12 @@ impl Window {
             delta_time: 0.0,
             cursor_pos: (0.0, 0.0),
             scroll_offset: (0.0, 0.0),
+            scene: Scene::create(),
         }
+    }
+
+    pub fn set_scene(&mut self, scene: SceneRef) {
+        self.scene = scene;
     }
 
     pub fn should_close(&self) -> bool {
@@ -48,6 +55,11 @@ impl Window {
     }
 
     pub fn update(&mut self) {
+        let mut scene = self.scene.borrow_mut();
+        scene.update_scene(self.delta_time);
+        scene.render_depth_map();
+        scene.render(self.get_size());
+
         let current_frame = self.glfw.get_time() as f32;
         self.delta_time = current_frame - self.last_frame;
         self.last_frame = current_frame;

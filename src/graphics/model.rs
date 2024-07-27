@@ -3,6 +3,8 @@
 
 use std::path::Path;
 use std::ffi::CStr;
+use core::cell::RefCell;
+use std::rc::Rc;
 
 use cgmath::{vec2, vec3, vec4, Vector3, Matrix4};
 use tobj;
@@ -10,13 +12,18 @@ use tobj;
 use super::mesh::{ Mesh, Texture, Vertex };
 use super::shader::Shader;
 use super::utils::*;
+use super::scene::*;
+use crate::physics::*;
 
+#[derive(Clone)]
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub textures_loaded: Vec<Texture>,
     directory: String,
-    position: Vector3<f32>
+    pub position: Vector3<f32>
 }
+
+pub type ModelRef = Rc<RefCell<Model>>;
 
 impl Model {
     fn default() -> Self {
@@ -28,11 +35,29 @@ impl Model {
         }
     }
 
-    pub fn new(path: &str, position: Vector3<f32>) -> Model {
+    pub fn add_physics(&mut self, scene: &mut Scene, mass: f32) {
+        let position = Vector3::new(self.position.x, self.position.y, self.position.z);
+        let body = RigidBody::new(position, mass);
+        scene.physics_world.add_body(body);
+    }
+
+    fn new(path: &str, position: Vector3<f32>) -> Model {
         let mut model = Model::default();
         model.loadModel(path);
         model.position = position;
         model
+    }
+
+    pub fn create(path: &str, position: Vector3<f32>) -> ModelRef {
+        Rc::new(RefCell::new(Model::new(path, position)))
+    }
+
+    pub fn set_position(&mut self, position: Vector3<f32>) {
+        self.position = position;
+    }
+
+    pub fn move_position(&mut self, offset: Vector3<f32>) {
+        self.position += offset;
     }
 
     pub fn Draw(&self, shader: &Shader) {

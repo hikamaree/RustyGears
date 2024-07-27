@@ -14,6 +14,7 @@ use gl;
 use super::shader::Shader;
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct Vertex {
     pub Position: Vector3<f32>,
     pub Normal: Vector3<f32>,
@@ -43,6 +44,7 @@ pub struct Texture {
     pub path: String,
 }
 
+#[derive(Clone)]
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
