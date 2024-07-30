@@ -36,8 +36,7 @@ impl Model {
     }
 
     pub fn add_physics(&mut self, scene: &mut Scene, mass: f32) {
-        let position = Vector3::new(self.position.x, self.position.y, self.position.z);
-        let body = RigidBody::new(position, mass);
+        let body = RigidBody::from_model_with_bounding_boxes(self, mass);
         scene.physics_world.add_body(body);
     }
 

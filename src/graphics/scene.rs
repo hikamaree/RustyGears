@@ -20,6 +20,15 @@ pub struct Scene {
 
 pub type SceneRef = Rc<RefCell<Scene>>;
 
+pub enum SceneItem {
+    Camera(CameraRef),
+    Shader(Shader),
+    DepthShader(Shader),
+    Model(ModelRef),
+    AmbientLight(AmbientLight),
+    Fog(Fog),
+}
+
 impl Scene {
     fn new() -> Self {
         Scene {
@@ -53,10 +62,7 @@ impl Scene {
     }
 
     pub fn add_model(&mut self, model: ModelRef) {
-        if self.models.len() > 0 {
-            let body = RigidBody::new(model.borrow().position, 10.0);
-            self.physics_world.add_body(body);
-        }
+        model.borrow_mut().add_physics(self, 10.0);
         self.models.push(model);
     }
 
