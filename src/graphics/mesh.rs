@@ -7,11 +7,12 @@ use std::mem::size_of;
 use std::os::raw::c_void;
 use std::ptr;
 
-use cgmath::{ Vector4, Vector3, Vector2 };
+use cgmath::{ Vector4, Vector3, Vector2, Point3 };
 use cgmath::prelude::*;
 use gl;
 
 use super::shader::Shader;
+use crate::collision_box::*;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -136,5 +137,46 @@ impl Mesh {
         gl::VertexAttribPointer(5, 3, gl::FLOAT, gl::FALSE, size, offset_of!(Vertex, Color) as *const c_void);
 
         gl::BindVertexArray(0);
+    }
+
+    pub fn calculate_sphere(&self) -> Sphere {
+        if self.vertices.is_empty() {
+            panic!("Cannot calculate sphere for an empty mesh.");
+        }
+
+        let center = self.vertices.iter().fold(Vector3::zero(), |acc, v| acc + v.Position) / (self.vertices.len() as f32);
+
+        let radius = self.vertices.iter()
+            .map(|v| (v.Position - center).magnitude())
+            .fold(0.0, f32::max);
+
+        Sphere {
+            center: Point3::from_vec(center),
+            radius,
+        }
+    }
+
+    pub fn calculate_bounding_box(&self) -> BoundingBox {
+        if self.vertices.is_empty() {
+            panic!("Cannot calculate bounding box for an empty mesh.");
+        }
+
+        let mut min = Vector3::from_value(f32::MAX);
+        let mut max = Vector3::from_value(f32::MIN);
+
+        for vertex in &self.vertices {
+            min.x = min.x.min(vertex.Position.x);
+            min.y = min.y.min(vertex.Position.y);
+            min.z = min.z.min(vertex.Position.z);
+
+            max.x = max.x.max(vertex.Position.x);
+            max.y = max.y.max(vertex.Position.y);
+            max.z = max.z.max(vertex.Position.z);
+        }
+
+        BoundingBox { 
+            min: Point3::from_vec(min),
+            max: Point3::from_vec(max)
+        }
     }
 }

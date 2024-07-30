@@ -2,6 +2,7 @@ use glfw::{Context, WindowEvent};
 use std::sync::mpsc::Receiver;
 use super::utils::*;
 use super::scene::*;
+use cgmath::{ Vector3, vec3 };
 
 pub struct Window {
     glfw: glfw::Glfw,
@@ -9,6 +10,7 @@ pub struct Window {
     events: Receiver<(f64, WindowEvent)>,
     last_frame: f32,
     pub delta_time: f32,
+    background_color: Vector3<f32>,
     cursor_pos: (f64, f64),
     scroll_offset: (f64, f64),
     pub scene: SceneRef,
@@ -40,6 +42,7 @@ impl Window {
             events,
             last_frame: 0.0,
             delta_time: 0.0,
+            background_color: vec3(0.0, 0.0, 0.0),
             cursor_pos: (0.0, 0.0),
             scroll_offset: (0.0, 0.0),
             scene: Scene::create(),
@@ -55,6 +58,10 @@ impl Window {
     }
 
     pub fn update(&mut self) {
+        unsafe {
+            gl::ClearColor(self.background_color.x, self.background_color.y, self.background_color.z, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        }
         let mut scene = self.scene.borrow_mut();
         scene.update_scene(self.delta_time);
         scene.render_depth_map();
@@ -88,13 +95,6 @@ impl Window {
         (width as u32, height as u32)
     }
 
-    pub fn clear(r: f32, g: f32, b: f32, a: f32) {
-        unsafe {
-            gl::ClearColor(r, g, b, a);
-            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
-        }
-    }
-
     pub fn key_pressed (&self, key: char) -> bool {
         if let Some(glfw_key) = char_to_glfw_key(key) {
             if self.window_handle.get_key(glfw_key) == glfw::Action::Press {
@@ -104,11 +104,15 @@ impl Window {
         false
     }
 
-    pub fn get_cursor_pos(&self) -> (f64, f64) {
-        self.cursor_pos
+    pub fn get_cursor_pos(&self) -> (f32, f32) {
+        (self.cursor_pos.0 as f32, self.cursor_pos.1 as f32)
     }
 
-    pub fn get_scroll_offset(&self) -> (f64, f64) {
-        self.scroll_offset
+    pub fn get_scroll_offset(&self) -> (f32, f32) {
+        (self.scroll_offset.0 as f32, self.scroll_offset.1 as f32)
+    }
+
+    pub fn set_background_color(&mut self, color: Vector3<f32>) {
+        self.background_color = color;
     }
 }
