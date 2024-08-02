@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use std::time::SystemTime;
 use std::os::raw::c_void;
 use std::path::Path;
@@ -18,10 +16,10 @@ pub fn elapsed(start_time: &SystemTime) -> String {
     format!("{}s {:.*}ms", elapsed.as_secs(), 1, elapsed.subsec_nanos() as f64 / 1_000_000.0)
 }
 
-pub fn loadTexture(path: &str) -> u32 {
-    let mut textureID = 0;
+pub fn load_texture(path: &str) -> u32 {
+    let mut texture_id = 0;
     unsafe {
-        gl::GenTextures(1, &mut textureID);
+        gl::GenTextures(1, &mut texture_id);
         let img = image::open(&Path::new(path)).expect("Texture failed to load");
         let format = match img {
             ImageLuma8(_) => gl::RED,
@@ -32,7 +30,7 @@ pub fn loadTexture(path: &str) -> u32 {
 
         let data = img.raw_pixels();
 
-        gl::BindTexture(gl::TEXTURE_2D, textureID);
+        gl::BindTexture(gl::TEXTURE_2D, texture_id);
         gl::TexImage2D(gl::TEXTURE_2D, 0, format as i32, img.width() as i32, img.height() as i32,
         0, format, gl::UNSIGNED_BYTE, &data[0] as *const u8 as *const c_void);
         gl::GenerateMipmap(gl::TEXTURE_2D);
@@ -42,7 +40,7 @@ pub fn loadTexture(path: &str) -> u32 {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
     }
-    textureID
+    texture_id
 }
 
 pub fn char_to_glfw_key(c: char) -> Option<glfw::Key> {

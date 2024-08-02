@@ -1,11 +1,12 @@
-use super::*;
 use crate::*;
+use crate::entities::Entity;
 use std::ffi::CString;
 use std::ffi::CStr;
 use core::cell::RefCell;
 use std::rc::Rc;
 
 pub struct Scene {
+    pub entities: Vec<Entity>,
     pub models: Vec<ModelRef>,
     pub ambient_light: Option<AmbientLight>,
     pub light_sources: Vec<LightSource>,
@@ -20,18 +21,10 @@ pub struct Scene {
 
 pub type SceneRef = Rc<RefCell<Scene>>;
 
-pub enum SceneItem {
-    Camera(CameraRef),
-    Shader(Shader),
-    DepthShader(Shader),
-    Model(ModelRef),
-    AmbientLight(AmbientLight),
-    Fog(Fog),
-}
-
 impl Scene {
     fn new() -> Self {
         Scene {
+            entities: Vec::new(),
             models: Vec::new(),
             ambient_light: None,
             light_sources: Vec::new(),
@@ -59,6 +52,11 @@ impl Scene {
 
     pub fn set_depth_shader(&mut self, shader: Shader) {
         self.depth_shader = Some(shader);
+    }
+
+    pub fn add_entity(&mut self, entity: Entity) {
+        entity.set_physics(&mut self.physics_world);
+        self.entities.push(entity);
     }
 
     pub fn add_model(&mut self, model: ModelRef) {
@@ -89,7 +87,11 @@ impl Scene {
 
     pub fn draw(&self, shader: &Shader) {
         for model in &self.models {
-            model.borrow_mut().Draw(shader);
+            model.borrow_mut().draw(shader);
+        }
+
+        for entity in &self.entities {
+            entity.draw(shader);
         }
     }
 
@@ -110,8 +112,8 @@ impl Scene {
     pub fn update_scene(&mut self, delta_time: f32) {
         self.physics_world.update(delta_time);
 
-        for (i, body) in self.physics_world.bodies.iter().enumerate() {
-            self.models[i].borrow_mut().set_position(body.position);
+        for entity in &mut self.entities {
+            entity.update();
         }
     }
 
@@ -125,8 +127,8 @@ impl Scene {
                     gl::Clear(gl::DEPTH_BUFFER_BIT);
                     gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_ATTACHMENT, gl::TEXTURE_2D, self.shadow_map.textures[i], 0);
                 }
-                depth_shader.useProgram();
-                depth_shader.setMat4(c_str!("lightSpaceMatrix"), light_space_matrix);
+                depth_shader.use_program();
+                depth_shader.set_mat4(c_str!("lightSpaceMatrix"), light_space_matrix);
 
                 self.draw(&depth_shader);
             }
@@ -141,30 +143,30 @@ impl Scene {
         }
 
         if let Some(shader) = &self.shader {
-            shader.useProgram();
+            shader.use_program();
 
             for (i, light_space_matrix) in self.light_space_matrices.iter().enumerate() {
                 let uniform_name = CString::new(format!("lightSpaceMatrices[{}]", i)).unwrap();
-                shader.setMat4(&uniform_name, light_space_matrix);
+                shader.set_mat4(&uniform_name, light_space_matrix);
 
                 let uniform_name = CString::new(format!("shadowMaps[{}]", i)).unwrap();
                 unsafe {
                     gl::ActiveTexture(gl::TEXTURE1 + i as u32);
                     gl::BindTexture(gl::TEXTURE_2D, self.shadow_map.textures[i]);
                 }
-                shader.setInt(&uniform_name, 1 + i as i32);
+                shader.set_int(&uniform_name, 1 + i as i32);
             }
 
             let camera = self.camera.borrow();
 
-            let projection: Matrix4<f32> = perspective(Deg(camera.Zoom), width as f32 / height as f32, 0.1, 100.0);
-            shader.setMat4(c_str!("projection"), &projection);
+            let projection: Matrix4<f32> = perspective(Deg(camera.zoom), width as f32 / height as f32, 0.1, 100.0);
+            shader.set_mat4(c_str!("projection"), &projection);
 
-            let view = camera.GetViewMatrix();
-            shader.setMat4(c_str!("view"), &view);
+            let view = camera.get_view_matrix();
+            shader.set_mat4(c_str!("view"), &view);
 
-            shader.setVector3(c_str!("cameraPosition"), &camera.Position.to_vec());
-            shader.setInt(c_str!("lightSourceNum"), self.light_sources.len() as i32);
+            shader.set_vector3(c_str!("cameraPosition"), &camera.position.to_vec());
+            shader.set_int(c_str!("lightSourceNum"), self.light_sources.len() as i32);
 
             self.apply_lights(shader);
             self.draw(shader);

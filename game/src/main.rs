@@ -2,13 +2,12 @@ use rusty_gears::*;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-struct FPS {
-
+struct Fps {
     last_time: Instant,
     frame_count: u32
 }
 
-impl FPS {
+impl Fps {
     pub fn init() -> Self {
         Self {
             last_time: Instant::now(),
@@ -22,12 +21,11 @@ impl FPS {
             let fps = self.frame_count;
             self.frame_count = 0;
             self.last_time = Instant::now();
-//            Command::new("clear").status().expect("Failed to clear console");
+            Command::new("clear").status().expect("Failed to clear console");
             println!("FPS: {}", fps);
         }
     }
 }
-
 
 pub fn main() {
     let mut window = Window::new(1280, 720, "RustyGears");
@@ -40,25 +38,32 @@ pub fn main() {
     let light_source1 = LightSource::new(vec3(-5.0, 10.0, -10.0), vec3(1.0, 1.0, 1.0), 1.0);
     let light_source2 = LightSource::new(vec3(5.0, 10.0, 10.0), vec3(1.0, 1.0, 1.0), 1.0);
 
-    let big_block = Model::create("resources/models/big_block/big_block.obj", vec3(0.0, -10.45, 0.0));
-    let car = Model::create("resources/models/car/Avent_sport.obj", vec3(0.0, 0.2, 0.0));
-    let ball = Model::create("resources/models/ball/ball.obj", vec3(1.5, 3.0, 0.0));
+    let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.0);
+
+    let big_block = Model::create("resources/models/big_block/big_block.obj", vec3(0.0, -10.0, 0.0));
+    //let car = Model::create("resources/models/car/Avent_sport.obj", vec3(0.0, 0.2, 0.0));
+    let ball = Model::create("resources/models/ball/ball.obj", vec3(0.0, 15.0, 0.0));
     let block = Model::create("resources/models/block/block.obj", vec3(0.0, 50.0, 0.0));
 
-    let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.005);
+    let mut bbc = Object::new();
+    bbc.add_model(big_block.clone());
+    bbc.set_body(RigidBody::from_model_with_bounding_boxes(&big_block.borrow(), 1000.0));
+
+    let mut sbc = Character::new();
+    sbc.add_model(block.clone());
+    sbc.set_body(RigidBody::from_model_with_bounding_boxes(&block.borrow(), 10.0));
+
+    let mut sphere = Character::new();
+    sphere.add_model(ball.clone());
+    sphere.set_body(RigidBody::from_model_with_spheres(&ball.borrow(), 10.0));
 
     let scene = Scene::create();
     window.set_scene(scene.clone());
-
+    window.background_color(vec3(0.6, 0.7, 0.8));
 
     {
         let mut s = scene.borrow_mut();
         s.set_camera(camera.clone());
-
-        s.add_model(ball.clone());
-        s.add_model(block.clone());
-        s.add_model(car.clone());
-        s.add_model(big_block.clone());
 
         s.add_light_source(light_source1);
         s.add_light_source(light_source2);
@@ -67,10 +72,13 @@ pub fn main() {
 
         s.set_depth_shader(depth_shader);
         s.set_shader(shader);
+
+        s.add_entity(Entity::Object(bbc));
+        s.add_entity(Entity::Character(sbc));
+        s.add_entity(Entity::Character(sphere));
     }
 
-    let mut fps = FPS::init();
-
+    let mut fps = Fps::init();
 
     while !window.should_close() {
         fps.update();
@@ -90,11 +98,13 @@ pub fn main() {
             }
 
             let (xpos, ypos) = window.get_cursor_pos();
-            cam.rotate(xpos as f32, ypos as f32, true);
+            cam.rotate(xpos, ypos, true);
 
             let (_xoffset, yoffset) = window.get_scroll_offset();
-            cam.zoom(yoffset as f32);
+            cam.zoom(yoffset);
         }
         window.update();
+        println!("Block position: {:?}", block.borrow_mut().position);
+        println!("Ball position: {:?}", ball.borrow_mut().position);
     }
 }

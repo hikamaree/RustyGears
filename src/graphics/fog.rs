@@ -12,7 +12,7 @@ impl Fog {
     }
 
     pub unsafe fn apply(&self, shader: &Shader) {
-        shader.setVector3(c_str!("fog.color"), &self.color);
-        shader.setFloat(c_str!("fog.density"), self.density);
+        shader.set_vector3(c_str!("fog.color"), &self.color);
+        shader.set_float(c_str!("fog.density"), self.density);
     }
 }

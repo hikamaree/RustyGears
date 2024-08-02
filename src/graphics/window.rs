@@ -112,7 +112,7 @@ impl Window {
         (self.scroll_offset.0 as f32, self.scroll_offset.1 as f32)
     }
 
-    pub fn set_background_color(&mut self, color: Vector3<f32>) {
+    pub fn background_color(&mut self, color: Vector3<f32>) {
         self.background_color = color;
     }
 }
