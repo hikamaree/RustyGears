@@ -1,6 +1,3 @@
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-
 use cgmath;
 use cgmath::vec3;
 use cgmath::prelude::*;
@@ -20,16 +17,16 @@ const ZOOM: f32 = 45.0;
 
 #[derive(Clone, Copy)]
 pub struct Camera {
-    pub Position: Point3,
-    pub Front: Vector3,
-    pub Up: Vector3,
-    pub Right: Vector3,
-    pub WorldUp: Vector3,
-    pub Yaw: f32,
-    pub Pitch: f32,
-    pub MovementSpeed: f32,
-    pub MouseSensitivity: f32,
-    pub Zoom: f32,
+    pub position: Point3,
+    pub front: Vector3,
+    pub up: Vector3,
+    pub right: Vector3,
+    pub world_up: Vector3,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub movement_speed: f32,
+    pub mouse_sensitivity: f32,
+    pub zoom: f32,
     pub last_x: f32,
     pub last_y: f32,
 }
@@ -39,20 +36,20 @@ pub type CameraRef = Rc<RefCell<Camera>>;
 impl Default for Camera {
     fn default() -> Camera {
         let mut camera = Camera {
-            Position: Point3::new(0.0, 0.0, 0.0),
-            Front: vec3(0.0, 0.0, -1.0),
-            Up: Vector3::zero(),
-            Right: Vector3::zero(),
-            WorldUp: Vector3::unit_y(),
-            Yaw: YAW,
-            Pitch: PITCH,
-            MovementSpeed: SPEED,
-            MouseSensitivity: SENSITIVTY,
-            Zoom: ZOOM,
+            position: Point3::new(0.0, 12.0, 0.0),
+            front: vec3(0.0, 0.0, -1.0),
+            up: Vector3::zero(),
+            right: Vector3::zero(),
+            world_up: Vector3::unit_y(),
+            yaw: YAW,
+            pitch: PITCH,
+            movement_speed: SPEED,
+            mouse_sensitivity: SENSITIVTY,
+            zoom: ZOOM,
             last_x: 0.0,
             last_y: 0.0,
         };
-        camera.updateCameraVectors();
+        camera.update_camera_vectors();
         camera
     }
 }
@@ -62,81 +59,81 @@ impl Camera {
         Rc::new(RefCell::new(Camera::default()))
     }
 
-    pub fn GetViewMatrix(&self) -> Matrix4 {
-        Matrix4::look_at_rh(self.Position, self.Position + self.Front, self.Up)
+    pub fn get_view_matrix(&self) -> Matrix4 {
+        Matrix4::look_at_rh(self.position, self.position + self.front, self.up)
     }
 
     pub fn move_forward(&mut self, delta_time: f32) {
-        let velocity = self.MovementSpeed * delta_time;
-        self.Position += self.Front * velocity;
+        let velocity = self.movement_speed * delta_time;
+        self.position += self.front * velocity;
     }
 
     pub fn move_backward(&mut self, delta_time: f32) {
-        let velocity = self.MovementSpeed * delta_time;
-        self.Position += -(self.Front * velocity);
+        let velocity = self.movement_speed * delta_time;
+        self.position += -(self.front * velocity);
     }
 
     pub fn move_left(&mut self, delta_time: f32) {
-        let velocity = self.MovementSpeed * delta_time;
-        self.Position += -(self.Right * velocity);
+        let velocity = self.movement_speed * delta_time;
+        self.position += -(self.right * velocity);
     }
 
     pub fn move_right(&mut self, delta_time: f32) {
-        let velocity = self.MovementSpeed * delta_time;
-        self.Position += self.Right * velocity;
+        let velocity = self.movement_speed * delta_time;
+        self.position += self.right * velocity;
     }
 
-    pub fn rotate(&mut self, xpos: f32, ypos: f32, constrainPitch: bool) {
-        let xoffset = (xpos - self.last_x) * self.MouseSensitivity;
-        let yoffset = (self.last_y - ypos) * self.MouseSensitivity;
+    pub fn rotate(&mut self, xpos: f32, ypos: f32, constrain_pitch: bool) {
+        let xoffset = (xpos - self.last_x) * self.mouse_sensitivity;
+        let yoffset = (self.last_y - ypos) * self.mouse_sensitivity;
 
         self.last_x = xpos;
         self.last_y = ypos;
 
-        self.Yaw += xoffset;
-        self.Pitch += yoffset;
+        self.yaw += xoffset;
+        self.pitch += yoffset;
 
-        self.Yaw %= 360.0;
+        self.yaw %= 360.0;
 
-        if constrainPitch {
-            if self.Pitch > 89.0 {
-                self.Pitch = 89.0;
+        if constrain_pitch {
+            if self.pitch > 89.0 {
+                self.pitch = 89.0;
             }
-            if self.Pitch < -89.0 {
-                self.Pitch = -89.0;
+            if self.pitch < -89.0 {
+                self.pitch = -89.0;
             }
         }
 
-        self.updateCameraVectors();
+        self.update_camera_vectors();
     }
 
     pub fn zoom(&mut self, yoffset: f32) {
-        if self.Zoom >= 1.0 && self.Zoom <= 45.0 {
-            self.Zoom -= yoffset;
+        if self.zoom >= 1.0 && self.zoom <= 45.0 {
+            self.zoom -= yoffset;
         }
-        if self.Zoom <= 1.0 {
-            self.Zoom = 1.0;
+        if self.zoom <= 1.0 {
+            self.zoom = 1.0;
         }
-        if self.Zoom >= 45.0 {
-            self.Zoom = 45.0;
+        if self.zoom >= 45.0 {
+            self.zoom = 45.0;
         }
     }
 
-    fn updateCameraVectors(&mut self) {
+    fn update_camera_vectors(&mut self) {
         let front = Vector3 {
-            x: self.Yaw.to_radians().cos() * self.Pitch.to_radians().cos(),
-            y: self.Pitch.to_radians().sin(),
-            z: self.Yaw.to_radians().sin() * self.Pitch.to_radians().cos(),
+            x: self.yaw.to_radians().cos() * self.pitch.to_radians().cos(),
+            y: self.pitch.to_radians().sin(),
+            z: self.yaw.to_radians().sin() * self.pitch.to_radians().cos(),
         };
-        self.Front = front.normalize();
-        self.Right = self.Front.cross(self.WorldUp).normalize();
-        self.Up = self.Right.cross(self.Front).normalize();
+        self.front = front.normalize();
+        self.right = self.front.cross(self.world_up).normalize();
+        self.up = self.right.cross(self.front).normalize();
     }
 
     pub fn print(&self) {
-        println!("Position {:?}", self.Position);
-        println!("Yaw {}", self.Yaw);
-        println!("Pitch {}", self.Pitch);
+        println!("Position {:?}", self.position);
+        println!("Yaw {}", self.yaw);
+        println!("Pitch {}", self.pitch);
     }
 }
 

@@ -15,8 +15,8 @@ impl AmbientLight {
     }
 
     pub fn apply(&self, shader: &Shader) {
-        shader.setVector3(c_str!("ambientLight.color"), &self.color);
-        shader.setFloat(c_str!("ambientLight.intensity"), self.intensity);
+        shader.set_vector3(c_str!("ambientLight.color"), &self.color);
+        shader.set_float(c_str!("ambientLight.intensity"), self.intensity);
     }
 }
 
@@ -36,9 +36,9 @@ impl LightSource {
         let color_uniform = CString::new(format!("lightSources[{}].color", index)).unwrap();
         let intensity_uniform = CString::new(format!("lightSources[{}].intensity", index)).unwrap();
 
-        shader.setVector3(&position_uniform, &self.position);
-        shader.setVector3(&color_uniform, &self.color);
-        shader.setFloat(&intensity_uniform, self.intensity);
+        shader.set_vector3(&position_uniform, &self.position);
+        shader.set_vector3(&color_uniform, &self.color);
+        shader.set_float(&intensity_uniform, self.intensity);
     }
 
     pub fn create_light_space_matrix(&self) -> Matrix4<f32> {

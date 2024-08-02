@@ -1,6 +1,3 @@
-#![allow(non_snake_case)]
-#![allow(dead_code)]
-
 use std::path::Path;
 use std::ffi::CStr;
 use core::cell::RefCell;
@@ -42,7 +39,7 @@ impl Model {
 
     fn new(path: &str, position: Vector3<f32>) -> Model {
         let mut model = Model::default();
-        model.loadModel(path);
+        model.load_model(path);
         model.position = position;
         model
     }
@@ -59,18 +56,18 @@ impl Model {
         self.position += offset;
     }
 
-    pub fn Draw(&self, shader: &Shader) {
+    pub fn draw(&self, shader: &Shader) {
         let mmodel = Matrix4::from_translation(self.position);
-        shader.setMat4(c_str!("model"), &mmodel);
+        shader.set_mat4(c_str!("model"), &mmodel);
 
         unsafe {
             for mesh in &self.meshes {
-                mesh.Draw(shader);
+                mesh.draw(shader);
             }
         }
     }
 
-    fn loadModel(&mut self, path: &str) {
+    fn load_model(&mut self, path: &str) {
         let path = Path::new(path);
 
         self.directory = path.parent().unwrap_or_else(|| Path::new("")).to_str().unwrap().into();
@@ -101,10 +98,10 @@ impl Model {
                 };
 
                 vertices.push(Vertex {
-                    Position: position,
-                    Normal: normal,
-                    TexCoords: texcoords,
-                    Color: vec4(1.0, 1.0, 1.0, 1.0),
+                    position,
+                    normal,
+                    tex_coords: texcoords,
+                    color: vec4(1.0, 1.0, 1.0, 1.0),
                     ..Vertex::default()
                 });
             }
@@ -114,23 +111,23 @@ impl Model {
                 let material = &materials[material_id];
 
                 if !material.diffuse_texture.is_empty() {
-                    let texture = self.loadMaterialTexture(&material.diffuse_texture, "texture_diffuse");
+                    let texture = self.load_material_texture(&material.diffuse_texture, "texture_diffuse");
                     textures.push(texture);
                 } else {
                     for vertex in vertices.iter_mut() {
                         if material.diffuse.len() > 3 {
-                            vertex.Color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], material.diffuse[3]);
+                            vertex.color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], material.diffuse[3]);
                         } else {
-                            vertex.Color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
+                            vertex.color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
                         }
                     }
                 }
                 if !material.specular_texture.is_empty() {
-                    let texture = self.loadMaterialTexture(&material.specular_texture, "texture_specular");
+                    let texture = self.load_material_texture(&material.specular_texture, "texture_specular");
                     textures.push(texture);
                 }
                 if !material.normal_texture.is_empty() {
-                    let texture = self.loadMaterialTexture(&material.normal_texture, "texture_normal");
+                    let texture = self.load_material_texture(&material.normal_texture, "texture_normal");
                     textures.push(texture);
                 }
             }
@@ -140,7 +137,7 @@ impl Model {
 
     }
 
-    fn loadMaterialTexture(&mut self, path: &str, typeName: &str) -> Texture {
+    fn load_material_texture(&mut self, path: &str, type_name: &str) -> Texture {
         {
             let texture = self.textures_loaded.iter().find(|t| t.path == path);
             if let Some(texture) = texture {
@@ -149,8 +146,8 @@ impl Model {
         }
 
         let texture = Texture {
-            id: loadTexture(format!("{}/{}", self.directory, path).as_str()),
-            type_: typeName.into(),
+            id: load_texture(format!("{}/{}", self.directory, path).as_str()),
+            type_: type_name.into(),
             path: path.into()
         };
         self.textures_loaded.push(texture.clone());

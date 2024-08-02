@@ -4,7 +4,7 @@ use super::collision_box::*;
 
 
 pub struct PhysicsWorld {
-    pub bodies: Vec<RigidBody>,
+    pub bodies: Vec<BodyRef>,
     pub gravity: Vector3<f32>,
 }
 
@@ -16,18 +16,18 @@ impl PhysicsWorld {
         }
     }
 
-    pub fn add_body(&mut self, body: RigidBody) {
+    pub fn add_body(&mut self, body: BodyRef) {
         self.bodies.push(body);
     }
 
     pub fn update(&mut self, dt: f32) {
-        self.bodies[0].ignore_gravity();
-        self.bodies[2].ignore_gravity();
-        self.bodies[3].ignore_gravity();
-        for body in &mut self.bodies {
+        for body_ref in &mut self.bodies {
 
-            if body.gravity {
-                body.apply_force(self.gravity * body.mass);
+            let mut body = body_ref.borrow_mut();
+
+            if body.gravity && body.movable {
+                let mass = body.mass;
+                body.apply_force(self.gravity * mass);
             }
 
             body.update(dt);
@@ -41,8 +41,8 @@ impl PhysicsWorld {
 
         for i in 0..body_count {
             for j in (i + 1)..body_count {
-                for shape_a in &self.bodies[i].collision_box {
-                    for shape_b in &self.bodies[j].collision_box {
+                for shape_a in &self.bodies[i].borrow().collision_box {
+                    for shape_b in &self.bodies[j].borrow().collision_box {
                         if let Some(collision) = self.detect_collision(shape_a, shape_b) {
                             collisions.push((i, j, collision));
                         }
@@ -52,7 +52,6 @@ impl PhysicsWorld {
         }
 
         for (i, j, collision) in collisions {
-            println!("Collision {}, {}", i, j);
             self.resolve_collision(i, j, collision);
         }
     }
@@ -102,18 +101,32 @@ impl PhysicsWorld {
     }
 
     fn resolve_collision(&mut self, i: usize, j: usize, collision: Collision) {
-        let normal = (self.bodies[j].position - self.bodies[i].position).normalize();
-        let relative_velocity = self.bodies[j].velocity - self.bodies[i].velocity;
-        let impulse = -(1.0 + 0.2) * relative_velocity.dot(normal);
+        let mut body_a = self.bodies[i].borrow_mut();
+        let mut body_b = self.bodies[j].borrow_mut();
 
-        let v1 = normal * impulse / self.bodies[i].mass;
-        let v2 = normal * impulse / self.bodies[j].mass;
-        self.bodies[i].velocity -= v1;
-        self.bodies[j].velocity += v2;
+        if !body_a.movable && !body_b.movable {
+            return;
+        }
 
-        let correction = collision.normal * (collision.penetration_depth / 2.0);
-        self.bodies[i].position -= correction;
-        self.bodies[j].position += correction;
+        let normal = (body_b.position - body_a.position).normalize();
+        let relative_velocity = body_b.velocity - body_a.velocity;
+        let impulse = relative_velocity.dot(normal) * (body_a.mass + body_b.mass) * 0.1;
+
+        let v1 = normal * impulse / body_a.mass;
+        let v2 = normal * impulse / body_b.mass;
+
+        if !body_a.movable {
+            body_b.velocity = -v2;
+            body_b.position -= collision.normal * collision.penetration_depth;
+        } else if !body_b.movable {
+            body_a.velocity = v1;
+            body_a.position -= collision.normal * collision.penetration_depth;
+        } else {
+            body_a.velocity = v1;
+            body_b.velocity = -v2;
+            body_a.position += collision.normal * (collision.penetration_depth / 2.0);
+            body_b.position -= collision.normal * (collision.penetration_depth / 2.0);
+        }
     }
 }
 
