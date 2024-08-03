@@ -1,6 +1,7 @@
 use super::*;
 use std::ffi::CStr;
 
+#[derive(Clone)]
 pub struct Fog {
     pub color: Vector3<f32>,
     pub density: f32,
