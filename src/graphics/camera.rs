@@ -136,4 +136,3 @@ impl Camera {
         println!("Pitch {}", self.pitch);
     }
 }
-

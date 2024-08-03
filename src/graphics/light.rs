@@ -4,6 +4,7 @@ use crate::*;
 use std::ffi::CString;
 use std::ffi::CStr;
 
+#[derive(Clone)]
 pub struct AmbientLight {
     pub color: Vector3<f32>,
     pub intensity: f32,
@@ -20,6 +21,7 @@ impl AmbientLight {
     }
 }
 
+#[derive(Clone)]
 pub struct LightSource {
     pub position: Vector3<f32>,
     pub color: Vector3<f32>,

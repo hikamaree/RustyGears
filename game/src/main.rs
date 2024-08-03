@@ -36,7 +36,6 @@ pub fn main() {
 
     let ambient_light = AmbientLight::new(vec3(0.2, 0.2, 0.2), 2.0);
     let light_source1 = LightSource::new(vec3(-5.0, 10.0, -10.0), vec3(1.0, 1.0, 1.0), 1.0);
-    let light_source2 = LightSource::new(vec3(5.0, 10.0, 10.0), vec3(1.0, 1.0, 1.0), 1.0);
 
     let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.0);
 
@@ -63,19 +62,16 @@ pub fn main() {
 
     {
         let mut s = scene.borrow_mut();
-        s.set_camera(camera.clone());
-
-        s.add_light_source(light_source1);
-        s.add_light_source(light_source2);
-        s.set_ambient_light(ambient_light);
-        s.set_fog(fog);
-
         s.set_depth_shader(depth_shader);
         s.set_shader(shader);
 
-        s.add_entity(Entity::Object(bbc));
-        s.add_entity(Entity::Character(sbc));
-        s.add_entity(Entity::Character(sphere));
+        s.add(camera.clone());
+        s.add(light_source1);
+        s.add(ambient_light);
+        s.add(fog);
+        s.add(bbc);
+        s.add(sbc);
+        s.add(sphere);
     }
 
     let mut fps = Fps::init();

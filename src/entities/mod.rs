@@ -33,5 +33,4 @@ impl Entity {
             Entity::Object(_) => ()
         }
     }
-
 }

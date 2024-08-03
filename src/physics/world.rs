@@ -70,27 +70,27 @@ impl PhysicsWorld {
                     None
                 }
             }
-            (CollisionBox::BoundingBox(aabb_a), CollisionBox::BoundingBox(aabb_b)) => {
-                let x_overlap = (aabb_a.max.x - aabb_b.min.x).min(aabb_b.max.x - aabb_a.min.x);
-                let y_overlap = (aabb_a.max.y - aabb_b.min.y).min(aabb_b.max.y - aabb_a.min.y);
-                let z_overlap = (aabb_a.max.z - aabb_b.min.z).min(aabb_b.max.z - aabb_a.min.z);
+            (CollisionBox::BoundingBox(box_a), CollisionBox::BoundingBox(box_b)) => {
+                let x_overlap = (box_a.max.x - box_b.min.x).min(box_b.max.x - box_a.min.x);
+                let y_overlap = (box_a.max.y - box_b.min.y).min(box_b.max.y - box_a.min.y);
+                let z_overlap = (box_a.max.z - box_b.min.z).min(box_b.max.z - box_a.min.z);
                 let penetration_depth = x_overlap.min(y_overlap).min(z_overlap);
                 if penetration_depth > 0.0 {
                     Some(Collision {
-                        normal: (aabb_b.center() - aabb_a.center()).normalize(),
+                        normal: (box_b.center() - box_a.center()).normalize(),
                         penetration_depth,
                     })
                 } else {
                     None
                 }
             }
-            (CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(aabb)) | (CollisionBox::BoundingBox(aabb), CollisionBox::Sphere(sphere)) => {
-                let closest_point = aabb.closest_point(&sphere.center);
+            (CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(bbox)) | (CollisionBox::BoundingBox(bbox), CollisionBox::Sphere(sphere)) => {
+                let closest_point = bbox.closest_point(&sphere.center);
                 let center_distance = (sphere.center.to_vec() - closest_point).magnitude();
                 let penetration_depth = sphere.radius - center_distance;
                 if penetration_depth > 0.0 {
                     Some(Collision {
-                        normal: (sphere.center.to_vec() - aabb.closest_point(&sphere.center)).normalize(),
+                        normal: (sphere.center.to_vec() - bbox.closest_point(&sphere.center)).normalize(),
                         penetration_depth,
                     })
                 } else {
@@ -108,24 +108,41 @@ impl PhysicsWorld {
             return;
         }
 
-        let normal = (body_b.position - body_a.position).normalize();
+        let normal = collision.normal.normalize();
         let relative_velocity = body_b.velocity - body_a.velocity;
-        let impulse = relative_velocity.dot(normal) * (body_a.mass + body_b.mass) * 0.1;
+        let velocity_along_normal = relative_velocity.dot(normal);
 
-        let v1 = normal * impulse / body_a.mass;
-        let v2 = normal * impulse / body_b.mass;
+        if velocity_along_normal > 0.0 {
+            return;
+        }
 
-        if !body_a.movable {
-            body_b.velocity = -v2;
-            body_b.position -= collision.normal * collision.penetration_depth;
-        } else if !body_b.movable {
-            body_a.velocity = v1;
-            body_a.position -= collision.normal * collision.penetration_depth;
-        } else {
-            body_a.velocity = v1;
-            body_b.velocity = -v2;
-            body_a.position += collision.normal * (collision.penetration_depth / 2.0);
-            body_b.position -= collision.normal * (collision.penetration_depth / 2.0);
+        let k = 10000.0;
+        let penetration_force = normal * (collision.penetration_depth * k);
+
+        let friction_coefficient = 0.1;
+        let friction_force = relative_velocity * friction_coefficient;
+
+        if body_a.movable {
+            let force_a = -penetration_force - friction_force;
+            body_a.apply_force(force_a);
+        }
+
+        if body_b.movable {
+            let force_b = penetration_force + friction_force;
+            body_b.apply_force(force_b);
+        }
+
+        let percent = 0.1;
+        let correction = collision.normal * (collision.penetration_depth / (body_a.mass + body_b.mass)) * percent;
+
+        if body_a.movable {
+            let mass = body_a.mass;
+            body_a.position -= correction / mass;
+        }
+
+        if body_b.movable {
+            let mass = body_b.mass;
+            body_b.position += correction / mass;
         }
     }
 }

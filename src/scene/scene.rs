@@ -1,22 +1,21 @@
 use crate::*;
-use crate::entities::Entity;
 use std::ffi::CString;
 use std::ffi::CStr;
 use core::cell::RefCell;
 use std::rc::Rc;
 
 pub struct Scene {
-    pub entities: Vec<Entity>,
-    pub models: Vec<ModelRef>,
-    pub ambient_light: Option<AmbientLight>,
-    pub light_sources: Vec<LightSource>,
-    pub light_space_matrices: Vec<Matrix4<f32>>,
-    pub shadow_map: ShadowMap,
-    pub fog: Option<Fog>,
-    pub shader: Option<Shader>,
-    pub depth_shader: Option<Shader>,
-    pub camera: CameraRef,
-    pub physics_world: PhysicsWorld,
+    entities: Vec<Entity>,
+    models: Vec<ModelRef>,
+    ambient_light: Option<AmbientLight>,
+    light_sources: Vec<LightSource>,
+    light_space_matrices: Vec<Matrix4<f32>>,
+    shadow_map: ShadowMap,
+    fog: Option<Fog>,
+    shader: Option<Shader>,
+    depth_shader: Option<Shader>,
+    camera: CameraRef,
+    physics_world: PhysicsWorld,
 }
 
 pub type SceneRef = Rc<RefCell<Scene>>;
@@ -34,16 +33,12 @@ impl Scene {
             shader: None,
             depth_shader: None,
             camera: Camera::create(),
-            physics_world: PhysicsWorld::new(Vector3::new(0.0, -0.1, 0.0)),
+            physics_world: PhysicsWorld::new(Vector3::new(0.0, -10.0, 0.0)),
         }
     }
 
     pub fn create() -> SceneRef {
         Rc::new(RefCell::new(Scene::new()))
-    }
-
-    pub fn set_camera(&mut self, camera: CameraRef) {
-        self.camera = camera;
     }
 
     pub fn set_shader(&mut self, shader: Shader) {
@@ -54,22 +49,29 @@ impl Scene {
         self.depth_shader = Some(shader);
     }
 
-    pub fn add_entity(&mut self, entity: Entity) {
+    pub(super) fn set_camera(&mut self, camera: CameraRef) {
+        self.camera = camera;
+    }
+
+    pub(super) fn add_entity(&mut self, entity: Entity) {
         entity.set_physics(&mut self.physics_world);
         self.entities.push(entity);
     }
 
-    pub fn add_model(&mut self, model: ModelRef) {
-        model.borrow_mut().add_physics(self, 10.0);
+    pub(super) fn add_model(&mut self, model: ModelRef) {
         self.models.push(model);
     }
 
-    pub fn set_ambient_light(&mut self, ambient_light: AmbientLight) {
+    pub(super) fn set_ambient_light(&mut self, ambient_light: AmbientLight) {
         self.ambient_light = Some(ambient_light);
     }
 
-    pub fn set_fog(&mut self, fog: Fog) {
+    pub(super) fn set_fog(&mut self, fog: Fog) {
         self.fog = Some(fog);
+    }
+
+    pub fn add<T: SceneItem>(&mut self, item: T) {
+        item.add_to_scene(self);
     }
 
     pub fn add_light_source(&mut self, light_source: LightSource) {

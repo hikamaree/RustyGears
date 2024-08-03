@@ -1,7 +1,7 @@
 use glfw::{Context, WindowEvent};
 use std::sync::mpsc::Receiver;
 use super::utils::*;
-use super::scene::*;
+use crate::scene::scene::*;
 use cgmath::{ Vector3, vec3 };
 
 pub struct Window {

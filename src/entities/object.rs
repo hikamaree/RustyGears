@@ -3,6 +3,7 @@ use crate::BodyRef;
 use crate::PhysicsWorld;
 use crate::Shader;
 
+#[derive(Clone)]
 pub struct Object {
     models: Vec<ModelRef>,
     body: Option<BodyRef>

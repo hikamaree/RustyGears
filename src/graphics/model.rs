@@ -9,8 +9,6 @@ use tobj;
 use super::mesh::{ Mesh, Texture, Vertex };
 use super::shader::Shader;
 use super::utils::*;
-use super::scene::*;
-use crate::physics::*;
 
 #[derive(Clone)]
 pub struct Model {
@@ -30,11 +28,6 @@ impl Model {
             directory: String::default(),
             position: vec3(0.0, 0.0, 0.0)
         }
-    }
-
-    pub fn add_physics(&mut self, scene: &mut Scene, mass: f32) {
-        let body = RigidBody::from_model_with_bounding_boxes(self, mass);
-        scene.physics_world.add_body(body);
     }
 
     fn new(path: &str, position: Vector3<f32>) -> Model {
