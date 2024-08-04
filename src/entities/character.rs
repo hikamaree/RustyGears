@@ -36,6 +36,7 @@ impl Character {
         if let Some(body) = &self.body {
             for model in &self.models {
                 model.borrow_mut().set_position(body.borrow_mut().position);
+                model.borrow_mut().set_rotation(body.borrow_mut().rotation);
             }
         }
     }

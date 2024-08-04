@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use core::cell::RefCell;
 use std::rc::Rc;
 
-use cgmath::{vec2, vec3, vec4, Vector3, Matrix4};
+use cgmath::{vec2, vec3, vec4, Vector3, Matrix4, Quaternion, Zero, One};
 use tobj;
 
 use super::mesh::{ Mesh, Texture, Vertex };
@@ -15,7 +15,8 @@ pub struct Model {
     pub meshes: Vec<Mesh>,
     pub textures_loaded: Vec<Texture>,
     directory: String,
-    pub position: Vector3<f32>
+    pub position: Vector3<f32>,
+    pub rotation: Quaternion<f32>
 }
 
 pub type ModelRef = Rc<RefCell<Model>>;
@@ -26,7 +27,8 @@ impl Model {
             meshes: Vec::default(),
             textures_loaded: Vec::default(),
             directory: String::default(),
-            position: vec3(0.0, 0.0, 0.0)
+            position: Vector3::zero(),
+            rotation: Quaternion::one(),
         }
     }
 
@@ -45,13 +47,19 @@ impl Model {
         self.position = position;
     }
 
+    pub fn set_rotation(&mut self, rotation: Quaternion<f32>) {
+        self.rotation = rotation;
+    }
+
     pub fn move_position(&mut self, offset: Vector3<f32>) {
         self.position += offset;
     }
 
     pub fn draw(&self, shader: &Shader) {
-        let mmodel = Matrix4::from_translation(self.position);
-        shader.set_mat4(c_str!("model"), &mmodel);
+        let translation_matrix = Matrix4::from_translation(self.position);
+        let rotation_matrix = Matrix4::from(self.rotation);
+        let model_matrix = translation_matrix * rotation_matrix;
+        shader.set_mat4(c_str!("model"), &model_matrix);
 
         unsafe {
             for mesh in &self.meshes {

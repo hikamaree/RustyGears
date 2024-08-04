@@ -65,6 +65,7 @@ impl PhysicsWorld {
                     Some(Collision {
                         normal: (sphere_b.center - sphere_a.center).normalize(),
                         penetration_depth,
+                        contact_point: (sphere_a.center.to_vec() + sphere_b.center.to_vec()) * 0.5,
                     })
                 } else {
                     None
@@ -79,6 +80,7 @@ impl PhysicsWorld {
                     Some(Collision {
                         normal: (box_b.center() - box_a.center()).normalize(),
                         penetration_depth,
+                        contact_point: (box_a.center().to_vec() + box_b.center().to_vec()) * 0.5,
                     })
                 } else {
                     None
@@ -92,6 +94,7 @@ impl PhysicsWorld {
                     Some(Collision {
                         normal: (sphere.center.to_vec() - bbox.closest_point(&sphere.center)).normalize(),
                         penetration_depth,
+                        contact_point: (sphere.center.to_vec() + bbox.center().to_vec()) * 0.5,
                     })
                 } else {
                     None
@@ -125,11 +128,19 @@ impl PhysicsWorld {
         if body_a.movable {
             let force_a = -penetration_force - friction_force;
             body_a.apply_force(force_a);
+
+            let r_a = collision.contact_point - body_a.position;
+            let torque_a = r_a.cross(force_a);
+            body_a.apply_torque(torque_a);
         }
 
         if body_b.movable {
             let force_b = penetration_force + friction_force;
             body_b.apply_force(force_b);
+
+            let r_b = collision.contact_point - body_b.position;
+            let torque_b = r_b.cross(force_b);
+            body_b.apply_torque(torque_b);
         }
 
         let percent = 0.1;
@@ -150,4 +161,5 @@ impl PhysicsWorld {
 struct Collision {
     normal: Vector3<f32>,
     penetration_depth: f32,
+    contact_point: Vector3<f32>
 }
