@@ -1,7 +1,6 @@
 use super::body::*;
-use cgmath::{ Vector3, InnerSpace, EuclideanSpace };
-use super::collision_box::*;
-
+use cgmath::{ Vector3, InnerSpace };
+use super::collision::*;
 
 pub struct PhysicsWorld {
     pub bodies: Vec<BodyRef>,
@@ -43,7 +42,7 @@ impl PhysicsWorld {
             for j in (i + 1)..body_count {
                 for shape_a in &self.bodies[i].borrow().collision_box {
                     for shape_b in &self.bodies[j].borrow().collision_box {
-                        if let Some(collision) = self.detect_collision(shape_a, shape_b) {
+                        if let Some(collision) = Collision::detect(shape_a, shape_b) {
                             collisions.push((i, j, collision));
                         }
                     }
@@ -53,53 +52,6 @@ impl PhysicsWorld {
 
         for (i, j, collision) in collisions {
             self.resolve_collision(i, j, collision);
-        }
-    }
-
-    fn detect_collision(&self, shape_a: &CollisionBox, shape_b: &CollisionBox) -> Option<Collision> {
-        match (shape_a, shape_b) {
-            (CollisionBox::Sphere(sphere_a), CollisionBox::Sphere(sphere_b)) => {
-                let center_distance = (sphere_a.center - sphere_b.center).magnitude();
-                let penetration_depth = (sphere_a.radius + sphere_b.radius) - center_distance;
-                if penetration_depth > 0.0 {
-                    Some(Collision {
-                        normal: (sphere_b.center - sphere_a.center).normalize(),
-                        penetration_depth,
-                        contact_point: (sphere_a.center.to_vec() + sphere_b.center.to_vec()) * 0.5,
-                    })
-                } else {
-                    None
-                }
-            }
-            (CollisionBox::BoundingBox(box_a), CollisionBox::BoundingBox(box_b)) => {
-                let x_overlap = (box_a.max.x - box_b.min.x).min(box_b.max.x - box_a.min.x);
-                let y_overlap = (box_a.max.y - box_b.min.y).min(box_b.max.y - box_a.min.y);
-                let z_overlap = (box_a.max.z - box_b.min.z).min(box_b.max.z - box_a.min.z);
-                let penetration_depth = x_overlap.min(y_overlap).min(z_overlap);
-                if penetration_depth > 0.0 {
-                    Some(Collision {
-                        normal: (box_b.center() - box_a.center()).normalize(),
-                        penetration_depth,
-                        contact_point: (box_a.center().to_vec() + box_b.center().to_vec()) * 0.5,
-                    })
-                } else {
-                    None
-                }
-            }
-            (CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(bbox)) | (CollisionBox::BoundingBox(bbox), CollisionBox::Sphere(sphere)) => {
-                let closest_point = bbox.closest_point(&sphere.center);
-                let center_distance = (sphere.center.to_vec() - closest_point).magnitude();
-                let penetration_depth = sphere.radius - center_distance;
-                if penetration_depth > 0.0 {
-                    Some(Collision {
-                        normal: (sphere.center.to_vec() - bbox.closest_point(&sphere.center)).normalize(),
-                        penetration_depth,
-                        contact_point: (sphere.center.to_vec() + bbox.center().to_vec()) * 0.5,
-                    })
-                } else {
-                    None
-                }
-            }
         }
     }
 
@@ -125,41 +77,42 @@ impl PhysicsWorld {
         let friction_coefficient = 0.1;
         let friction_force = relative_velocity * friction_coefficient;
 
+        let percent = 0.5;
+        let correction = collision.normal * (collision.penetration_depth / (body_a.mass + body_b.mass)) * percent;
+
         if body_a.movable {
+            let mass = body_a.mass;
             let force_a = -penetration_force - friction_force;
             body_a.apply_force(force_a);
 
             let r_a = collision.contact_point - body_a.position;
             let torque_a = r_a.cross(force_a);
             body_a.apply_torque(torque_a);
+
+            body_a.apply_surface_friction(friction_coefficient);
+
+            let rotational_friction = body_a.angular_velocity * -0.05;
+            body_a.apply_torque(rotational_friction);
+
+            body_a.position -= correction / mass;
         }
 
         if body_b.movable {
+            let mass = body_b.mass;
             let force_b = penetration_force + friction_force;
             body_b.apply_force(force_b);
 
             let r_b = collision.contact_point - body_b.position;
             let torque_b = r_b.cross(force_b);
             body_b.apply_torque(torque_b);
-        }
 
-        let percent = 0.1;
-        let correction = collision.normal * (collision.penetration_depth / (body_a.mass + body_b.mass)) * percent;
+            body_b.apply_surface_friction(friction_coefficient);
 
-        if body_a.movable {
-            let mass = body_a.mass;
-            body_a.position -= correction / mass;
-        }
+            let rotational_friction = body_b.angular_velocity * -0.05;
+            body_b.apply_torque(rotational_friction);
 
-        if body_b.movable {
-            let mass = body_b.mass;
             body_b.position += correction / mass;
         }
     }
 }
 
-struct Collision {
-    normal: Vector3<f32>,
-    penetration_depth: f32,
-    contact_point: Vector3<f32>
-}
