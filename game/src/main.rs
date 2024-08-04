@@ -42,7 +42,7 @@ pub fn main() {
     let big_block = Model::create("resources/models/big_block/big_block.obj", vec3(0.0, -10.0, 0.0));
     //let car = Model::create("resources/models/car/Avent_sport.obj", vec3(0.0, 0.2, 0.0));
     let ball = Model::create("resources/models/ball/ball.obj", vec3(0.0, 15.0, 0.0));
-    let block = Model::create("resources/models/block/block.obj", vec3(0.0, 50.0, 0.0));
+    let block = Model::create("resources/models/block/block.obj", vec3(0.5, 50.0, 0.0));
 
     let mut bbc = Object::new();
     bbc.add_model(big_block.clone());
@@ -100,7 +100,7 @@ pub fn main() {
             cam.zoom(yoffset);
         }
         window.update();
-        println!("Block position: {:?}", block.borrow_mut().position);
-        println!("Ball position: {:?}", ball.borrow_mut().position);
+//        println!("Block position: {:?}", block.borrow_mut().position);
+//        println!("Ball position: {:?}", ball.borrow_mut().position);
     }
 }
