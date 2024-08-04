@@ -126,7 +126,51 @@ impl RigidBody {
     }
 
     fn update_inertia_tensor(&mut self) {
-        self.inertia_tensor = Matrix3::from_value(self.mass);
+        let mut inertia_tensor = Matrix3::zero();
+
+        for shape in &self.collision_box {
+            match shape {
+                CollisionBox::BoundingBox(bbox) => {
+                    let size = bbox.size();
+                    let mass = self.mass;
+                    let width = size.x;
+                    let height = size.y;
+                    let depth = size.z;
+
+                    let i_xx = (1.0 / 12.0) * mass * (height * height + depth * depth);
+                    let i_yy = (1.0 / 12.0) * mass * (width * width + depth * depth);
+                    let i_zz = (1.0 / 12.0) * mass * (width * width + height * height);
+
+                    inertia_tensor.x.x += i_xx;
+                    inertia_tensor.y.y += i_yy;
+                    inertia_tensor.z.z += i_zz;
+                }
+                CollisionBox::Sphere(sphere) => {
+                    let radius = sphere.radius;
+                    let mass = self.mass;
+
+                    let i = (2.0 / 5.0) * mass * radius * radius;
+
+                    inertia_tensor.x.x += i;
+                    inertia_tensor.y.y += i;
+                    inertia_tensor.z.z += i;
+                }
+            }
+        }
+
+        self.inertia_tensor = inertia_tensor;
         self.inverse_inertia_tensor = self.inertia_tensor.invert().unwrap_or(Matrix3::zero());
+    }
+
+
+
+    pub fn tangential_velocity(&self) -> Vector3<f32> {
+        self.angular_velocity.cross(Vector3::unit_y()) * self.mass
+    }
+
+    pub fn apply_surface_friction(&mut self, friction_coefficient: f32) {
+        let tangential_velocity = self.tangential_velocity();
+        let friction_force = -tangential_velocity * friction_coefficient;
+        self.apply_force(friction_force);
     }
 }

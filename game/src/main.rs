@@ -75,7 +75,7 @@ pub fn main() {
     }
 
     let mut fps = Fps::init();
-
+    let mut x = 0;
     while !window.should_close() {
         fps.update();
         {

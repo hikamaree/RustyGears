@@ -64,6 +64,10 @@ impl BoundingBox {
             (self.min.z + self.max.z) / 2.0,
         )
     }
+
+    pub fn size(&self) -> Vector3<f32> {
+        self.max - self.min
+    }
 }
 
 #[derive(Clone)]
