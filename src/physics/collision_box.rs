@@ -68,6 +68,25 @@ impl BoundingBox {
     pub fn size(&self) -> Vector3<f32> {
         self.max - self.min
     }
+
+    pub fn get_overlap_region(&self, other: &BoundingBox) -> Option<BoundingBox> {
+        if self.intersects_box(other) {
+            let min_x = self.min.x.max(other.min.x);
+            let min_y = self.min.y.max(other.min.y);
+            let min_z = self.min.z.max(other.min.z);
+
+            let max_x = self.max.x.min(other.max.x);
+            let max_y = self.max.y.min(other.max.y);
+            let max_z = self.max.z.min(other.max.z);
+
+            Some(BoundingBox {
+                min: Point3::new(min_x, min_y, min_z),
+                max: Point3::new(max_x, max_y, max_z),
+            })
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone)]

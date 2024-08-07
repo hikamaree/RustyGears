@@ -5,7 +5,6 @@ use cgmath::{
     Quaternion,
     Rotation3,
     Zero,
-    One,
     Rad,
     EuclideanSpace,
     SquareMatrix,
@@ -39,7 +38,7 @@ pub struct RigidBody {
 pub type BodyRef = Rc<RefCell<RigidBody>>;
 
 impl RigidBody {
-    pub fn new(position: Vector3<f32>, mass: f32, collision_box: Vec<CollisionBox>) -> BodyRef {
+    pub fn new(position: Vector3<f32>, rotation: Quaternion<f32>,mass: f32, collision_box: Vec<CollisionBox>) -> BodyRef {
         let mut body: RigidBody = RigidBody {
             position,
             previous_position: position,
@@ -50,7 +49,7 @@ impl RigidBody {
             gravity: true,
             movable: true,
             collision_box,
-            rotation: Quaternion::one(),
+            rotation,
             angular_velocity: Vector3::zero(),
             angular_acceleration: Vector3::zero(),
             torque: Vector3::zero(),
@@ -68,7 +67,7 @@ impl RigidBody {
             CollisionBox::BoundingBox(mesh.calculate_bounding_box())
         }).collect();
 
-        RigidBody::new(model.position, mass, collision_box)
+        RigidBody::new(model.position, model.rotation, mass, collision_box)
     }
 
     pub fn from_model_with_spheres(model: &Model, mass: f32) -> BodyRef {
@@ -76,7 +75,7 @@ impl RigidBody {
             CollisionBox::Sphere(mesh.calculate_sphere())
         }).collect();
 
-        RigidBody::new(model.position, mass, collision_box)
+        RigidBody::new(model.position, model.rotation, mass, collision_box)
     }
 
     pub fn apply_force(&mut self, force: Vector3<f32>) {
@@ -163,14 +162,17 @@ impl RigidBody {
     }
 
 
-
-    pub fn tangential_velocity(&self) -> Vector3<f32> {
-        self.angular_velocity.cross(Vector3::unit_y()) * self.mass
+    pub fn tangential_velocity(&self, contact_point: Vector3<f32>) -> Vector3<f32> {
+        self.angular_velocity.cross(contact_point - self.position)
     }
 
-    pub fn apply_surface_friction(&mut self, friction_coefficient: f32) {
-        let tangential_velocity = self.tangential_velocity();
-        let friction_force = -tangential_velocity * friction_coefficient;
+    pub fn apply_surface_friction(&mut self, contact_normal: Vector3<f32>, contact_point: Vector3<f32>, friction_coefficient: f32) {
+        let relative_velocity = self.velocity + self.tangential_velocity(contact_point);
+
+        let tangential_velocity = relative_velocity - contact_normal * relative_velocity.dot(contact_normal);
+
+        let friction_force = -tangential_velocity * friction_coefficient * self.mass;
+
         self.apply_force(friction_force);
     }
 }

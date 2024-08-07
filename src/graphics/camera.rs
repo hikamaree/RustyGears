@@ -36,7 +36,7 @@ pub type CameraRef = Rc<RefCell<Camera>>;
 impl Default for Camera {
     fn default() -> Camera {
         let mut camera = Camera {
-            position: Point3::new(0.0, 12.0, 0.0),
+            position: Point3::new(0.0, 5.0, 5.0),
             front: vec3(0.0, 0.0, -1.0),
             up: Vector3::zero(),
             right: Vector3::zero(),
