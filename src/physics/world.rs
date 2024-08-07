@@ -71,27 +71,33 @@ impl PhysicsWorld {
             return;
         }
 
+        let restitution = 0.2; // 0.0 - 1.0
+        let j = (-(1.0 + restitution) * velocity_along_normal) / (1.0 / body_a.mass + 1.0 / body_b.mass);
+        let impulse = j * normal;
+
         let k = 10000.0;
         let penetration_force = normal * (collision.penetration_depth * k);
 
-        let friction_coefficient = 0.1;
-        let friction_force = relative_velocity * friction_coefficient;
+        let friction_coefficient = 0.5;
 
-        let percent = 0.5;
+        let percent = 0.1;
         let correction = collision.normal * (collision.penetration_depth / (body_a.mass + body_b.mass)) * percent;
 
         if body_a.movable {
             let mass = body_a.mass;
-            let force_a = -penetration_force - friction_force;
+
+            body_a.velocity -= impulse / mass;
+
+            let force_a = -penetration_force;
             body_a.apply_force(force_a);
 
             let r_a = collision.contact_point - body_a.position;
-            let torque_a = r_a.cross(force_a);
+            let torque_a = r_a.cross(force_a / mass);
             body_a.apply_torque(torque_a);
 
-            body_a.apply_surface_friction(friction_coefficient);
+            body_a.apply_surface_friction(normal, collision.contact_point, friction_coefficient);
 
-            let rotational_friction = body_a.angular_velocity * -0.05;
+            let rotational_friction = -body_a.angular_velocity * friction_coefficient;
             body_a.apply_torque(rotational_friction);
 
             body_a.position -= correction / mass;
@@ -99,20 +105,22 @@ impl PhysicsWorld {
 
         if body_b.movable {
             let mass = body_b.mass;
-            let force_b = penetration_force + friction_force;
+
+            body_b.velocity += impulse / mass;
+
+            let force_b = penetration_force;
             body_b.apply_force(force_b);
 
             let r_b = collision.contact_point - body_b.position;
-            let torque_b = r_b.cross(force_b);
+            let torque_b = -r_b.cross(force_b / mass);
             body_b.apply_torque(torque_b);
 
-            body_b.apply_surface_friction(friction_coefficient);
+            body_b.apply_surface_friction(normal, collision.contact_point ,friction_coefficient);
 
-            let rotational_friction = body_b.angular_velocity * -0.05;
+            let rotational_friction = -body_b.angular_velocity * friction_coefficient;
             body_b.apply_torque(rotational_friction);
 
             body_b.position += correction / mass;
         }
     }
 }
-
