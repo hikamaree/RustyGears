@@ -161,7 +161,6 @@ impl RigidBody {
         self.inverse_inertia_tensor = self.inertia_tensor.invert().unwrap_or(Matrix3::zero());
     }
 
-
     pub fn tangential_velocity(&self, contact_point: Vector3<f32>) -> Vector3<f32> {
         self.angular_velocity.cross(contact_point - self.position)
     }
@@ -171,8 +170,22 @@ impl RigidBody {
 
         let tangential_velocity = relative_velocity - contact_normal * relative_velocity.dot(contact_normal);
 
-        let friction_force = -tangential_velocity * friction_coefficient * self.mass;
 
-        self.apply_force(friction_force);
+        let friction_force;
+        if tangential_velocity.magnitude() < 0.1 {
+            friction_force = -tangential_velocity * friction_coefficient * self.mass;
+        } else {
+            friction_force = -tangential_velocity.normalize() * friction_coefficient * self.mass;
+        }
+
+
+        self.apply_force(-friction_force);
+        let r = contact_point - self.position;
+
+        let torque = r.cross(friction_force);
+        self.apply_torque(torque);
+
+        self.velocity *= 0.98;
+        self.angular_velocity *= 0.98
     }
 }

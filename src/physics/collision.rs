@@ -1,10 +1,10 @@
-use cgmath::{ Vector3, EuclideanSpace, InnerSpace};
+use cgmath::{ Vector3, EuclideanSpace, InnerSpace };
 use super::collision_box::*;
 
 pub struct Collision {
     pub normal: Vector3<f32>,
     pub penetration_depth: f32,
-    pub contact_point: Vector3<f32>
+    pub contact_point: Vector3<f32>,
 }
 
 impl Collision {
@@ -62,7 +62,7 @@ impl Collision {
                 let penetration_depth = sphere.radius - center_distance;
                 if penetration_depth > 0.0 {
                     Some(Collision {
-                        normal: (sphere.center.to_vec() - bbox.closest_point(&sphere.center)).normalize(),
+                        normal: (sphere.center.to_vec() - closest_point).normalize(),
                         penetration_depth,
                         contact_point: closest_point,
                     })
