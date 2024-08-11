@@ -1,4 +1,11 @@
-use cgmath::{Point3, Vector3, InnerSpace};
+use cgmath::{
+    Point3,
+    Vector3,
+    InnerSpace,
+    Quaternion,
+    Matrix3,
+    EuclideanSpace,
+};
 
 #[derive(Clone)]
 pub struct Sphere {
@@ -33,12 +40,6 @@ impl BoundingBox {
         BoundingBox { min, max }
     }
 
-    pub fn intersects_box(&self, other: &BoundingBox) -> bool {
-        self.min.x <= other.max.x && self.max.x >= other.min.x &&
-            self.min.y <= other.max.y && self.max.y >= other.min.y &&
-            self.min.z <= other.max.z && self.max.z >= other.min.z
-    }
-
     pub fn intersects_sphere(&self, sphere: &Sphere) -> bool {
         let closest_point = Point3 {
             x: sphere.center.x.max(self.min.x).min(self.max.x),
@@ -69,23 +70,26 @@ impl BoundingBox {
         self.max - self.min
     }
 
-    pub fn get_overlap_region(&self, other: &BoundingBox) -> Option<BoundingBox> {
-        if self.intersects_box(other) {
-            let min_x = self.min.x.max(other.min.x);
-            let min_y = self.min.y.max(other.min.y);
-            let min_z = self.min.z.max(other.min.z);
+    pub fn rotated_points(&self, rotation: &Quaternion<f32>) -> Vec<Vector3<f32>> {
+        let half_size = self.size() / 2.0;
 
-            let max_x = self.max.x.min(other.max.x);
-            let max_y = self.max.y.min(other.max.y);
-            let max_z = self.max.z.min(other.max.z);
+        let corners = vec![
+            Vector3::new(-half_size.x, -half_size.y, -half_size.z),
+            Vector3::new(half_size.x, -half_size.y, -half_size.z),
+            Vector3::new(-half_size.x, half_size.y, -half_size.z),
+            Vector3::new(half_size.x, half_size.y, -half_size.z),
+            Vector3::new(-half_size.x, -half_size.y, half_size.z),
+            Vector3::new(half_size.x, -half_size.y, half_size.z),
+            Vector3::new(-half_size.x, half_size.y, half_size.z),
+            Vector3::new(half_size.x, half_size.y, half_size.z),
+        ];
 
-            Some(BoundingBox {
-                min: Point3::new(min_x, min_y, min_z),
-                max: Point3::new(max_x, max_y, max_z),
-            })
-        } else {
-            None
-        }
+        let rotation_matrix = Matrix3::from(*rotation);
+
+        corners
+            .into_iter()
+            .map(|corner| rotation_matrix * corner + self.center().to_vec())
+            .collect()
     }
 }
 
