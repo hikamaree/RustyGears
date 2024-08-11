@@ -1,5 +1,5 @@
 use rusty_gears::*;
-use std::process::Command;
+/*use std::process::Command;
 use std::time::{Duration, Instant};
 
 struct Fps {
@@ -25,7 +25,7 @@ impl Fps {
             println!("FPS: {}", fps);
         }
     }
-}
+}*/
 
 pub fn main() {
     let mut window = Window::new(1280, 720, "RustyGears");
@@ -39,11 +39,11 @@ pub fn main() {
 
     let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.0);
 
-    let big_block = Model::create("resources/models/plane/plane.obj", vec3(0.0, 0.0, 0.0));
+    let big_block = Model::create("resources/models/plane/plane.obj", vec3(10.0, 0.0, 10.0));
     //let car = Model::create("resources/models/car/Avent_sport.obj", vec3(0.0, 0.2, 0.0));
     let ball = Model::create("resources/models/ball/ball.obj", vec3(0.0, 15.0, 0.0));
     let block = Model::create("resources/models/block/block.obj", vec3(1.5, 50.0, 1.0));
-    //block.borrow_mut().set_rotation(Quaternion::from_angle_x(Deg(10.0)) * Quaternion::from_angle_z(Deg(30.0)));
+    block.borrow_mut().set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
 
     let mut bbc = Object::new();
     bbc.add_model(big_block.clone());
@@ -71,8 +71,8 @@ pub fn main() {
         s.add(ambient_light);
         s.add(fog);
         s.add(bbc);
-        s.add(sbc);
         s.add(sphere);
+        s.add(sbc);
     }
 
 //    let mut fps = Fps::init();

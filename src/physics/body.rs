@@ -33,6 +33,9 @@ pub struct RigidBody {
     pub torque: Vector3<f32>,
     pub inertia_tensor: Matrix3<f32>,
     pub inverse_inertia_tensor: Matrix3<f32>,
+
+    pub bounciness: f32,
+    pub friction_coefficient: f32,
 }
 
 pub type BodyRef = Rc<RefCell<RigidBody>>;
@@ -55,8 +58,10 @@ impl RigidBody {
             torque: Vector3::zero(),
             inertia_tensor: Matrix3::identity(),
             inverse_inertia_tensor: Matrix3::identity(),
-
+            bounciness: 0.5,
+            friction_coefficient: 0.5,
         };
+
         body.update_collision_shapes();
         body.update_inertia_tensor();
         Rc::new(RefCell::new(body))
@@ -76,6 +81,24 @@ impl RigidBody {
         }).collect();
 
         RigidBody::new(model.position, model.rotation, mass, collision_box)
+    }
+
+    pub fn set_bounciness(&mut self, bounciness: f32) {
+        if bounciness > 1.0 {
+            self.bounciness = 1.0;
+        } else if bounciness < 0.0 {
+            self.bounciness = 0.0;
+        } else {
+            self.bounciness = bounciness;
+        }
+    }
+
+    pub fn set_friction_coefficient(&mut self, friction_coefficient: f32) {
+        if friction_coefficient < 0.0 {
+            self.friction_coefficient = 0.0;
+        } else {
+            self.friction_coefficient = friction_coefficient;
+        }
     }
 
     pub fn apply_force(&mut self, force: Vector3<f32>) {
@@ -100,10 +123,16 @@ impl RigidBody {
 
         self.angular_acceleration = self.inverse_inertia_tensor * self.torque;
         self.angular_velocity += self.angular_acceleration * dt;
-        let delta_rotation = Quaternion::from_angle_x(Rad(self.angular_velocity.x * dt)) *
-                             Quaternion::from_angle_y(Rad(self.angular_velocity.y * dt)) *
-                             Quaternion::from_angle_z(Rad(self.angular_velocity.z * dt));
-        self.rotation = (delta_rotation * self.rotation).normalize();
+
+        if self.angular_velocity.magnitude() < 0.1 {
+            self.angular_velocity = Vector3::zero();
+        } else {
+            let delta_rotation = Quaternion::from_angle_x(Rad(self.angular_velocity.x * dt)) *
+                Quaternion::from_angle_y(Rad(self.angular_velocity.y * dt)) *
+                Quaternion::from_angle_z(Rad(self.angular_velocity.z * dt));
+            self.rotation = (delta_rotation * self.rotation).normalize();
+        }
+
         self.torque = Vector3::zero();
 
         self.update_collision_shapes();
@@ -172,20 +201,18 @@ impl RigidBody {
 
 
         let friction_force;
-        if tangential_velocity.magnitude() < 0.1 {
+        if tangential_velocity.magnitude() < 0.01 {
             friction_force = -tangential_velocity * friction_coefficient * self.mass;
         } else {
             friction_force = -tangential_velocity.normalize() * friction_coefficient * self.mass;
         }
 
-
-        self.apply_force(-friction_force);
         let r = contact_point - self.position;
 
         let torque = r.cross(friction_force);
         self.apply_torque(torque);
 
         self.velocity *= 0.98;
-        self.angular_velocity *= 0.98
+        self.angular_velocity *= 0.98;
     }
 }
