@@ -16,7 +16,7 @@ const SENSITIVTY: f32 = 0.1;
 const ZOOM: f32 = 45.0;
 
 #[derive(Clone, Copy)]
-pub struct Camera {
+pub struct CameraContoller {
     pub position: Point3,
     pub front: Vector3,
     pub up: Vector3,
@@ -31,11 +31,11 @@ pub struct Camera {
     pub last_y: f32,
 }
 
-pub type CameraRef = Rc<RefCell<Camera>>;
+pub type CameraRef = Rc<RefCell<CameraContoller>>;
 
-impl Default for Camera {
-    fn default() -> Camera {
-        let mut camera = Camera {
+impl Default for CameraContoller {
+    fn default() -> CameraContoller {
+        let mut camera = CameraContoller {
             position: Point3::new(0.0, 5.0, 5.0),
             front: vec3(0.0, 0.0, -1.0),
             up: Vector3::zero(),
@@ -54,11 +54,10 @@ impl Default for Camera {
     }
 }
 
-impl Camera {
+impl CameraContoller {
     pub fn create() -> CameraRef {
-        Rc::new(RefCell::new(Camera::default()))
+        Rc::new(RefCell::new(CameraContoller::default()))
     }
-
     pub fn get_view_matrix(&self) -> Matrix4 {
         Matrix4::look_at_rh(self.position, self.position + self.front, self.up)
     }
@@ -134,5 +133,49 @@ impl Camera {
         println!("Position {:?}", self.position);
         println!("Yaw {}", self.yaw);
         println!("Pitch {}", self.pitch);
+    }
+}
+
+pub struct Camera {
+    pub(crate) camera: CameraRef,
+}
+
+impl Camera {
+    pub fn new() -> Camera {
+        Camera {
+            camera: Rc::new(RefCell::new(CameraContoller::default()))
+        }
+    }
+
+    pub fn move_forward(&self, dt: f32) {
+        self.camera.borrow_mut().move_forward(dt);
+    }
+
+    pub fn move_backward(&self, dt: f32) {
+        self.camera.borrow_mut().move_backward(dt);
+    }
+
+    pub fn move_left(&self, dt: f32) {
+        self.camera.borrow_mut().move_left(dt);
+    }
+
+    pub fn move_right(&self, dt: f32) {
+        self.camera.borrow_mut().move_right(dt);
+    }
+
+    pub fn rotate(&self, xpos: f32, ypos: f32, constrain_pitch: bool) {
+        self.camera.borrow_mut().rotate(xpos, ypos, constrain_pitch);
+    }
+
+    pub fn zoom(&self, yoffset: f32) {
+        self.camera.borrow_mut().zoom(yoffset);
+    }
+
+    pub fn position(&self) -> Vector3 {
+        self.camera.borrow().position.to_vec()
+    }
+
+    pub fn front(&self) -> Vector3 {
+        self.camera.borrow().front
     }
 }

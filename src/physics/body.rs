@@ -59,7 +59,7 @@ impl RigidBody {
             inertia_tensor: Matrix3::identity(),
             inverse_inertia_tensor: Matrix3::identity(),
             bounciness: 0.5,
-            friction_coefficient: 0.5,
+            friction_coefficient: 1.0,
         };
 
         body.update_collision_shapes();
@@ -199,13 +199,9 @@ impl RigidBody {
 
         let tangential_velocity = relative_velocity - contact_normal * relative_velocity.dot(contact_normal);
 
+        let friction_force = -tangential_velocity * friction_coefficient * self.mass;
 
-        let friction_force;
-        if tangential_velocity.magnitude() < 0.01 {
-            friction_force = -tangential_velocity * friction_coefficient * self.mass;
-        } else {
-            friction_force = -tangential_velocity.normalize() * friction_coefficient * self.mass;
-        }
+        self.apply_force(-friction_force);
 
         let r = contact_point - self.position;
 

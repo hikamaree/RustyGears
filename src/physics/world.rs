@@ -66,56 +66,58 @@ impl PhysicsWorld {
             return;
         }
 
-        let normal = collision.normal.normalize();
-        let relative_velocity = body_b.velocity - body_a.velocity;
-        let velocity_along_normal = relative_velocity.dot(normal);
+        if collision.normal.x.is_nan() {
+            return;
+        }
+
+        let r_a = collision.contact_point - body_a.position;
+        let r_b = collision.contact_point - body_b.position;
+        let relative_velocity = (body_b.velocity + r_b.cross(body_b.angular_velocity)) - (body_a.velocity + r_a.cross(body_a.angular_velocity));
+        let normal = collision.normal;
 
         let bounciness = (body_a.bounciness + body_b.bounciness) / 2.0;
-        let j = (-(1.0 + bounciness) * velocity_along_normal) / (1.0 / body_a.mass + 1.0 / body_b.mass);
-        let impulse = j * normal;
+        let impulse_magnitude = -(1.0 + bounciness) * relative_velocity.dot(normal) / (1.0 / body_a.mass + 1.0 / body_b.mass);
+        let impulse = impulse_magnitude * normal;
 
-        let k = 10000.0;
-        let force = normal * (collision.overlap * k);
+        //let k = (body_a.mass * body_b.mass).sqrt();
+        //let force = normal * (collision.overlap * k);
 
         let friction_coefficient = (body_a.friction_coefficient * body_b.friction_coefficient).sqrt();
 
-        let percent = 0.2;
+        let percent = 0.5;
         let correction = collision.normal * (collision.overlap / (body_a.mass + body_b.mass)) * percent;
 
         if body_a.movable {
             let mass = body_a.mass;
-
             body_a.velocity -= impulse / mass;
 
-            body_a.apply_force(-force);
+//            body_a.apply_force(-force);
 
-            let r_a = collision.contact_point - body_a.position;
-            let torque_a = -r_a.cross(body_a.velocity * body_a.mass + body_b.velocity * body_b.mass);
+            let torque_a = -r_a.cross(impulse);
             body_a.apply_torque(torque_a);
 
-
-            let gravity_torque = r_a.cross(self.gravity * body_a.mass);
-            body_a.apply_torque(-gravity_torque);
+            let gravity_torque = -r_a.cross(self.gravity * body_a.mass);
+            body_a.apply_torque(gravity_torque);
 
             body_a.apply_surface_friction(normal, collision.contact_point, friction_coefficient);
+
             body_a.position -= correction * mass;
         }
 
         if body_b.movable {
             let mass = body_b.mass;
-
             body_b.velocity += impulse / mass;
 
-            body_b.apply_force(force);
+//            body_b.apply_force(-force);
 
-            let r_b = collision.contact_point - body_b.position;
-            let torque_b = -r_b.cross(body_a.velocity * body_a.mass + body_b.velocity * body_b.mass);
+            let torque_b = r_b.cross(impulse);
             body_b.apply_torque(torque_b);
 
-            let gravity_torque = r_b.cross(self.gravity * body_b.mass);
-            body_b.apply_torque(-gravity_torque);
+            let gravity_torque = -r_b.cross(self.gravity * body_b.mass);
+            body_b.apply_torque(gravity_torque);
 
             body_b.apply_surface_friction(normal, collision.contact_point ,friction_coefficient);
+
             body_b.position += correction * body_a.mass;
         }
     }

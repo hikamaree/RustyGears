@@ -5,7 +5,7 @@ use core::cell::RefCell;
 use std::rc::Rc;
 
 pub struct Scene {
-    entities: Vec<Entity>,
+    entities: Vec<Box<dyn Entity>>,
     models: Vec<ModelRef>,
     ambient_light: Option<AmbientLight>,
     light_sources: Vec<LightSource>,
@@ -32,7 +32,7 @@ impl Scene {
             fog: None,
             shader: None,
             depth_shader: None,
-            camera: Camera::create(),
+            camera: CameraContoller::create(),
             physics_world: PhysicsWorld::new(Vector3::new(0.0, -10.0, 0.0)),
         }
     }
@@ -41,21 +41,23 @@ impl Scene {
         Rc::new(RefCell::new(Scene::new()))
     }
 
-    pub fn set_shader(&mut self, shader: Shader) {
+    pub fn set_shader(&mut self, shader: Shader) -> &mut Self{
         self.shader = Some(shader);
+        self
     }
 
-    pub fn set_depth_shader(&mut self, shader: Shader) {
+    pub fn set_depth_shader(&mut self, shader: Shader) -> &mut Self {
         self.depth_shader = Some(shader);
+        self
     }
 
     pub(super) fn set_camera(&mut self, camera: CameraRef) {
         self.camera = camera;
     }
 
-    pub(super) fn add_entity(&mut self, entity: Entity) {
+    pub(super) fn add_entity<T: Entity + 'static>(&mut self, mut entity: T) {
         entity.set_physics(&mut self.physics_world);
-        self.entities.push(entity);
+        self.entities.push(Box::new(entity));
     }
 
     pub(super) fn add_model(&mut self, model: ModelRef) {
@@ -70,8 +72,9 @@ impl Scene {
         self.fog = Some(fog);
     }
 
-    pub fn add<T: SceneItem>(&mut self, item: T) {
+    pub fn add<T: SceneItem>(&mut self, item: &T) -> &mut Self {
         item.add_to_scene(self);
+        self
     }
 
     pub fn add_light_source(&mut self, light_source: LightSource) {
@@ -89,7 +92,7 @@ impl Scene {
 
     pub fn draw(&self, shader: &Shader) {
         for model in &self.models {
-            model.borrow_mut().draw(shader);
+            model.borrow_mut().draw(shader, Vector3::zero(), Quaternion::zero());
         }
 
         for entity in &self.entities {
