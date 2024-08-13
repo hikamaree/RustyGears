@@ -4,6 +4,7 @@ use cgmath::{
     InnerSpace,
     Quaternion,
     Zero,
+    Matrix,
     Matrix3,
     Point3,
 };
@@ -84,6 +85,10 @@ impl Collision {
                     }
                 }
 
+                if (box_b.center() - box_a.center()).dot(normal) < 0.0 {
+                    normal = -normal;
+                }
+
                 let corners_a = box_a.rotated_points(&rotation_a);
                 let corners_b = box_b.rotated_points(&rotation_b);
 
@@ -113,6 +118,7 @@ impl Collision {
                     contact_point: contact_point.to_vec(),
                 })
             }
+
             (CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(bbox)) => {
                 let closest_point = bbox.closest_point(&sphere.center);
                 let center_distance = (sphere.center.to_vec() - closest_point).magnitude();
@@ -141,6 +147,63 @@ impl Collision {
                     None
                 }
             }
+
+            /*(CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(bbox)) => {
+                let rot_box = Matrix3::from(rotation_b);
+                let half_box = bbox.size() / 2.0;
+
+                let sphere_center_local = rot_box.transpose() * (sphere.center - bbox.center());
+
+                let closest_point = Vector3::new(
+                    sphere_center_local.x.max(-half_box.x).min(half_box.x),
+                    sphere_center_local.y.max(-half_box.y).min(half_box.y),
+                    sphere_center_local.z.max(-half_box.z).min(half_box.z),
+                );
+
+                let distance = (sphere_center_local - closest_point).magnitude();
+
+                let normal = (closest_point - sphere_center_local).normalize();
+                let overlap = sphere.radius - distance;
+                let contact_point = rot_box * closest_point + bbox.center().to_vec();
+
+                if overlap > 0.0 {
+                    Some(Collision {
+                        normal,
+                        overlap,
+                        contact_point,
+                    })
+                } else {
+                    None
+                }
+            }
+            (CollisionBox::BoundingBox(bbox), CollisionBox::Sphere(sphere)) => {
+                let rot_box = Matrix3::from(rotation_a);
+                let half_box = bbox.size() / 2.0;
+
+                let sphere_center_local = rot_box.transpose() * (sphere.center - bbox.center());
+
+                let closest_point = Vector3::new(
+                    sphere_center_local.x.max(-half_box.x).min(half_box.x),
+                    sphere_center_local.y.max(-half_box.y).min(half_box.y),
+                    sphere_center_local.z.max(-half_box.z).min(half_box.z),
+                );
+
+                let distance = (sphere_center_local - closest_point).magnitude();
+
+                let normal = -(closest_point - sphere_center_local).normalize();
+                let overlap = sphere.radius - distance;
+                let contact_point = rot_box * closest_point + bbox.center().to_vec();
+
+                if overlap > 0.0 {
+                    Some(Collision {
+                        normal,
+                        overlap,
+                        contact_point,
+                    })
+                } else {
+                    None
+                }
+            }*/
         }
     }
 }

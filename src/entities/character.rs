@@ -1,49 +1,60 @@
 use crate::graphics::ModelRef;
-use crate::graphics::Shader;
 use crate::physics::BodyRef;
-use crate::physics::PhysicsWorld;
+
+use cgmath::{
+    Vector3,
+    Quaternion,
+    Zero,
+    One
+};
 
 #[derive(Clone)]
 pub struct Character {
     pub models: Vec<ModelRef>,
-    pub body: Option<BodyRef>
+    pub body: Option<BodyRef>,
+    pub position: Vector3<f32>,
+    pub rotation: Quaternion<f32>,
 }
 
 impl Character {
     pub fn new() -> Self {
         Character {
             models: Vec::new(),
-            body: None
+            body: None,
+            position: Vector3::zero(),
+            rotation: Quaternion::one(),
         }
     }
 
-    pub fn set_body(&mut self, body: BodyRef) {
-        body.borrow_mut().movable = true;
-        self.body = Some(body);
-    }
-
-    pub fn add_model(&mut self, model: ModelRef) {
-        self.models.push(model);
-    }
-
-    pub fn set_physics(&self, world: &mut PhysicsWorld) {
+    pub fn set_position(&mut self, position: Vector3<f32>) {
+        self.position = position;
         if let Some(body) = &self.body {
-            world.add_body(body.clone());
+            body.borrow_mut().position = position;
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn set_rotation(&mut self, rotation: Quaternion<f32>) {
+        self.rotation = rotation;
         if let Some(body) = &self.body {
-            for model in &self.models {
-                model.borrow_mut().set_position(body.borrow_mut().position);
-                model.borrow_mut().set_rotation(body.borrow_mut().rotation);
-            }
+            body.borrow_mut().rotation = rotation;
         }
     }
 
-    pub fn draw(&self, shader: &Shader) {
-        for model in &self.models {
-            model.borrow().draw(shader);
+    pub fn set_velocity(&mut self, velocity: Vector3<f32>) {
+        if let Some(body) = &self.body {
+            body.borrow_mut().velocity = velocity;
+        }
+    }
+
+    pub fn apply_force(&mut self, force: Vector3<f32>) {
+        if let Some(body) = &self.body {
+            body.borrow_mut().apply_force(force);
+        }
+    }
+
+    pub fn apply_torque(&mut self, force: Vector3<f32>) {
+        if let Some(body) = &self.body {
+            body.borrow_mut().apply_torque(force);
         }
     }
 }

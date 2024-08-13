@@ -3,7 +3,17 @@ use std::ffi::CStr;
 use core::cell::RefCell;
 use std::rc::Rc;
 
-use cgmath::{vec2, vec3, vec4, Vector3, Matrix4, Quaternion, Zero, One};
+use cgmath::{
+    vec2,
+    vec3,
+    vec4,
+    Vector3,
+    Matrix4,
+    Quaternion,
+    Zero,
+    One
+};
+
 use tobj;
 
 use super::mesh::{ Mesh, Texture, Vertex };
@@ -55,9 +65,9 @@ impl Model {
         self.position += offset;
     }
 
-    pub fn draw(&self, shader: &Shader) {
-        let translation_matrix = Matrix4::from_translation(self.position);
-        let rotation_matrix = Matrix4::from(self.rotation);
+    pub fn draw(&self, shader: &Shader, position: Vector3<f32>, rotation: Quaternion<f32>) {
+        let translation_matrix = Matrix4::from_translation(position);
+        let rotation_matrix = Matrix4::from(rotation);
         let model_matrix = translation_matrix * rotation_matrix;
         shader.set_mat4(c_str!("model"), &model_matrix);
 

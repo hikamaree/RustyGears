@@ -104,6 +104,16 @@ impl Window {
         false
     }
 
+    pub fn key_released (&self, key: char) -> bool {
+        if let Some(glfw_key) = char_to_glfw_key(key) {
+            if self.window_handle.get_key(glfw_key) == glfw::Action::Release {
+                return true;
+            }
+        }
+        false
+    }
+
+
     pub fn get_cursor_pos(&self) -> (f32, f32) {
         (self.cursor_pos.0 as f32, self.cursor_pos.1 as f32)
     }

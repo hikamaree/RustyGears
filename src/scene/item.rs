@@ -6,21 +6,21 @@ pub trait SceneItem {
     fn add_to_scene(&self, scene: &mut Scene);
 }
 
-impl SceneItem for CameraRef {
+impl SceneItem for Camera {
     fn add_to_scene(&self, scene: &mut Scene) {
-        scene.set_camera(self.clone());
+        scene.set_camera(self.camera.clone());
     }
 }
 
 impl SceneItem for Character {
     fn add_to_scene(&self, scene: &mut Scene) {
-        scene.add_entity(Entity::Character(self.clone()));
+        scene.add_entity(self.clone());
     }
 }
 
 impl SceneItem for Object {
     fn add_to_scene(&self, scene: &mut Scene) {
-        scene.add_entity(Entity::Object(self.clone()));
+        scene.add_entity(self.clone());
     }
 }
 
