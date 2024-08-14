@@ -55,10 +55,16 @@ impl Scene {
         self.camera = camera;
     }
 
-    pub(super) fn add_entity<T: Entity + 'static>(&mut self, mut entity: T) {
+/*    pub(super) fn add_entity<T: Entity + 'static>(&mut self, mut entity: T) {
         entity.set_physics(&mut self.physics_world);
         self.entities.push(Box::new(entity));
+    }*/
+
+    pub(super) fn add_entity(&mut self, mut entity: Box<dyn Entity>) {
+        entity.set_physics(&mut self.physics_world);
+        self.entities.push(entity);
     }
+
 
     pub(super) fn add_model(&mut self, model: ModelRef) {
         self.models.push(model);
