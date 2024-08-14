@@ -46,16 +46,16 @@ pub fn main() {
     let block = Model::create("resources/models/block/block.obj", vec3(1.5, 50.0, 1.1));
     //block.borrow_mut().set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
 
-    let mut bbc = Object::new();
-    bbc.add_model(big_block.clone())
+    let bbc = Object::new()
+        .add_model(big_block.clone())
         .set_body(RigidBody::from_model_with_bounding_boxes(&big_block.borrow(), 1000000.0));
 
-    let mut sbc = Character::new();
-    sbc.add_model(block.clone())
+    let sbc = Character::new()
+        .add_model(block.clone())
         .set_body(RigidBody::from_model_with_bounding_boxes(&block.borrow(), 10.0));
 
-    let mut sphere = Character::new();
-    sphere.add_model(ball.clone())
+    let sphere = Character::new()
+        .add_model(ball.clone())
         .set_body(RigidBody::from_model_with_spheres(&ball.borrow(), 10.0));
 
     let scene = Scene::create();
@@ -92,11 +92,11 @@ pub fn main() {
         }
         if window.key_pressed('F') && !pucaj {
             pucaj = true;
-            let mut b = Character::new();
-            b.add_model(bullet.clone());
-            b.set_body(RigidBody::from_model_with_spheres(&bullet.borrow(), 1.0));
-            b.set_position(camera.position());
-            b.set_velocity(camera.front() * 50.0);
+            let mut b = Character::new()
+                .add_model(bullet.clone())
+                .set_body(RigidBody::from_model_with_spheres(&bullet.borrow(), 1.0))
+                .set_position(camera.position())
+                .set_velocity(camera.front() * 50.0);
             scene.borrow_mut().add(&b);
         }
         if window.key_released('F') && pucaj {
