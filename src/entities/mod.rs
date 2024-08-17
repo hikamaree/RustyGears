@@ -10,7 +10,7 @@ use cgmath::{
 };
 
 use crate::BodyRef;
-use crate::ModelRef;
+use crate::Model;
 
 use crate::Shader;
 use crate::PhysicsWorld;
@@ -22,7 +22,8 @@ pub trait Entity {
     fn set_physics(&mut self, world: &mut PhysicsWorld) -> Box<dyn Entity>;
     fn update(&mut self);
     fn set_body(&mut self, body: BodyRef) -> Box<dyn Entity>;
-    fn add_model(&mut self, model: ModelRef) -> Box<dyn Entity>;
+    fn set_mass(&mut self, mass: f32) -> Box<dyn Entity>;
+    fn add_model(&mut self, model: Model) -> Box<dyn Entity>;
     fn set_position(&mut self, position: Vector3<f32>) -> Box<dyn Entity>;
     fn set_rotation(&mut self, rotation: Quaternion<f32>) -> Box<dyn Entity>;
     fn set_velocity(&mut self, velocity: Vector3<f32>) -> Box<dyn Entity>;

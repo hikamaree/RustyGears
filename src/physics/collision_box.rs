@@ -1,7 +1,6 @@
 use cgmath::{
     Point3,
     Vector3,
-    InnerSpace,
     Quaternion,
     Matrix3,
     EuclideanSpace,
@@ -17,16 +16,6 @@ impl Sphere {
     pub fn new(center: Point3<f32>, radius: f32) -> Self {
         Sphere { center, radius }
     }
-
-    pub fn intersects_sphere(&self, other: &Sphere) -> bool {
-        let distance = (self.center - other.center).magnitude();
-        distance < (self.radius + other.radius)
-    }
-
-    pub fn intersects_box(&self, bbox: &BoundingBox) -> bool {
-        bbox.intersects_sphere(self)
-    }
-
 }
 
 #[derive(Clone)]
@@ -39,16 +28,6 @@ impl BoundingBox {
     pub fn new(min: Point3<f32>, max: Point3<f32>) -> Self {
         BoundingBox { min, max }
     }
-
-    pub fn intersects_sphere(&self, sphere: &Sphere) -> bool {
-        let closest_point = Point3 {
-            x: sphere.center.x.max(self.min.x).min(self.max.x),
-            y: sphere.center.y.max(self.min.y).min(self.max.y),
-            z: sphere.center.z.max(self.min.z).min(self.max.z),
-        };
-        (closest_point - sphere.center).magnitude2() < sphere.radius * sphere.radius
-    }
-
 
     pub fn closest_point(&self, point: &Point3<f32>) -> Vector3<f32> {
         Vector3::new(

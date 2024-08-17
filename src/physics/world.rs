@@ -45,7 +45,7 @@ impl PhysicsWorld {
             for j in (i + 1)..body_count {
                 for shape_a in &self.bodies[i].borrow().collision_box {
                     for shape_b in &self.bodies[j].borrow().collision_box {
-                        if let Some(collision) = Collision::detect(shape_a, shape_b, self.bodies[i].borrow().rotation, self.bodies[j].borrow().rotation) {
+                        if let Some(collision) = Collision::detect(shape_a, shape_b, &self.bodies[i].borrow().rotation, &self.bodies[j].borrow().rotation) {
                             collisions.push((i, j, collision));
                         }
                     }
@@ -91,7 +91,7 @@ impl PhysicsWorld {
             let mass = body_a.mass;
             body_a.velocity -= impulse / mass;
 
-//            body_a.apply_force(-force);
+            //body_a.apply_force(-force);
 
             let torque_a = -r_a.cross(impulse);
             body_a.apply_torque(torque_a);
@@ -108,7 +108,7 @@ impl PhysicsWorld {
             let mass = body_b.mass;
             body_b.velocity += impulse / mass;
 
-//            body_b.apply_force(-force);
+            //body_b.apply_force(-force);
 
             let torque_b = r_b.cross(impulse);
             body_b.apply_torque(torque_b);

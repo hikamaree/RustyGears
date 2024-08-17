@@ -24,12 +24,6 @@ impl SceneItem for Box<dyn Entity> {
     }
 }
 
-impl SceneItem for ModelRef {
-    fn add_to_scene(&self, scene: &mut Scene) {
-        scene.add_model(self.clone());
-    }
-}
-
 impl SceneItem for AmbientLight {
     fn add_to_scene(&self, scene: &mut Scene) {
         scene.set_ambient_light(self.clone());
