@@ -6,7 +6,6 @@ use std::rc::Rc;
 
 pub struct Scene {
     entities: Vec<Box<dyn Entity>>,
-    models: Vec<ModelRef>,
     ambient_light: Option<AmbientLight>,
     light_sources: Vec<LightSource>,
     light_space_matrices: Vec<Matrix4<f32>>,
@@ -24,7 +23,6 @@ impl Scene {
     fn new() -> Self {
         Scene {
             entities: Vec::new(),
-            models: Vec::new(),
             ambient_light: None,
             light_sources: Vec::new(),
             light_space_matrices: Vec::new(),
@@ -55,19 +53,9 @@ impl Scene {
         self.camera = camera;
     }
 
-/*    pub(super) fn add_entity<T: Entity + 'static>(&mut self, mut entity: T) {
-        entity.set_physics(&mut self.physics_world);
-        self.entities.push(Box::new(entity));
-    }*/
-
     pub(super) fn add_entity(&mut self, mut entity: Box<dyn Entity>) {
         entity.set_physics(&mut self.physics_world);
         self.entities.push(entity);
-    }
-
-
-    pub(super) fn add_model(&mut self, model: ModelRef) {
-        self.models.push(model);
     }
 
     pub(super) fn set_ambient_light(&mut self, ambient_light: AmbientLight) {
@@ -97,10 +85,6 @@ impl Scene {
     }
 
     pub fn draw(&self, shader: &Shader) {
-        for model in &self.models {
-            model.borrow_mut().draw(shader, Vector3::zero(), Quaternion::zero());
-        }
-
         for entity in &self.entities {
             entity.draw(shader);
         }

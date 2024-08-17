@@ -5,6 +5,7 @@ use cgmath::{
     Quaternion,
     Rotation3,
     Zero,
+    One,
     Rad,
     EuclideanSpace,
     SquareMatrix,
@@ -18,7 +19,6 @@ use std::rc::Rc;
 
 pub struct RigidBody {
     pub position: Vector3<f32>,
-    pub previous_position: Vector3<f32>,
     pub velocity: Vector3<f32>,
     pub acceleration: Vector3<f32>,
     pub mass: f32,
@@ -41,18 +41,17 @@ pub struct RigidBody {
 pub type BodyRef = Rc<RefCell<RigidBody>>;
 
 impl RigidBody {
-    pub fn new(position: Vector3<f32>, rotation: Quaternion<f32>,mass: f32, collision_box: Vec<CollisionBox>) -> BodyRef {
+    pub fn new(collision_box: Vec<CollisionBox>) -> BodyRef {
         let mut body: RigidBody = RigidBody {
-            position,
-            previous_position: position,
+            position: Vector3::zero(),
             velocity: Vector3::zero(),
             acceleration: Vector3::zero(),
-            mass,
+            mass: 1.0,
             forces: Vector3::zero(),
             gravity: true,
             movable: true,
             collision_box,
-            rotation,
+            rotation: Quaternion::one(),
             angular_velocity: Vector3::zero(),
             angular_acceleration: Vector3::zero(),
             torque: Vector3::zero(),
@@ -67,20 +66,25 @@ impl RigidBody {
         Rc::new(RefCell::new(body))
     }
 
-    pub fn from_model_with_bounding_boxes(model: &Model, mass: f32) -> BodyRef {
-        let collision_box = model.meshes.iter().map(|mesh| {
+    pub fn from_model_with_bounding_boxes(model: &Model) -> BodyRef {
+        let collision_box = model.get_meshes().iter().map(|mesh| {
             CollisionBox::BoundingBox(mesh.calculate_bounding_box())
         }).collect();
 
-        RigidBody::new(model.position, model.rotation, mass, collision_box)
+        RigidBody::new(collision_box)
     }
 
-    pub fn from_model_with_spheres(model: &Model, mass: f32) -> BodyRef {
-        let collision_box = model.meshes.iter().map(|mesh| {
+    pub fn from_model_with_spheres(model: &Model) -> BodyRef {
+        let collision_box = model.get_meshes().iter().map(|mesh| {
             CollisionBox::Sphere(mesh.calculate_sphere())
         }).collect();
 
-        RigidBody::new(model.position, model.rotation, mass, collision_box)
+        RigidBody::new(collision_box)
+    }
+
+    pub fn set_mass(&mut self, mass: f32) {
+        self.mass = mass;
+        self.update_inertia_tensor();
     }
 
     pub fn set_bounciness(&mut self, bounciness: f32) {
@@ -115,7 +119,6 @@ impl RigidBody {
 
     pub fn update(&mut self, dt: f32) {
         if !self.movable { return; }
-        self.previous_position = self.position;
         self.acceleration = self.forces / self.mass;
         self.position += self.velocity * dt + self.acceleration * dt * dt / 2.0;
         self.velocity += self.acceleration * dt;

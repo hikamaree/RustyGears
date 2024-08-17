@@ -1,31 +1,4 @@
 use rusty_gears::*;
-use std::process::Command;
-use std::time::{Duration, Instant};
-
-struct Fps {
-    last_time: Instant,
-    frame_count: u32
-}
-
-impl Fps {
-    pub fn init() -> Self {
-        Self {
-            last_time: Instant::now(),
-            frame_count: 0
-        }
-    }
-    pub fn update(&mut self) {
-        self.frame_count += 1;
-        let elapsed = self.last_time.elapsed();
-        if elapsed >= Duration::new(1, 0) {
-            let fps = self.frame_count;
-            self.frame_count = 0;
-            self.last_time = Instant::now();
-            Command::new("clear").status().expect("Failed to clear console");
-            println!("FPS: {}", fps);
-        }
-    }
-}
 
 pub fn main() {
     let mut window = Window::new(1280, 720, "RustyGears");
@@ -39,24 +12,29 @@ pub fn main() {
 
     let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.0);
 
-    let big_block = Model::create("resources/models/plane/plane.obj", vec3(10.0, 0.0, 10.0));
-    //let car = Model::create("resources/models/car/Avent_sport.obj", vec3(0.0, 0.2, 0.0));
-    let ball = Model::create("resources/models/ball/ball.obj", vec3(0.0, 15.0, 0.0));
-    let bullet = Model::create("resources/models/bullet/bullet.obj", vec3(1.5, 50.0, 1.1));
-    let block = Model::create("resources/models/block/block.obj", vec3(1.5, 50.0, 1.1));
-    //block.borrow_mut().set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
+    let big_block = Model::open("resources/models/plane/plane.obj");
+    //let car = Model::create("resources/models/car/Avent_sport.obj", vec3(5.0, 0.2, 5.0));
+    let ball = Model::open("resources/models/ball/ball.obj");
+    let bullet = Model::open("resources/models/bullet/bullet.obj");
+    let block = Model::open("resources/models/block/block.obj");
 
     let bbc = Object::new()
         .add_model(big_block.clone())
-        .set_body(RigidBody::from_model_with_bounding_boxes(&big_block.borrow(), 1000000.0));
+        .set_body(RigidBody::from_model_with_bounding_boxes(&big_block))
+        .set_mass(1000000.0);
 
     let sbc = Character::new()
         .add_model(block.clone())
-        .set_body(RigidBody::from_model_with_bounding_boxes(&block.borrow(), 10.0));
+        .set_body(RigidBody::from_model_with_bounding_boxes(&block))
+        .set_mass(10.0)
+        .set_position(vec3(1.5, 50.0, 1.1))
+        .set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
 
     let sphere = Character::new()
         .add_model(ball.clone())
-        .set_body(RigidBody::from_model_with_spheres(&ball.borrow(), 10.0));
+        .set_body(RigidBody::from_model_with_spheres(&ball))
+        .set_mass(10.0)
+        .set_position(vec3(0.0, 15.0, 0.0));
 
     let scene = Scene::create();
     window.set_scene(scene.clone());
@@ -75,9 +53,7 @@ pub fn main() {
 
     let mut pucaj = false;
 
-    let mut fps = Fps::init();
     while !window.should_close() {
-        fps.update();
         if window.key_pressed('W') {
             camera.move_forward(window.delta_time);
         }
@@ -92,9 +68,9 @@ pub fn main() {
         }
         if window.key_pressed('F') && !pucaj {
             pucaj = true;
-            let mut b = Character::new()
+            let b = Character::new()
                 .add_model(bullet.clone())
-                .set_body(RigidBody::from_model_with_spheres(&bullet.borrow(), 1.0))
+                .set_body(RigidBody::from_model_with_spheres(&bullet))
                 .set_position(camera.position())
                 .set_velocity(camera.front() * 50.0);
             scene.borrow_mut().add(&b);
@@ -108,8 +84,7 @@ pub fn main() {
 
         let (_xoffset, yoffset) = window.get_scroll_offset();
         camera.zoom(yoffset);
+
         window.update();
-        //println!("Block position: {:?}", block.borrow_mut().position);
-        //println!("Ball position: {:?}", ball.borrow_mut().position);
     }
 }

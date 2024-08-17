@@ -1,4 +1,4 @@
-use crate::graphics::ModelRef;
+use crate::graphics::Model;
 use crate::physics::BodyRef;
 use crate::Entity;
 
@@ -14,7 +14,7 @@ use cgmath::{
 
 #[derive(Clone)]
 pub struct Character {
-    pub models: Vec<ModelRef>,
+    pub models: Vec<Model>,
     pub body: Option<BodyRef>,
     pub position: Vector3<f32>,
     pub rotation: Quaternion<f32>,
@@ -38,7 +38,7 @@ impl Entity for Character {
 
     fn draw(&self, shader: &Shader) {
         for model in &self.models {
-            model.borrow().draw(shader, self.position, self.rotation);
+            model.draw(shader, self.position, self.rotation);
         }
     }
 
@@ -62,7 +62,14 @@ impl Entity for Character {
         Box::new(self.clone())
     }
 
-    fn add_model(&mut self, model: ModelRef) -> Box<dyn Entity> {
+    fn set_mass(&mut self, mass: f32) -> Box<dyn Entity> {
+        if let Some(body) = &self.body {
+            body.borrow_mut().set_mass(mass);
+        }
+        Box::new(self.clone())
+    }
+
+    fn add_model(&mut self, model: Model) -> Box<dyn Entity> {
         self.models.push(model);
         Box::new(self.clone())
     }

@@ -1,4 +1,4 @@
-use crate::ModelRef;
+use crate::Model;
 use crate::BodyRef;
 use crate::Entity;
 
@@ -14,7 +14,7 @@ use cgmath::{
 
 #[derive(Clone)]
 pub struct Object {
-    pub(super) models: Vec<ModelRef>,
+    pub(super) models: Vec<Model>,
     pub(super) body: Option<BodyRef>,
     pub(super) position: Vector3<f32>,
     pub(super) rotation: Quaternion<f32>,
@@ -38,7 +38,7 @@ impl Entity for Object {
 
     fn draw(&self, shader: &Shader) {
         for model in &self.models {
-            model.borrow().draw(shader, self.position, self.rotation);
+            model.draw(shader, self.position, self.rotation);
         }
     }
 
@@ -52,17 +52,23 @@ impl Entity for Object {
     fn update(&mut self) {
     }
 
+    fn set_mass(&mut self, mass: f32) -> Box<dyn Entity> {
+        if let Some(body) = &self.body {
+            body.borrow_mut().set_mass(mass);
+        }
+        Box::new(self.clone())
+    }
+
     fn set_body(&mut self, body: BodyRef) -> Box<dyn Entity> {
         body.borrow_mut().movable = false;
         self.body = Some(body);
         Box::new(self.clone())
     }
 
-    fn add_model(&mut self, model: ModelRef) -> Box<dyn Entity> {
+    fn add_model(&mut self, model: Model) -> Box<dyn Entity> {
         self.models.push(model);
         Box::new(self.clone())
     }
-
 
     fn set_position(&mut self, position: Vector3<f32>) -> Box<dyn Entity> {
         self.position = position;

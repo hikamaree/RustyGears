@@ -10,59 +10,36 @@ use cgmath::{
     Vector3,
     Matrix4,
     Quaternion,
-    Zero,
-    One
 };
 
 use tobj;
 
-use super::mesh::{ Mesh, Texture, Vertex };
-use super::shader::Shader;
-use super::utils::*;
+use super::{
+    Mesh,
+    Texture,
+    Vertex,
+    Shader,
+    load_texture,
+};
 
 #[derive(Clone)]
-pub struct Model {
+pub struct ModelController {
     pub meshes: Vec<Mesh>,
     pub textures_loaded: Vec<Texture>,
     directory: String,
-    pub position: Vector3<f32>,
-    pub rotation: Quaternion<f32>
 }
 
-pub type ModelRef = Rc<RefCell<Model>>;
+type ModelRef = Rc<RefCell<ModelController>>;
 
-impl Model {
-    fn default() -> Self {
-        Self {
+impl ModelController {
+    fn new(path: &str) -> ModelController {
+        let mut model = ModelController {
             meshes: Vec::default(),
             textures_loaded: Vec::default(),
             directory: String::default(),
-            position: Vector3::zero(),
-            rotation: Quaternion::one(),
-        }
-    }
-
-    fn new(path: &str, position: Vector3<f32>) -> Model {
-        let mut model = Model::default();
+        };
         model.load_model(path);
-        model.position = position;
         model
-    }
-
-    pub fn create(path: &str, position: Vector3<f32>) -> ModelRef {
-        Rc::new(RefCell::new(Model::new(path, position)))
-    }
-
-    pub fn set_position(&mut self, position: Vector3<f32>) {
-        self.position = position;
-    }
-
-    pub fn set_rotation(&mut self, rotation: Quaternion<f32>) {
-        self.rotation = rotation;
-    }
-
-    pub fn move_position(&mut self, offset: Vector3<f32>) {
-        self.position += offset;
     }
 
     pub fn draw(&self, shader: &Shader, position: Vector3<f32>, rotation: Quaternion<f32>) {
@@ -163,5 +140,26 @@ impl Model {
         };
         self.textures_loaded.push(texture.clone());
         texture
+    }
+}
+
+#[derive(Clone)]
+pub struct Model {
+    pub(crate)model: ModelRef,
+}
+
+impl Model {
+    pub fn open(path: &str) -> Self {
+        Self {
+            model: Rc::new(RefCell::new(ModelController::new(path)))
+        }
+    }
+
+    pub fn draw(&self, shader: &Shader, position: Vector3<f32>, rotation: Quaternion<f32>) {
+        self.model.borrow().draw(shader, position, rotation);
+    }
+
+    pub(crate) fn get_meshes(&self) -> Vec<Mesh> {
+        self.model.borrow().meshes.clone()
     }
 }
