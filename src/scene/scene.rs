@@ -53,9 +53,9 @@ impl Scene {
         self.camera = camera;
     }
 
-    pub(super) fn add_entity(&mut self, mut entity: Box<dyn Entity>) {
+    pub(super) fn add_entity<T: Entity + Clone + 'static>(&mut self, entity: T) {
         entity.set_physics(&mut self.physics_world);
-        self.entities.push(entity);
+        self.entities.push(Box::new(entity));
     }
 
     pub(super) fn set_ambient_light(&mut self, ambient_light: AmbientLight) {
