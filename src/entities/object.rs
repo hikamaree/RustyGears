@@ -29,6 +29,40 @@ impl Object {
             rotation: Quaternion::one(),
         }
     }
+
+    pub fn set_mass(&mut self, mass: f32) -> Self {
+        if let Some(body) = &self.body {
+            body.borrow_mut().set_mass(mass);
+        }
+        self.clone()
+    }
+
+    pub fn set_body(&mut self, body: BodyRef) -> Self {
+        body.borrow_mut().movable = false;
+        self.body = Some(body);
+        self.clone()
+    }
+
+    pub fn add_model(&mut self, model: Model) -> Self {
+        self.models.push(model);
+        self.clone()
+    }
+
+    pub fn set_position(&mut self, position: Vector3<f32>) -> Self {
+        self.position = position;
+        if let Some(body) = &self.body {
+            body.borrow_mut().position = position;
+        }
+        self.clone()
+    }
+
+    pub fn set_rotation(&mut self, rotation: Quaternion<f32>) -> Self {
+        self.rotation = rotation;
+        if let Some(body) = &self.body {
+            body.borrow_mut().rotation = rotation;
+        }
+        self.clone()
+    }
 }
 
 impl Entity for Object {
@@ -42,59 +76,12 @@ impl Entity for Object {
         }
     }
 
-    fn set_physics(&mut self, world: &mut PhysicsWorld) -> Box<dyn Entity> {
+    fn set_physics(&self, world: &mut PhysicsWorld) {
         if let Some(body) = &self.body {
             world.add_body(body.clone());
         }
-        Box::new(self.clone())
     }
 
     fn update(&mut self) {
-    }
-
-    fn set_mass(&mut self, mass: f32) -> Box<dyn Entity> {
-        if let Some(body) = &self.body {
-            body.borrow_mut().set_mass(mass);
-        }
-        Box::new(self.clone())
-    }
-
-    fn set_body(&mut self, body: BodyRef) -> Box<dyn Entity> {
-        body.borrow_mut().movable = false;
-        self.body = Some(body);
-        Box::new(self.clone())
-    }
-
-    fn add_model(&mut self, model: Model) -> Box<dyn Entity> {
-        self.models.push(model);
-        Box::new(self.clone())
-    }
-
-    fn set_position(&mut self, position: Vector3<f32>) -> Box<dyn Entity> {
-        self.position = position;
-        if let Some(body) = &self.body {
-            body.borrow_mut().position = position;
-        }
-        Box::new(self.clone())
-    }
-
-    fn set_rotation(&mut self, rotation: Quaternion<f32>) -> Box<dyn Entity> {
-        self.rotation = rotation;
-        if let Some(body) = &self.body {
-            body.borrow_mut().rotation = rotation;
-        }
-        Box::new(self.clone())
-    }
-
-    fn set_velocity(&mut self, _velocity: Vector3<f32>) -> Box<dyn Entity> {
-        Box::new(self.clone())
-    }
-
-    fn apply_force(&mut self, _force: Vector3<f32>) -> Box<dyn Entity> {
-        Box::new(self.clone())
-    }
-
-    fn apply_torque(&mut self, _torque: Vector3<f32>) -> Box<dyn Entity> {
-        Box::new(self.clone())
     }
 }

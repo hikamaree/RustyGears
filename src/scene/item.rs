@@ -14,12 +14,6 @@ impl SceneItem for Camera {
 
 impl<T: Entity + Clone + 'static> SceneItem for T {
     fn add_to_scene(&self, scene: &mut Scene) {
-        scene.add_entity(Box::new(self.clone()));
-    }
-}
-
-impl SceneItem for Box<dyn Entity> {
-    fn add_to_scene(&self, scene: &mut Scene) {
         scene.add_entity(self.clone());
     }
 }
