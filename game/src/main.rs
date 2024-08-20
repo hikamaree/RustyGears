@@ -13,7 +13,7 @@ pub fn main() {
     let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.0);
 
     let big_block = Model::open("resources/models/plane/plane.obj");
-    //let car = Model::create("resources/models/car/Avent_sport.obj", vec3(5.0, 0.2, 5.0));
+    let car = Model::open("resources/models/car/Avent_sport.obj");
     let ball = Model::open("resources/models/ball/ball.obj");
     let bullet = Model::open("resources/models/bullet/bullet.obj");
     let block = Model::open("resources/models/block/block.obj");
@@ -23,18 +23,28 @@ pub fn main() {
         .set_body(RigidBody::from_model_with_bounding_boxes(&big_block))
         .set_mass(1000000.0);
 
-    let sbc = Character::new()
+    let mut lambo = Character::new()
+        .add_model(car.clone())
+        .set_body(RigidBody::from_model_with_bounding_boxes(&car))
+        .set_gravity(false)
+        .set_mass(10000.0)
+        .set_position(vec3(5.0, 2.0, 5.0));
+
+    let mut sphere = Character::new()
+        .add_model(ball.clone())
+        .set_body(RigidBody::from_model_with_spheres(&ball))
+        .set_gravity(false)
+        .set_mass(10.0)
+        .set_position(vec3(0.0, 15.0, 0.0));
+
+    let mut sbc = Character::new()
         .add_model(block.clone())
         .set_body(RigidBody::from_model_with_bounding_boxes(&block))
+        .set_gravity(false)
         .set_mass(10.0)
         .set_position(vec3(1.5, 50.0, 1.1))
         .set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
 
-    let sphere = Character::new()
-        .add_model(ball.clone())
-        .set_body(RigidBody::from_model_with_spheres(&ball))
-        .set_mass(10.0)
-        .set_position(vec3(0.0, 15.0, 0.0));
 
     let scene = Scene::create();
     window.set_scene(scene.clone());
@@ -49,11 +59,14 @@ pub fn main() {
         .add(&fog)
         .add(&bbc)
         .add(&sbc)
-        .add(&sphere);
+        .add(&sphere)
+        .add(&lambo);
 
     let mut pucaj = false;
 
     while !window.should_close() {
+        window.update();
+
         if window.key_pressed('W') {
             camera.move_forward(window.delta_time);
         }
@@ -76,6 +89,9 @@ pub fn main() {
             scene.borrow_mut().add(&b);
         }
         if window.key_released('F') && pucaj {
+            lambo.set_gravity(true);
+            sphere.set_gravity(true);
+            sbc.set_gravity(true);
             pucaj = false;
         }
 
@@ -85,6 +101,5 @@ pub fn main() {
         let (_xoffset, yoffset) = window.get_scroll_offset();
         camera.zoom(yoffset);
 
-        window.update();
     }
 }

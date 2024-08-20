@@ -84,6 +84,13 @@ impl Character {
         }
         self.clone()
     }
+
+    pub fn set_gravity(&mut self, gravity: bool) -> Self {
+        if let Some(body) = &self.body {
+            body.borrow_mut().set_gravity(gravity);
+        }
+        self.clone()
+    }
 }
 
 impl Entity for Character {

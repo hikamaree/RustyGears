@@ -15,8 +15,5 @@ pub use light::*;
 pub use mesh::*;
 pub use model::*;
 pub use shader::*;
-pub use utils::*;
+pub(crate) use utils::*;
 pub use window::*;
-
-pub use cgmath::*;
-

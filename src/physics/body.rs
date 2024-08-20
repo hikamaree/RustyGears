@@ -17,6 +17,7 @@ use crate::model::*;
 use core::cell::RefCell;
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct RigidBody {
     pub position: Vector3<f32>,
     pub velocity: Vector3<f32>,
@@ -113,8 +114,9 @@ impl RigidBody {
         self.torque += torque;
     }
 
-    pub fn ignore_gravity(&mut self) {
-        self.gravity = false;
+    pub fn set_gravity(&mut self, gravity: bool) -> Self{
+        self.gravity = gravity;
+        self.clone()
     }
 
     pub fn update(&mut self, dt: f32) {
