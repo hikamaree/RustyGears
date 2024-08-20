@@ -1,5 +1,7 @@
-use super::*;
 use std::ffi::CStr;
+
+use crate::Shader;
+use cgmath::Vector3;
 
 #[derive(Clone)]
 pub struct Fog {

@@ -128,12 +128,6 @@ impl CameraContoller {
         self.right = self.front.cross(self.world_up).normalize();
         self.up = self.right.cross(self.front).normalize();
     }
-
-    pub fn print(&self) {
-        println!("Position {:?}", self.position);
-        println!("Yaw {}", self.yaw);
-        println!("Pitch {}", self.pitch);
-    }
 }
 
 pub struct Camera {

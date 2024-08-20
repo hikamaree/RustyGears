@@ -1,8 +1,30 @@
-use crate::*;
 use std::ffi::CString;
 use std::ffi::CStr;
 use core::cell::RefCell;
 use std::rc::Rc;
+
+use cgmath::{
+    Deg,
+    perspective,
+    Vector3,
+    Matrix4,
+    EuclideanSpace,
+    SquareMatrix
+};
+
+use crate::{
+    SceneItem,
+    CameraContoller,
+    PhysicsWorld,
+    CameraRef,
+    Shader,
+    Fog,
+    ShadowMap,
+    LightSource,
+    AmbientLight,
+    Entity,
+    c_str,
+};
 
 pub struct Scene {
     entities: Vec<Box<dyn Entity>>,
