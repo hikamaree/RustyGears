@@ -20,37 +20,35 @@ pub fn main() {
 
     let bbc = Object::new()
         .add_model(big_block.clone())
-        .set_body(RigidBody::from_model_with_bounding_boxes(&big_block))
+        .set_body(RigidBody::with_single_bbox(&big_block))
         .set_mass(1000000.0);
 
     let mut lambo = Character::new()
         .add_model(car.clone())
-        .set_body(RigidBody::from_model_with_bounding_boxes(&car))
+        .set_body(RigidBody::with_single_bbox(&car))
         .set_gravity(false)
-        .set_mass(10000.0)
+        .set_bounciness(0.0)
+        .set_mass(1000.0)
         .set_position(vec3(5.0, 2.0, 5.0));
 
     let mut sphere = Character::new()
         .add_model(ball.clone())
-        .set_body(RigidBody::from_model_with_spheres(&ball))
+        .set_body(RigidBody::with_single_sphere(&ball))
         .set_gravity(false)
         .set_mass(10.0)
         .set_position(vec3(0.0, 15.0, 0.0));
 
     let mut sbc = Character::new()
         .add_model(block.clone())
-        .set_body(RigidBody::from_model_with_bounding_boxes(&block))
+        .set_body(RigidBody::with_single_bbox(&block))
         .set_gravity(false)
         .set_mass(10.0)
         .set_position(vec3(1.5, 50.0, 1.1))
         .set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
 
 
-    let scene = Scene::create();
-    window.set_scene(scene.clone());
-    window.background_color(vec3(0.6, 0.7, 0.8));
-
-    scene.borrow_mut()
+    let world = World::new()
+        .set_physycs_frequency(200.0)
         .set_depth_shader(depth_shader)
         .set_shader(shader)
         .add(&camera)
@@ -61,6 +59,9 @@ pub fn main() {
         .add(&sbc)
         .add(&sphere)
         .add(&lambo);
+
+    window.set_world(&world);
+    window.background_color(vec3(0.6, 0.7, 0.8));
 
     let mut pucaj = false;
 
@@ -83,10 +84,11 @@ pub fn main() {
             pucaj = true;
             let b = Character::new()
                 .add_model(bullet.clone())
-                .set_body(RigidBody::from_model_with_spheres(&bullet))
+                .set_body(RigidBody::with_single_sphere(&bullet))
                 .set_position(camera.position())
-                .set_velocity(camera.front() * 50.0);
-            scene.borrow_mut().add(&b);
+                .set_mass(2.0)
+                .set_velocity(camera.front() * 100.0);
+            world.add(&b);
         }
         if window.key_released('F') && pucaj {
             lambo.set_gravity(true);

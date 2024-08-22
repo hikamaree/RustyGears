@@ -32,13 +32,13 @@ impl Object {
 
     pub fn set_mass(&mut self, mass: f32) -> Self {
         if let Some(body) = &self.body {
-            body.borrow_mut().set_mass(mass);
+            body.lock().unwrap().set_mass(mass);
         }
         self.clone()
     }
 
     pub fn set_body(&mut self, body: BodyRef) -> Self {
-        body.borrow_mut().movable = false;
+        body.lock().unwrap().movable = false;
         self.body = Some(body);
         self.clone()
     }
@@ -51,7 +51,7 @@ impl Object {
     pub fn set_position(&mut self, position: Vector3<f32>) -> Self {
         self.position = position;
         if let Some(body) = &self.body {
-            body.borrow_mut().position = position;
+            body.lock().unwrap().set_position(position);
         }
         self.clone()
     }
@@ -59,7 +59,7 @@ impl Object {
     pub fn set_rotation(&mut self, rotation: Quaternion<f32>) -> Self {
         self.rotation = rotation;
         if let Some(body) = &self.body {
-            body.borrow_mut().rotation = rotation;
+            body.lock().unwrap().rotation = rotation;
         }
         self.clone()
     }

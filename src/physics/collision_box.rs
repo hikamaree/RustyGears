@@ -49,6 +49,18 @@ impl BoundingBox {
         self.max - self.min
     }
 
+    pub fn contains(&self, point: &Point3<f32>) -> bool {
+        point.x >= self.min.x && point.x <= self.max.x &&
+        point.y >= self.min.y && point.y <= self.max.y &&
+        point.z >= self.min.z && point.z <= self.max.z
+    }
+
+    pub fn intersects(&self, other: &BoundingBox) -> bool {
+        self.min.x <= other.max.x && self.max.x >= other.min.x &&
+        self.min.y <= other.max.y && self.max.y >= other.min.y &&
+        self.min.z <= other.max.z && self.max.z >= other.min.z
+    }
+
     pub fn rotated_points(&self, rotation: &Quaternion<f32>) -> Vec<Vector3<f32>> {
         let half_size = self.size() / 2.0;
 
