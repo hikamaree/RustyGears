@@ -1,25 +1,29 @@
 use cgmath::{
     Vector3,
-    Point3,
     Matrix3,
+    Point3,
     Quaternion,
     Rotation3,
     Zero,
     One,
     Rad,
-    EuclideanSpace,
     SquareMatrix,
     InnerSpace,
+    EuclideanSpace,
+    Array
 };
 use super::collision_box::*;
 use crate::model::*;
 
-use core::cell::RefCell;
-use std::rc::Rc;
+//use core::cell::RefCell;
+//use std::rc::Rc;
+use std::sync::Mutex;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct RigidBody {
     pub position: Vector3<f32>,
+    pub correction: Vector3<f32>,
     pub velocity: Vector3<f32>,
     pub acceleration: Vector3<f32>,
     pub mass: f32,
@@ -39,12 +43,13 @@ pub struct RigidBody {
     pub friction_coefficient: f32,
 }
 
-pub type BodyRef = Rc<RefCell<RigidBody>>;
+pub type BodyRef = Arc<Mutex<RigidBody>>;
 
 impl RigidBody {
     pub fn new(collision_box: Vec<CollisionBox>) -> BodyRef {
         let mut body: RigidBody = RigidBody {
             position: Vector3::zero(),
+            correction: Vector3::zero(),
             velocity: Vector3::zero(),
             acceleration: Vector3::zero(),
             mass: 1.0,
@@ -62,12 +67,12 @@ impl RigidBody {
             friction_coefficient: 1.0,
         };
 
-        body.update_collision_shapes();
+        body.set_position(body.position);
         body.update_inertia_tensor();
-        Rc::new(RefCell::new(body))
+        Arc::new(Mutex::new(body))
     }
 
-    pub fn from_model_with_bounding_boxes(model: &Model) -> BodyRef {
+    pub fn with_bboxes(model: &Model) -> BodyRef {
         let collision_box = model.get_meshes().iter().map(|mesh| {
             CollisionBox::BoundingBox(mesh.calculate_bounding_box())
         }).collect();
@@ -75,12 +80,82 @@ impl RigidBody {
         RigidBody::new(collision_box)
     }
 
-    pub fn from_model_with_spheres(model: &Model) -> BodyRef {
+    pub fn with_spheres(model: &Model) -> BodyRef {
         let collision_box = model.get_meshes().iter().map(|mesh| {
             CollisionBox::Sphere(mesh.calculate_sphere())
         }).collect();
 
         RigidBody::new(collision_box)
+    }
+
+    pub fn with_single_bbox(model: &Model) -> BodyRef {
+        let mut min = Vector3::from_value(f32::MAX);
+        let mut max = Vector3::from_value(f32::MIN);
+
+        for mesh in model.get_meshes() {
+            let bounding_box = mesh.calculate_bounding_box();
+
+            min.x = min.x.min(bounding_box.min.x);
+            min.y = min.y.min(bounding_box.min.y);
+            min.z = min.z.min(bounding_box.min.z);
+
+            max.x = max.x.max(bounding_box.max.x);
+            max.y = max.y.max(bounding_box.max.y);
+            max.z = max.z.max(bounding_box.max.z);
+        }
+
+        let combined_bounding_box = BoundingBox {
+            min: Point3::from_vec(min),
+            max: Point3::from_vec(max)
+        };
+
+        let collision_box = CollisionBox::BoundingBox(combined_bounding_box);
+        RigidBody::new(vec![collision_box])
+    }
+
+
+    pub fn with_single_sphere(model: &Model) -> BodyRef {
+        let mut center = Vector3::zero();
+        let mut total_vertices = 0;
+
+        for mesh in model.get_meshes() {
+            let mesh_center = mesh.vertices.iter().fold(Vector3::zero(), |acc, v| acc + v.position);
+            center += mesh_center;
+            total_vertices += mesh.vertices.len();
+        }
+
+        center /= total_vertices as f32;
+
+        let mut radius: f32 = 0.0;
+        for mesh in model.get_meshes() {
+            for vertex in &mesh.vertices {
+                radius = radius.max((vertex.position - center).magnitude());
+            }
+        }
+
+        let sphere = Sphere {
+            center: Point3::from_vec(center),
+            radius,
+        };
+
+        let collision_box = CollisionBox::Sphere(sphere);
+        RigidBody::new(vec![collision_box])
+    }
+
+    pub fn set_position(&mut self, positon: Vector3<f32>) {
+        let delta = positon - self.position;
+        self.position = positon;
+        for shape in &mut self.collision_box {
+            match shape {
+                CollisionBox::BoundingBox(bbox) => {
+                    bbox.min += delta;
+                    bbox.max += delta;
+                }
+                CollisionBox::Sphere(sphere) => {
+                    sphere.center += delta;
+                }
+            }
+        }
     }
 
     pub fn set_mass(&mut self, mass: f32) {
@@ -122,40 +197,21 @@ impl RigidBody {
     pub fn update(&mut self, dt: f32) {
         if !self.movable { return; }
         self.acceleration = self.forces / self.mass;
-        self.position += self.velocity * dt + self.acceleration * dt * dt / 2.0;
         self.velocity += self.acceleration * dt;
-        self.forces = Vector3::zero();
 
         self.angular_acceleration = self.inverse_inertia_tensor * self.torque;
         self.angular_velocity += self.angular_acceleration * dt;
 
-        if self.angular_velocity.magnitude() < 0.1 {
-            self.angular_velocity = Vector3::zero();
-        } else {
-            let delta_rotation = Quaternion::from_angle_x(Rad(self.angular_velocity.x * dt)) *
-                Quaternion::from_angle_y(Rad(self.angular_velocity.y * dt)) *
-                Quaternion::from_angle_z(Rad(self.angular_velocity.z * dt));
-            self.rotation = (delta_rotation * self.rotation).normalize();
-        }
+        let delta_rotation = Quaternion::from_angle_x(Rad(self.angular_velocity.x * dt)) *
+            Quaternion::from_angle_y(Rad(self.angular_velocity.y * dt)) *
+            Quaternion::from_angle_z(Rad(self.angular_velocity.z * dt));
 
+        self.set_position(self.position + self.velocity * dt + self.correction);
+        self.rotation = (delta_rotation * self.rotation).normalize();
+
+        self.correction = Vector3::zero();
+        self.forces = Vector3::zero();
         self.torque = Vector3::zero();
-
-        self.update_collision_shapes();
-    }
-
-    fn update_collision_shapes(&mut self) {
-        for shape in &mut self.collision_box {
-            match shape {
-                CollisionBox::BoundingBox(bbox) => {
-                    let size = bbox.max - bbox.min;
-                    bbox.min = Point3::from_vec(self.position - size * 0.5);
-                    bbox.max = Point3::from_vec(self.position + size * 0.5);
-                }
-                CollisionBox::Sphere(sphere) => {
-                    sphere.center = Point3::from_vec(self.position);
-                }
-            }
-        }
     }
 
     fn update_inertia_tensor(&mut self) {
@@ -199,21 +255,26 @@ impl RigidBody {
         self.angular_velocity.cross(contact_point - self.position)
     }
 
-    pub fn apply_surface_friction(&mut self, contact_normal: Vector3<f32>, contact_point: Vector3<f32>, friction_coefficient: f32) {
+    pub fn apply_surface_friction(&mut self, contact_normal: Vector3<f32>, contact_point: Vector3<f32>, friction_coefficient: f32, dumping: f32) {
         let relative_velocity = self.velocity + self.tangential_velocity(contact_point);
 
         let tangential_velocity = relative_velocity - contact_normal * relative_velocity.dot(contact_normal);
 
-        let friction_force = -tangential_velocity * friction_coefficient * self.mass;
+        let friction_force =
+            if tangential_velocity.magnitude() < 0.1 {
+                -tangential_velocity * friction_coefficient * self.mass
+            } else {
+                -tangential_velocity.normalize() * friction_coefficient * self.mass
+            };
 
-        self.apply_force(-friction_force);
+        self.apply_force(friction_force);
 
         let r = contact_point - self.position;
 
         let torque = r.cross(friction_force);
         self.apply_torque(torque);
 
-        self.velocity *= 0.98;
-        self.angular_velocity *= 0.98;
+        self.velocity *= 1.0 - dumping;
+        self.angular_velocity *= 1.0 - dumping;
     }
 }

@@ -26,7 +26,7 @@ pub use physics::{
     PhysicsWorld,
     RigidBody,
 };
-pub use scene::Scene;
+pub use scene::World;
 
 pub use cgmath::{
     Vector3,

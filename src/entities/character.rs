@@ -31,14 +31,14 @@ impl Character {
     }
 
     pub fn set_body(&mut self, body: BodyRef) -> Self {
-        body.borrow_mut().movable = true;
+        body.lock().unwrap().movable = true;
         self.body = Some(body);
         self.clone()
     }
 
     pub fn set_mass(&mut self, mass: f32) -> Self {
         if let Some(body) = &self.body {
-            body.borrow_mut().set_mass(mass);
+            body.lock().unwrap().set_mass(mass);
         }
         self.clone()
     }
@@ -51,7 +51,7 @@ impl Character {
     pub fn set_position(&mut self, position: Vector3<f32>) -> Self {
         self.position = position;
         if let Some(body) = &self.body {
-            body.borrow_mut().position = position;
+            body.lock().unwrap().set_position(position);
         }
         self.clone()
     }
@@ -59,38 +59,53 @@ impl Character {
     pub fn set_rotation(&mut self, rotation: Quaternion<f32>) -> Self {
         self.rotation = rotation;
         if let Some(body) = &self.body {
-            body.borrow_mut().rotation = rotation;
+            body.lock().unwrap().rotation = rotation;
         }
         self.clone()
     }
 
     pub fn set_velocity(&mut self, velocity: Vector3<f32>) -> Self {
         if let Some(body) = &self.body {
-            body.borrow_mut().velocity = velocity;
+            body.lock().unwrap().velocity = velocity;
         }
         self.clone()
     }
 
     pub fn apply_force(&mut self, force: Vector3<f32>) -> Self {
         if let Some(body) = &self.body {
-            body.borrow_mut().apply_force(force);
+            body.lock().unwrap().apply_force(force);
         }
         self.clone()
     }
 
     pub fn apply_torque(&mut self, torque: Vector3<f32>) -> Self {
         if let Some(body) = &self.body {
-            body.borrow_mut().apply_torque(torque);
+            body.lock().unwrap().apply_torque(torque);
         }
         self.clone()
     }
 
     pub fn set_gravity(&mut self, gravity: bool) -> Self {
         if let Some(body) = &self.body {
-            body.borrow_mut().set_gravity(gravity);
+            body.lock().unwrap().set_gravity(gravity);
         }
         self.clone()
     }
+
+    pub fn set_bounciness(&mut self, bounciness: f32) -> Self {
+        if let Some(body) = &self.body {
+            body.lock().unwrap().set_bounciness(bounciness);
+        }
+        self.clone()
+    }
+
+    pub fn set_friction_coefficient(&mut self, friction_coefficient: f32) -> Self {
+        if let Some(body) = &self.body {
+            body.lock().unwrap().set_friction_coefficient(friction_coefficient);
+        }
+        self.clone()
+    }
+
 }
 
 impl Entity for Character {
@@ -112,8 +127,8 @@ impl Entity for Character {
 
     fn update(&mut self) {
         if let Some(body) = &self.body {
-            self.position = body.borrow().position;
-            self.rotation = body.borrow().rotation;
+            self.position = body.lock().unwrap().position;
+            self.rotation = body.lock().unwrap().rotation;
         }
     }
 }

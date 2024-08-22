@@ -27,16 +27,16 @@ use crate::{
 };
 
 pub struct Scene {
-    entities: Vec<Box<dyn Entity>>,
-    ambient_light: Option<AmbientLight>,
-    light_sources: Vec<LightSource>,
-    light_space_matrices: Vec<Matrix4<f32>>,
-    shadow_map: ShadowMap,
-    fog: Option<Fog>,
-    shader: Option<Shader>,
-    depth_shader: Option<Shader>,
-    camera: CameraRef,
-    physics_world: PhysicsWorld,
+    pub(crate) entities: Vec<Box<dyn Entity>>,
+    pub(crate) ambient_light: Option<AmbientLight>,
+    pub(crate) light_sources: Vec<LightSource>,
+    pub(crate) light_space_matrices: Vec<Matrix4<f32>>,
+    pub(crate) shadow_map: ShadowMap,
+    pub(crate) fog: Option<Fog>,
+    pub(crate) shader: Option<Shader>,
+    pub(crate) depth_shader: Option<Shader>,
+    pub(crate) camera: CameraRef,
+    pub(crate) physics: PhysicsWorld,
 }
 
 pub type SceneRef = Rc<RefCell<Scene>>;
@@ -53,7 +53,7 @@ impl Scene {
             shader: None,
             depth_shader: None,
             camera: CameraContoller::create(),
-            physics_world: PhysicsWorld::new(Vector3::new(0.0, -10.0, 0.0)),
+            physics: PhysicsWorld::new(Vector3::new(0.0, -10.0, 0.0)),
         }
     }
 
@@ -61,22 +61,12 @@ impl Scene {
         Rc::new(RefCell::new(Scene::new()))
     }
 
-    pub fn set_shader(&mut self, shader: Shader) -> &mut Self{
-        self.shader = Some(shader);
-        self
-    }
-
-    pub fn set_depth_shader(&mut self, shader: Shader) -> &mut Self {
-        self.depth_shader = Some(shader);
-        self
-    }
-
     pub(super) fn set_camera(&mut self, camera: CameraRef) {
         self.camera = camera;
     }
 
     pub(super) fn add_entity<T: Entity + Clone + 'static>(&mut self, entity: T) {
-        entity.set_physics(&mut self.physics_world);
+        entity.set_physics(&mut self.physics);
         self.entities.push(Box::new(entity));
     }
 
@@ -88,31 +78,30 @@ impl Scene {
         self.fog = Some(fog);
     }
 
-    pub fn add<T: SceneItem>(&mut self, item: &T) -> &mut Self {
+    pub fn add<T: SceneItem>(&mut self, item: &T) {
         item.add_to_scene(self);
-        self
     }
 
-    pub fn add_light_source(&mut self, light_source: LightSource) {
+    pub(crate) fn add_light_source(&mut self, light_source: LightSource) {
         self.light_sources.push(light_source);
         self.light_space_matrices.push(Matrix4::identity());
         self.shadow_map = ShadowMap::new(self.light_sources.len());
     }
 
-    pub fn update_light_space_matrices(&mut self) {
+    fn update_light_space_matrices(&mut self) {
         self.light_space_matrices.clear();
         for light_source in self.light_sources.iter() {
             self.light_space_matrices.push(light_source.create_light_space_matrix());
         }
     }
 
-    pub fn draw(&self, shader: &Shader) {
+    fn draw(&self, shader: &Shader) {
         for entity in &self.entities {
             entity.draw(shader);
         }
     }
 
-    pub fn apply_lights(&self, shader: &Shader) {
+    fn apply_lights(&self, shader: &Shader) {
         unsafe {
             if let Some(ambient_light) = &self.ambient_light {
                 ambient_light.apply(shader);
@@ -126,15 +115,15 @@ impl Scene {
         }
     }
 
-    pub fn update_scene(&mut self, delta_time: f32) {
-        self.physics_world.update(delta_time);
+    pub(crate) fn update_scene(&mut self, delta_time: f32) {
+        self.physics.update(delta_time);
 
         for entity in &mut self.entities {
             entity.update();
         }
     }
 
-    pub fn render_depth_map(&mut self) {
+    pub(crate) fn render_depth_map(&mut self) {
         self.update_light_space_matrices();
         if let Some(depth_shader) = &self.depth_shader {
             for (i, light_space_matrix) in self.light_space_matrices.iter().enumerate() {
@@ -152,7 +141,7 @@ impl Scene {
         }
     }
 
-    pub fn render(&self, (width, height): (u32, u32)) {
+    pub(crate) fn render(&self, (width, height): (u32, u32)) {
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
             gl::Viewport(0, 0, width as i32, height as i32);

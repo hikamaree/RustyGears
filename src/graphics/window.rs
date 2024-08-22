@@ -1,7 +1,7 @@
 use glfw::{Context, WindowEvent};
 use std::sync::mpsc::Receiver;
 use super::utils::*;
-use crate::scene::scene::*;
+use crate::{scene::scene::*, World};
 use cgmath::{ Vector3, vec3 };
 
 pub struct Window {
@@ -49,8 +49,8 @@ impl Window {
         }
     }
 
-    pub fn set_scene(&mut self, scene: SceneRef) {
-        self.scene = scene;
+    pub fn set_world(&mut self, world: &World) {
+        self.scene = world.scene.clone();
     }
 
     pub fn should_close(&self) -> bool {

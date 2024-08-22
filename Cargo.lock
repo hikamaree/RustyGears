@@ -360,6 +360,7 @@ dependencies = [
  "gl",
  "glfw",
  "image",
+ "rayon",
  "tobj",
 ]
 
