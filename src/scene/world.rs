@@ -42,4 +42,10 @@ impl World {
         self.scene.borrow_mut().physics.set_refresh_frequency(frequency);
         self.clone()
     }
+
+    pub fn set_bounds(&self, bounds: f32) -> Self {
+        self.scene.borrow_mut().bounds = bounds;
+        self.scene.borrow_mut().physics.bounds = bounds;
+        self.clone()
+    }
 }

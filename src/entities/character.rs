@@ -131,4 +131,8 @@ impl Entity for Character {
             self.rotation = body.lock().unwrap().rotation;
         }
     }
+
+    fn get_position(&self) -> Vector3<f32> {
+        self.position
+    }
 }

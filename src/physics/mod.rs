@@ -6,4 +6,3 @@ mod octree;
 
 pub use body::*;
 pub use world::*;
-//pub use octree::*;

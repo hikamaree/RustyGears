@@ -39,6 +39,7 @@ impl Object {
 
     pub fn set_body(&mut self, body: BodyRef) -> Self {
         body.lock().unwrap().movable = false;
+        body.lock().unwrap().mass = f32::MAX;
         self.body = Some(body);
         self.clone()
     }
@@ -83,5 +84,9 @@ impl Entity for Object {
     }
 
     fn update(&mut self) {
+    }
+
+    fn get_position(&self) -> Vector3<f32> {
+        self.position
     }
 }
