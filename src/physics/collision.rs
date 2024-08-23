@@ -26,7 +26,6 @@ impl Collision {
                 Self::box_box(box_a, box_b, rotation_a, rotation_b)
             }
 
-
             (CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(bbox)) => {
                 Self::sphere_box(bbox, sphere, rotation_b)
             }

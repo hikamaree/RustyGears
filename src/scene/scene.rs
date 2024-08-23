@@ -3,6 +3,7 @@ use std::ffi::CStr;
 use core::cell::RefCell;
 use std::rc::Rc;
 
+use cgmath::InnerSpace;
 use cgmath::{
     Deg,
     perspective,
@@ -37,6 +38,7 @@ pub struct Scene {
     pub(crate) depth_shader: Option<Shader>,
     pub(crate) camera: CameraRef,
     pub(crate) physics: PhysicsWorld,
+    pub(crate) bounds: f32,
 }
 
 pub type SceneRef = Rc<RefCell<Scene>>;
@@ -54,6 +56,7 @@ impl Scene {
             depth_shader: None,
             camera: CameraContoller::create(),
             physics: PhysicsWorld::new(Vector3::new(0.0, -10.0, 0.0)),
+            bounds: 1000.0,
         }
     }
 
@@ -118,9 +121,14 @@ impl Scene {
     pub(crate) fn update_scene(&mut self, delta_time: f32) {
         self.physics.update(delta_time);
 
-        for entity in &mut self.entities {
+        let mut new_entities = Vec::new();
+        for mut entity in self.entities.drain(..) {
             entity.update();
+            if entity.get_position().magnitude() <= self.bounds {
+                new_entities.push(entity);
+            }
         }
+        self.entities = new_entities;
     }
 
     pub(crate) fn render_depth_map(&mut self) {

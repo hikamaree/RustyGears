@@ -15,8 +15,6 @@ use cgmath::{
 use super::collision_box::*;
 use crate::model::*;
 
-//use core::cell::RefCell;
-//use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::Arc;
 

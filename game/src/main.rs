@@ -20,8 +20,7 @@ pub fn main() {
 
     let bbc = Object::new()
         .add_model(big_block.clone())
-        .set_body(RigidBody::with_single_bbox(&big_block))
-        .set_mass(1000000.0);
+        .set_body(RigidBody::with_single_bbox(&big_block));
 
     let mut lambo = Character::new()
         .add_model(car.clone())
@@ -48,16 +47,17 @@ pub fn main() {
 
 
     let world = World::new()
-        .set_physycs_frequency(200.0)
+        .set_bounds(200.0)
+        .set_physycs_frequency(500.0)
         .set_depth_shader(depth_shader)
         .set_shader(shader)
         .add(&camera)
         .add(&light_source1)
         .add(&ambient_light)
         .add(&fog)
+        .add(&sphere)
         .add(&bbc)
         .add(&sbc)
-        .add(&sphere)
         .add(&lambo);
 
     window.set_world(&world);
@@ -86,8 +86,8 @@ pub fn main() {
                 .add_model(bullet.clone())
                 .set_body(RigidBody::with_single_sphere(&bullet))
                 .set_position(camera.position())
-                .set_mass(2.0)
-                .set_velocity(camera.front() * 100.0);
+                .set_mass(1.0)
+                .set_velocity(camera.front() * 50.0);
             world.add(&b);
         }
         if window.key_released('F') && pucaj {
