@@ -253,7 +253,7 @@ impl RigidBody {
         self.angular_velocity.cross(contact_point - self.position)
     }
 
-    pub fn apply_surface_friction(&mut self, contact_normal: Vector3<f32>, contact_point: Vector3<f32>, friction_coefficient: f32, dumping: f32) {
+    pub fn apply_surface_friction(&mut self, contact_normal: Vector3<f32>, contact_point: Vector3<f32>, friction_coefficient: f32, delta_time: f32) {
         let relative_velocity = self.velocity + self.tangential_velocity(contact_point);
 
         let tangential_velocity = relative_velocity - contact_normal * relative_velocity.dot(contact_normal);
@@ -272,7 +272,10 @@ impl RigidBody {
         let torque = r.cross(friction_force);
         self.apply_torque(torque);
 
-        self.velocity *= 1.0 - dumping;
-        self.angular_velocity *= 1.0 - dumping;
+        let k = 0.5;
+        let damping_factor = (-k * delta_time).exp();
+
+        self.velocity *= damping_factor;
+        self.angular_velocity *= damping_factor;
     }
 }

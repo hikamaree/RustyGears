@@ -20,6 +20,7 @@ pub fn main() {
 
     let bbc = Object::new()
         .add_model(big_block.clone())
+        .set_bounciness(1.0)
         .set_body(RigidBody::with_single_bbox(&big_block));
 
     let mut lambo = Character::new()
@@ -28,20 +29,20 @@ pub fn main() {
         .set_gravity(false)
         .set_bounciness(0.0)
         .set_mass(1000.0)
-        .set_position(vec3(5.0, 2.0, 5.0));
+        .set_position(vec3(0.0, 2.0, 0.0));
 
     let mut sphere = Character::new()
         .add_model(ball.clone())
         .set_body(RigidBody::with_single_sphere(&ball))
         .set_gravity(false)
-        .set_mass(10.0)
+        .set_mass(20.0)
         .set_position(vec3(0.0, 15.0, 0.0));
 
     let mut sbc = Character::new()
         .add_model(block.clone())
         .set_body(RigidBody::with_single_bbox(&block))
         .set_gravity(false)
-        .set_mass(10.0)
+        .set_mass(50.0)
         .set_position(vec3(1.5, 50.0, 1.1))
         .set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
 

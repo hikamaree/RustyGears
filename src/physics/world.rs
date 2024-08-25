@@ -99,43 +99,38 @@ impl PhysicsWorld {
         let relative_velocity = (body_b.velocity + r_b.cross(body_b.angular_velocity)) - (body_a.velocity + r_a.cross(body_a.angular_velocity));
         let normal = collision.normal;
 
-        let bounciness = (body_a.bounciness + body_b.bounciness) / 2.0;
+        let bounciness = (body_a.bounciness * body_b.bounciness).sqrt();
         let impulse_magnitude = -(1.0 + bounciness) * relative_velocity.dot(normal) / (1.0 / body_a.mass + 1.0 / body_b.mass);
         let impulse = impulse_magnitude * normal;
 
-        let friction_coefficient = (body_a.friction_coefficient * body_b.friction_coefficient).sqrt() * 10.0;
+        let friction_coefficient = (body_a.friction_coefficient * body_b.friction_coefficient).sqrt();
 
-        let correction = collision.normal * (collision.overlap / (body_a.mass + body_b.mass)) / 2.0;
+        let correction = normal * (collision.overlap / (1.0 / body_a.mass + 1.0 / body_b.mass));
+
+        println!("{:?}", collision.contact_point);
 
         if body_a.movable {
             let mass = body_a.mass;
             body_a.velocity -= impulse / mass;
 
-
-            let torque_a = -r_a.cross(impulse / self.delta_time);
+            let torque_a = r_a.cross(impulse); //impulse/delta_time
             body_a.apply_torque(torque_a);
-
-            let gravity_torque = -r_a.cross(self.gravity * mass);
-            body_a.apply_torque(gravity_torque);
 
             body_a.apply_surface_friction(normal, collision.contact_point, friction_coefficient, self.delta_time);
 
-            body_a.correction = correction * body_b.mass;
+            body_a.correction = -correction / mass;
         }
 
         if body_b.movable {
             let mass = body_b.mass;
             body_b.velocity += impulse / mass;
 
-            let torque_b = -r_b.cross(impulse / self.delta_time);
-            body_a.apply_torque(torque_b);
-
-            let gravity_torque = -r_b.cross(self.gravity * mass);
-            body_b.apply_torque(gravity_torque);
+            let torque_b = r_b.cross(impulse); //impulse/delta_time
+            body_b.apply_torque(torque_b);
 
             body_b.apply_surface_friction(normal, collision.contact_point, friction_coefficient, self.delta_time);
 
-            body_b.correction = correction * body_a.mass;
+            body_b.correction = correction / mass;
         }
     }
 
