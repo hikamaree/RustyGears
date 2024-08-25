@@ -27,22 +27,30 @@ impl Collision {
             }
 
             (CollisionBox::Sphere(sphere), CollisionBox::BoundingBox(bbox)) => {
-                Self::sphere_box(bbox, sphere, rotation_b)
+                Self::sphere_box(bbox, sphere, rotation_b, bbox.center() - sphere.center)
             }
             (CollisionBox::BoundingBox(bbox), CollisionBox::Sphere(sphere)) => {
-                Self::sphere_box(bbox, sphere, rotation_a)
+                Self::sphere_box(bbox, sphere, rotation_a, sphere.center - bbox.center())
             }
         }
     }
 
     fn sphere_sphere(sphere_a: &Sphere, sphere_b: &Sphere) -> Option<Collision>  {
-        let center_distance = (sphere_a.center - sphere_b.center).magnitude();
-        let overlap = (sphere_a.radius + sphere_b.radius) - center_distance;
+        let diff = sphere_b.center - sphere_a.center;
+        let overlap = (sphere_a.radius + sphere_b.radius) - diff.magnitude();
+        let contact_point = (sphere_a.center.to_vec() + sphere_b.center.to_vec()) * 0.5;
+
+        let mut normal = (sphere_b.center - sphere_a.center).normalize();
+
+        if diff.dot(normal) < 0.0 {
+            normal = -normal;
+        }
+
         if overlap > 0.0 {
             Some(Collision {
-                normal: (sphere_b.center - sphere_a.center).normalize(),
+                normal,
                 overlap,
-                contact_point: (sphere_a.center.to_vec() + sphere_b.center.to_vec()) * 0.5,
+                contact_point
             })
         } else {
             None
@@ -136,12 +144,10 @@ impl Collision {
         })
     }
 
-    fn sphere_box(bbox: &BoundingBox, sphere: &Sphere, box_rotation: &Quaternion<f32>) -> Option<Collision>  {
+    fn sphere_box(bbox: &BoundingBox, sphere: &Sphere, box_rotation: &Quaternion<f32>, diff: Vector3<f32>) -> Option<Collision>  {
 
         let rot_box = Matrix3::from(*box_rotation);
         let half_box = bbox.size() / 2.0;
-
-        let diff = sphere.center - bbox.center();
 
         let axes = [
             rot_box.x, rot_box.y, rot_box.z,
@@ -178,11 +184,11 @@ impl Collision {
             }
         }
 
+        let contact_point = sphere.center.to_vec() - normal * sphere.radius;
+
         if diff.dot(normal) < 0.0 {
             normal = -normal;
         }
-
-        let contact_point = sphere.center.to_vec() - normal * sphere.radius;
 
         Some(Collision {
             normal,

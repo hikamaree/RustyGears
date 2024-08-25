@@ -64,6 +64,13 @@ impl Object {
         }
         self.clone()
     }
+
+    pub fn set_bounciness(&mut self, bounciness: f32) -> Self {
+        if let Some(body) = &self.body {
+            body.lock().unwrap().set_bounciness(bounciness);
+        }
+        self.clone()
+    }
 }
 
 impl Entity for Object {
