@@ -105,7 +105,6 @@ impl Character {
         }
         self.clone()
     }
-
 }
 
 impl Entity for Character {

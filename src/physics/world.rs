@@ -107,14 +107,17 @@ impl PhysicsWorld {
 
         let correction = normal * (collision.overlap / (1.0 / body_a.mass + 1.0 / body_b.mass));
 
-        println!("{:?}", collision.contact_point);
-
         if body_a.movable {
             let mass = body_a.mass;
             body_a.velocity -= impulse / mass;
 
             let torque_a = r_a.cross(impulse); //impulse/delta_time
             body_a.apply_torque(torque_a);
+
+            if body_a.position.y > collision.contact_point.y {
+                let gravity_torque = -r_a.cross(self.gravity * mass);
+                body_a.apply_torque(gravity_torque);
+            }
 
             body_a.apply_surface_friction(normal, collision.contact_point, friction_coefficient, self.delta_time);
 
@@ -127,6 +130,11 @@ impl PhysicsWorld {
 
             let torque_b = r_b.cross(impulse); //impulse/delta_time
             body_b.apply_torque(torque_b);
+
+            if body_b.position.y > collision.contact_point.y {
+                let gravity_torque = -r_b.cross(self.gravity * mass);
+                body_b.apply_torque(gravity_torque);
+            }
 
             body_b.apply_surface_friction(normal, collision.contact_point, friction_coefficient, self.delta_time);
 
