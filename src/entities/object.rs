@@ -71,6 +71,13 @@ impl Object {
         }
         self.clone()
     }
+
+    pub fn set_friction_coefficient(&mut self, friction_coefficient: f32) -> Self {
+        if let Some(body) = &self.body {
+            body.lock().unwrap().set_friction_coefficient(friction_coefficient);
+        }
+        self.clone()
+    }
 }
 
 impl Entity for Object {

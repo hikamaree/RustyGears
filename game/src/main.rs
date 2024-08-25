@@ -13,29 +13,34 @@ pub fn main() {
     let fog = Fog::new(vec3(0.2, 0.2, 0.2), 0.0);
 
     let big_block = Model::open("resources/models/plane/plane.obj");
-    let car = Model::open("resources/models/car/Avent_sport.obj");
+    //let car = Model::open("resources/models/car/Avent_sport.obj");
     let ball = Model::open("resources/models/ball/ball.obj");
     let bullet = Model::open("resources/models/bullet/bullet.obj");
     let block = Model::open("resources/models/block/block.obj");
 
     let bbc = Object::new()
         .add_model(big_block.clone())
-        .set_bounciness(1.0)
-        .set_body(RigidBody::with_single_bbox(&big_block));
+        .set_body(RigidBody::with_single_bbox(&big_block))
+        .set_friction_coefficient(1.5)
+        .set_bounciness(1.0);
 
     let mut lambo = Character::new()
-        .add_model(car.clone())
-        .set_body(RigidBody::with_single_bbox(&car))
+        //.add_model(car.clone())
+        //.set_body(RigidBody::with_single_bbox(&car))
+        .add_model(block.clone())
+        .set_body(RigidBody::with_single_bbox(&block))
         .set_gravity(false)
-        .set_bounciness(0.0)
-        .set_mass(1000.0)
-        .set_position(vec3(0.0, 2.0, 0.0));
+        .set_bounciness(0.8)
+        .set_friction_coefficient(1.5)
+        .set_mass(100.0)
+        .set_position(vec3(0.5, 2.0, 0.5));
 
     let mut sphere = Character::new()
         .add_model(ball.clone())
         .set_body(RigidBody::with_single_sphere(&ball))
         .set_gravity(false)
         .set_mass(20.0)
+        .set_friction_coefficient(1.5)
         .set_position(vec3(0.0, 15.0, 0.0));
 
     let mut sbc = Character::new()
@@ -43,8 +48,9 @@ pub fn main() {
         .set_body(RigidBody::with_single_bbox(&block))
         .set_gravity(false)
         .set_mass(50.0)
-        .set_position(vec3(1.5, 50.0, 1.1))
-        .set_rotation(Quaternion::from_angle_z(Deg(-30.0)));
+        .set_friction_coefficient(10.5)
+        .set_position(vec3(0.5, 50.0, 0.0))
+        .set_rotation(Quaternion::from_angle_z(Deg(10.0)));
 
 
     let world = World::new()
@@ -56,9 +62,9 @@ pub fn main() {
         .add(&light_source1)
         .add(&ambient_light)
         .add(&fog)
-        .add(&sphere)
         .add(&bbc)
         .add(&sbc)
+        .add(&sphere)
         .add(&lambo);
 
     window.set_world(&world);
