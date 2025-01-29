@@ -16,7 +16,7 @@ use tobj;
 
 use super::{
     Mesh,
-    Texture,
+    Textures,
     Vertex,
     Shader,
     load_texture,
@@ -25,7 +25,7 @@ use super::{
 #[derive(Clone)]
 pub struct ModelController {
     pub meshes: Vec<Mesh>,
-    pub textures_loaded: Vec<Texture>,
+    pub textures_loaded: Vec<Textures>,
     directory: String,
 }
 
@@ -59,7 +59,12 @@ impl ModelController {
         let path = Path::new(path);
 
         self.directory = path.parent().unwrap_or_else(|| Path::new("")).to_str().unwrap().into();
-        let obj = tobj::load_obj(path);
+        let obj = tobj::load_obj(path, &tobj::LoadOptions {
+            triangulate: true,
+            single_index: true,
+            ..Default::default()
+        }
+        );
 
         let (models, materials) = obj.unwrap();
         for model in models {
@@ -95,7 +100,7 @@ impl ModelController {
             }
 
             let mut textures = Vec::new();
-            if let Some(material_id) = mesh.material_id {
+/*            if let Some(material_id) = mesh.material_id {
                 let material = &materials[material_id];
 
                 if !material.diffuse_texture.is_empty() {
@@ -119,13 +124,13 @@ impl ModelController {
                     textures.push(texture);
                 }
             }
-
+*/
             self.meshes.push(Mesh::new(vertices, indices, textures));
         }
 
     }
 
-    fn load_material_texture(&mut self, path: &str, type_name: &str) -> Texture {
+    fn load_material_texture(&mut self, path: &str, type_name: &str) -> Textures {
         {
             let texture = self.textures_loaded.iter().find(|t| t.path == path);
             if let Some(texture) = texture {
@@ -133,7 +138,7 @@ impl ModelController {
             }
         }
 
-        let texture = Texture {
+        let texture = Textures {
             id: load_texture(format!("{}/{}", self.directory, path).as_str()),
             type_: type_name.into(),
             path: path.into()

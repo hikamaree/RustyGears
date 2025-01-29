@@ -6,7 +6,7 @@ use gl;
 extern crate glfw;
 
 use image;
-use image::GenericImage;
+use image::GenericImageView;
 use image::DynamicImage::*;
 
 
@@ -18,7 +18,7 @@ pub fn elapsed(start_time: &SystemTime) -> String {
 
 pub fn load_texture(path: &str) -> u32 {
     let mut texture_id = 0;
-    unsafe {
+/*    unsafe {
         gl::GenTextures(1, &mut texture_id);
         let img = image::open(&Path::new(path)).expect("Texture failed to load");
         let format = match img {
@@ -28,7 +28,7 @@ pub fn load_texture(path: &str) -> u32 {
             ImageRgba8(_) => gl::RGBA,
         };
 
-        let data = img.raw_pixels();
+        let data = img.pixels();
 
         gl::BindTexture(gl::TEXTURE_2D, texture_id);
         gl::TexImage2D(gl::TEXTURE_2D, 0, format as i32, img.width() as i32, img.height() as i32,
@@ -39,7 +39,7 @@ pub fn load_texture(path: &str) -> u32 {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::REPEAT as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR_MIPMAP_LINEAR as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
-    }
+    }*/
     texture_id
 }
 

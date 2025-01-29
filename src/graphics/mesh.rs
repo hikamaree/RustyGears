@@ -37,7 +37,7 @@ impl Default for Vertex {
 }
 
 #[derive(Clone)]
-pub struct Texture {
+pub struct Textures {
     pub id: u32,
     pub type_: String,
     pub path: String,
@@ -47,7 +47,7 @@ pub struct Texture {
 pub struct Mesh {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
-    pub textures: Vec<Texture>,
+    pub textures: Vec<Textures>,
     pub vao: u32,
 
     vbo: u32,
@@ -55,7 +55,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>, textures: Vec<Texture>) -> Mesh {
+    pub fn new(vertices: Vec<Vertex>, indices: Vec<u32>, textures: Vec<Textures>) -> Mesh {
         let mut mesh = Mesh {
             vertices, indices, textures,
             vao: 0, vbo: 0, ebo: 0

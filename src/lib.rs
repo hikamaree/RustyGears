@@ -2,11 +2,16 @@ mod entities;
 mod graphics;
 mod physics;
 mod scene;
+mod wgpu;
+mod time;
+mod game;
 
 use entities::*;
 use graphics::*;
 use physics::*;
 use scene::*;
+
+pub use wgpu::*;
 
 pub use entities::{
     Character,
@@ -14,7 +19,6 @@ pub use entities::{
 };
 pub use graphics::{
     AmbientLight,
-    Camera,
     Fog,
     Model,
     LightSource,
@@ -37,3 +41,7 @@ pub use cgmath::{
     Zero,
     One
 };
+
+pub use time::Time;
+
+pub use game::*;

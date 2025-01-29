@@ -1,0 +1,114 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+class World {
+    - entities: HashMap<u32, Entity>
+    - render_engine: RenderEngine
+    - physics_engine: PhysicsEngine
+    - particle_engine: ParticleEngine
+    - sound_engine: SoundEngine
+    + create_entity(world_transform: Transform): u32
+    + add_component<T: Component>(entity_id: u32, component_type: String, component: T): void
+    + update(): void
+}
+
+class Entity {
+    + id: u32
+    + world_transform: Transform
+    + components: HashMap<String, Vec<Box<Component>>>
+    + add_component<T: Component>(component_type: String, component: T): void
+    + get_components(component_type: String): Option<&Vec<Box<Component>>>
+}
+
+class Transform {
+    + position: Vec3
+    + rotation: Vec3
+    + scale: Vec3
+    + combine(other: Transform): Transform
+}
+
+interface Component {
+    + as_any(): &dyn Any
+}
+
+class SharedTransformComponent {
+    + position: Vec3
+    + rotation: Vec3
+    + scale: Vec3
+}
+
+class RenderEngine {
+    + render(entities: HashMap<u32, Entity>): void
+}
+
+class PhysicsEngine {
+    + update(entities: &mut HashMap<u32, Entity>, delta_time: f32): void
+}
+
+class ParticleEngine {
+    + update(entities: &mut HashMap<u32, Entity>, delta_time: f32): void
+    + render(entities: HashMap<u32, Entity>): void
+}
+
+class SoundEngine {
+    + update(entities: &mut HashMap<u32, Entity>, delta_time: f32): void
+    + play_sound(entity_id: u32, sound_id: String): void
+}
+
+class RenderComponent {
+    + local_transform: Transform
+    - mesh: Option<String>
+    - material: Option<String>
+    + render_with_transform(transform: Transform): void
+}
+
+class LightComponent {
+    + local_transform: Transform
+    - light_type: String
+    - intensity: f32
+    - color: Vec3
+    + illuminate(): void
+}
+
+class PhysicsComponent {
+    + local_transform: Transform
+    - velocity: Vec3
+    - mass: f32
+    + apply_physics(transform: Transform): void
+}
+
+class ParticleComponent {
+    + local_transform: Transform
+    - particle_count: u32
+    - emission_rate: f32
+    + update_particles(): void
+}
+
+class SoundComponent {
+    + local_transform: Transform
+    - sound_id: String
+    - volume: f32
+    + play(): void
+}
+
+World --> Entity : "1..*"
+Entity --> Transform
+Entity --> "0..*" Component
+Component <|-- RenderComponent
+Component <|-- LightComponent
+Component <|-- PhysicsComponent
+Component <|-- ParticleComponent
+Component <|-- SoundComponent
+
+RenderComponent --> Transform : local_transform
+LightComponent --> Transform : local_transform
+PhysicsComponent --> Transform : local_transform
+ParticleComponent --> Transform : local_transform
+SoundComponent --> Transform : local_transform
+
+World --> RenderEngine
+World --> PhysicsEngine
+World --> ParticleEngine
+World --> SoundEngine
+
+@enduml

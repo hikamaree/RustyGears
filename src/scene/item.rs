@@ -6,12 +6,6 @@ pub trait SceneItem {
     fn add_to_scene(&self, scene: &mut Scene);
 }
 
-impl SceneItem for Camera {
-    fn add_to_scene(&self, scene: &mut Scene) {
-        scene.set_camera(self.camera.clone());
-    }
-}
-
 impl<T: Entity + Clone + 'static> SceneItem for T {
     fn add_to_scene(&self, scene: &mut Scene) {
         scene.add_entity(self.clone());
