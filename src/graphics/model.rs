@@ -103,11 +103,7 @@ impl ModelController {
                     textures.push(texture);
                 } else {
                     for vertex in vertices.iter_mut() {
-                        if material.diffuse.len() > 3 {
-                            vertex.color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], material.diffuse[3]);
-                        } else {
-                            vertex.color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
-                        }
+                        vertex.color = vec4(material.diffuse[0], material.diffuse[1], material.diffuse[2], 1.0);
                     }
                 }
                 if !material.specular_texture.is_empty() {
