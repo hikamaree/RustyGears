@@ -1,7 +1,7 @@
 use crate::Camera;
 use crate::CameraManagerGear;
 use crate::Time;
-use super::GameLoop;
+use crate::game::gameloop::GameLoop;
 use std::any::Any;
 
 use winit::event::ElementState;

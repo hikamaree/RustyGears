@@ -1,7 +1,6 @@
 use cgmath::{
     Vector3,
     Matrix3,
-    Point3,
     Quaternion,
     Rotation3,
     Zero,
@@ -9,11 +8,8 @@ use cgmath::{
     Rad,
     SquareMatrix,
     InnerSpace,
-    EuclideanSpace,
-    Array
 };
 use super::collision_box::*;
-use crate::model::*;
 
 use std::sync::Mutex;
 use std::sync::Arc;
@@ -70,75 +66,75 @@ impl RigidBody {
         Arc::new(Mutex::new(body))
     }
 
-    pub fn with_bboxes(model: &Model) -> BodyRef {
-        let collision_box = model.get_meshes().iter().map(|mesh| {
-            CollisionBox::BoundingBox(mesh.calculate_bounding_box())
-        }).collect();
-
-        RigidBody::new(collision_box)
-    }
-
-    pub fn with_spheres(model: &Model) -> BodyRef {
-        let collision_box = model.get_meshes().iter().map(|mesh| {
-            CollisionBox::Sphere(mesh.calculate_sphere())
-        }).collect();
-
-        RigidBody::new(collision_box)
-    }
-
-    pub fn with_single_bbox(model: &Model) -> BodyRef {
-        let mut min = Vector3::from_value(f32::MAX);
-        let mut max = Vector3::from_value(f32::MIN);
-
-        for mesh in model.get_meshes() {
-            let bounding_box = mesh.calculate_bounding_box();
-
-            min.x = min.x.min(bounding_box.min.x);
-            min.y = min.y.min(bounding_box.min.y);
-            min.z = min.z.min(bounding_box.min.z);
-
-            max.x = max.x.max(bounding_box.max.x);
-            max.y = max.y.max(bounding_box.max.y);
-            max.z = max.z.max(bounding_box.max.z);
-        }
-
-        let combined_bounding_box = BoundingBox {
-            min: Point3::from_vec(min),
-            max: Point3::from_vec(max)
-        };
-
-        let collision_box = CollisionBox::BoundingBox(combined_bounding_box);
-        RigidBody::new(vec![collision_box])
-    }
-
-
-    pub fn with_single_sphere(model: &Model) -> BodyRef {
-        let mut center = Vector3::zero();
-        let mut total_vertices = 0;
-
-        for mesh in model.get_meshes() {
-            let mesh_center = mesh.vertices.iter().fold(Vector3::zero(), |acc, v| acc + v.position);
-            center += mesh_center;
-            total_vertices += mesh.vertices.len();
-        }
-
-        center /= total_vertices as f32;
-
-        let mut radius: f32 = 0.0;
-        for mesh in model.get_meshes() {
-            for vertex in &mesh.vertices {
-                radius = radius.max((vertex.position - center).magnitude());
-            }
-        }
-
-        let sphere = Sphere {
-            center: Point3::from_vec(center),
-            radius,
-        };
-
-        let collision_box = CollisionBox::Sphere(sphere);
-        RigidBody::new(vec![collision_box])
-    }
+    //pub fn with_bboxes(model: &Model) -> BodyRef {
+    //    let collision_box = model.get_meshes().iter().map(|mesh| {
+    //        CollisionBox::BoundingBox(mesh.calculate_bounding_box())
+    //    }).collect();
+    //
+    //    RigidBody::new(collision_box)
+    //}
+    //
+    //pub fn with_spheres(model: &Model) -> BodyRef {
+    //    let collision_box = model.get_meshes().iter().map(|mesh| {
+    //        CollisionBox::Sphere(mesh.calculate_sphere())
+    //    }).collect();
+    //
+    //    RigidBody::new(collision_box)
+    //}
+    //
+    //pub fn with_single_bbox(model: &Model) -> BodyRef {
+    //    let mut min = Vector3::from_value(f32::MAX);
+    //    let mut max = Vector3::from_value(f32::MIN);
+    //
+    //    for mesh in model.get_meshes() {
+    //        let bounding_box = mesh.calculate_bounding_box();
+    //
+    //        min.x = min.x.min(bounding_box.min.x);
+    //        min.y = min.y.min(bounding_box.min.y);
+    //        min.z = min.z.min(bounding_box.min.z);
+    //
+    //        max.x = max.x.max(bounding_box.max.x);
+    //        max.y = max.y.max(bounding_box.max.y);
+    //        max.z = max.z.max(bounding_box.max.z);
+    //    }
+    //
+    //    let combined_bounding_box = BoundingBox {
+    //        min: Point3::from_vec(min),
+    //        max: Point3::from_vec(max)
+    //    };
+    //
+    //    let collision_box = CollisionBox::BoundingBox(combined_bounding_box);
+    //    RigidBody::new(vec![collision_box])
+    //}
+    //
+    //
+    //pub fn with_single_sphere(model: &Model) -> BodyRef {
+    //    let mut center = Vector3::zero();
+    //    let mut total_vertices = 0;
+    //
+    //    for mesh in model.get_meshes() {
+    //        let mesh_center = mesh.vertices.iter().fold(Vector3::zero(), |acc, v| acc + v.position);
+    //        center += mesh_center;
+    //        total_vertices += mesh.vertices.len();
+    //    }
+    //
+    //    center /= total_vertices as f32;
+    //
+    //    let mut radius: f32 = 0.0;
+    //    for mesh in model.get_meshes() {
+    //        for vertex in &mesh.vertices {
+    //            radius = radius.max((vertex.position - center).magnitude());
+    //        }
+    //    }
+    //
+    //    let sphere = Sphere {
+    //        center: Point3::from_vec(center),
+    //        radius,
+    //    };
+    //
+    //    let collision_box = CollisionBox::Sphere(sphere);
+    //    RigidBody::new(vec![collision_box])
+    //}
 
     pub fn set_position(&mut self, positon: Vector3<f32>) {
         let delta = positon - self.position;
