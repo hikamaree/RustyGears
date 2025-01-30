@@ -56,8 +56,6 @@ impl<'a> Game {
             gear.borrow_mut().handle_event(&event, self);
         }
         self.gears = gears;
-
-        self.get_camera().borrow_mut().handle_event(&event, self);
     }
 
     pub fn run(&mut self) -> &mut Self {

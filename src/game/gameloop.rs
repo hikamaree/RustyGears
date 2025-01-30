@@ -1,5 +1,5 @@
 use crate::{
-    DrawLight, DrawModel, GearEvent, window::State
+    window::State, DrawLight, DrawModel, Gear, GearEvent
 };
 
 use tokio::runtime::Runtime;
@@ -151,6 +151,7 @@ impl GameLoop {
                                 ..
                         } => {
                             game.dispatch_event(GearEvent::Input(event));
+                            game.get_camera().borrow_mut().handle_event(&GearEvent::Input(event), game);
                         }
                         _ => {}
                     }
