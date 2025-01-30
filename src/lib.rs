@@ -2,10 +2,10 @@ mod physics;
 mod wgpu;
 mod time;
 mod game;
+mod gears;
+mod winit;
 
 use physics::*;
-
-pub use wgpu::*;
 
 pub use physics::{
     PhysicsWorld,
@@ -25,3 +25,9 @@ pub use cgmath::{
 pub use time::Time;
 
 pub use game::*;
+
+pub use gears::*;
+
+pub use winit::*;
+
+pub use wgpu::*;
