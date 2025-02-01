@@ -1,5 +1,5 @@
 use crate::{
-    window::State, DrawLight, DrawModel, Gear, GearEvent
+    window::State, DrawLight, DrawModel, GearEvent
 };
 
 use tokio::runtime::Runtime;
@@ -113,18 +113,16 @@ impl GameLoop {
                     state.window().request_redraw();
                 }
 
-                Event::DeviceEvent {
-                    event: DeviceEvent::MouseMotion { delta },
-                    ..
-                } => {
-                    let dt = game.delta_time();
-                    game.get_camera().borrow_mut().rotate(delta.0 as f32, delta.1 as f32, dt);
+                Event::DeviceEvent { event, .. } => {
+                    match event {
+                        DeviceEvent::MouseMotion { delta } => {
+                            game.dispatch_event(GearEvent::MouseMotion(delta.0, delta.1));
+                        }
+                        _ => {}
+                    }
                 }
 
-                Event::WindowEvent {
-                    ref event,
-                    window_id,
-                } if window_id == state.window().id() => {
+                Event::WindowEvent { ref event, window_id, } if window_id == state.window().id() => {
                     match event {
                         WindowEvent::CloseRequested => control_flow.exit(),
 
@@ -134,24 +132,11 @@ impl GameLoop {
 
                         WindowEvent::RedrawRequested => {
                             game.dispatch_event(GearEvent::RenderRequested());
-
-                            match render(&state) {
-                                Ok(_) => {}
-                                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => state.resize(state.render_data.size),
-                                Err(wgpu::SurfaceError::OutOfMemory) => control_flow.exit(),
-                                Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                            }
+                            let _ = render(&state);
                         }
 
-                        WindowEvent::KeyboardInput {
-                            event:
-                                KeyEvent {
-                                    ..
-                                },
-                                ..
-                        } => {
-                            game.dispatch_event(GearEvent::Input(event));
-                            game.get_camera().borrow_mut().handle_event(&GearEvent::Input(event), game);
+                        WindowEvent::KeyboardInput { event: KeyEvent { .. }, .. } => {
+                            game.dispatch_event(GearEvent::KeyboardInput(event));
                         }
                         _ => {}
                     }

@@ -1,10 +1,16 @@
 use cgmath::*;
-use std::{cell::RefCell, f32::consts::FRAC_PI_2, rc::Rc};
+use std::{f32::consts::FRAC_PI_2, sync::{Arc, Mutex}};
+
+use crate::{Game, GearEvent};
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
+
+static ID_COUNTER: Mutex<u64> = Mutex::new(0);
+
 //#[derive(Copy, Clone)]
 pub struct Camera {
+    id: u64,
     pub position: Point3<f32>,
     yaw: Rad<f32>,
     pitch: Rad<f32>,
@@ -13,7 +19,8 @@ pub struct Camera {
     speed: f32,
     sensitivity: f32,
     forward: Vector3<f32>,
-    right: Vector3<f32>
+    right: Vector3<f32>,
+    pub custom_handler: Option<Box<dyn FnMut(&mut Camera, &GearEvent, &mut Game) + Send + Sync>>,
 }
 
 impl Camera {
@@ -22,7 +29,12 @@ impl Camera {
         yaw: Y,
         pitch: P,
     ) -> Self {
+        let mut id_counter = ID_COUNTER.lock().unwrap();
+        *id_counter += 1;
+        let id = *id_counter;
+
         Self {
+            id,
             position: position.into(),
             yaw: yaw.into(),
             pitch: pitch.into(),
@@ -32,7 +44,12 @@ impl Camera {
             sensitivity: 0.4,
             forward: vec3(0.0, 0.0, -1.0),
             right: Vector3::zero(),
+            custom_handler: None,
         }
+    }
+
+    pub fn get_id(&self) -> u64 {
+        self.id
     }
 
     pub fn calc_matrix(&self) -> Matrix4<f32> {
@@ -107,6 +124,11 @@ impl Camera {
         self.forward = forward.normalize();
         self.right = self.forward.cross(Vector3::unit_y()).normalize();
     }
+
+    pub fn set_handle(&mut self, handler: impl FnMut(&mut Camera, &GearEvent, &mut Game) + 'static + Send + Sync) -> &mut Self {
+        self.custom_handler = Some(Box::new(handler));
+        self
+    }
 }
 
 pub struct Projection {
@@ -136,8 +158,9 @@ impl Projection {
 }
 
 pub struct CameraManagerGear {
-    cameras: Vec<Rc<RefCell<Camera>>>,
+    cameras: Vec<Arc<Mutex<Camera>>>,
     active_camera_index: usize,
+    active_camera_id: u64,
 }
 
 impl CameraManagerGear {
@@ -145,25 +168,34 @@ impl CameraManagerGear {
         Self {
             cameras: Vec::new(),
             active_camera_index: 0,
+            active_camera_id: 0
         }
     }
 
-    pub fn add_camera(&mut self, camera: Rc<RefCell<Camera>>) {
+    pub fn add_camera(&mut self, camera: Arc<Mutex<Camera>>) {
+        if self.cameras.is_empty() {
+            self.active_camera_id = camera.lock().unwrap().get_id();
+        }
         self.cameras.push(camera);
     }
 
     pub fn set_active_camera(&mut self, index: usize) {
         if index < self.cameras.len() {
             self.active_camera_index = index;
+            self.active_camera_id = self.cameras[index].lock().unwrap().get_id();
         }
     }
 
-    pub fn get_active_camera(&mut self) -> Option<Rc<RefCell<Camera>>> {
+    pub fn get_active_camera(&mut self) -> Option<Arc<Mutex<Camera>>> {
         self.cameras.get_mut(self.active_camera_index).cloned()
     }
 
     pub fn index(&self) -> usize {
         self.active_camera_index
+    }
+
+    pub fn get_active_camera_id(&self) -> u64 {
+        self.active_camera_id
     }
 
     pub fn count(&self) -> usize {

@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 use winit::window::Window;
 use super::*;
 use model::Vertex;
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
 
@@ -124,7 +124,7 @@ pub(crate) struct State<'a> {
 
 
 impl<'a> State<'a> {
-    pub(crate) async fn new(window: &'a Window, camera: Rc<RefCell<Camera>>) -> State<'a> {
+    pub(crate) async fn new(window: &'a Window, camera: Arc<Mutex<Camera>>) -> State<'a> {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -214,11 +214,11 @@ impl<'a> State<'a> {
 
         let projection = camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 1000.0);
 
-        camera.borrow_mut().update_view_proj(&projection);
+        camera.lock().unwrap().update_view_proj(&projection);
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
-            contents: &camera.borrow().get_uniform(),
+            contents: &camera.lock().unwrap().get_uniform(),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -422,12 +422,12 @@ impl<'a> State<'a> {
         }
     }
 
-    pub(crate) fn update(&mut self, camera: Rc<RefCell<Camera>>) {
-        camera.borrow_mut().update_view_proj(&self.render_data.projection);
+    pub(crate) fn update(&mut self, camera: Arc<Mutex<Camera>>) {
+        camera.lock().unwrap().update_view_proj(&self.render_data.projection);
         self.queue.write_buffer(
             &self.render_data.camera_buffer,
             0,
-            &camera.borrow().get_uniform(),
+            &camera.lock().unwrap().get_uniform(),
         );
 
         let old_position: cgmath::Vector3<_> = self.render_data.light_uniform.position.into();

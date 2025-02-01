@@ -1,5 +1,5 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use crate::Camera;
 use crate::CameraManagerGear;
@@ -9,7 +9,7 @@ use crate::Time;
 use crate::game::gameloop::GameLoop;
 
 pub struct Game {
-    gears: Vec<Rc<RefCell<dyn Gear>>>,
+    gears: Vec<Arc<Mutex<dyn Gear>>>,
     timer: Time,
     camera_manager: CameraManagerGear,
 }
@@ -24,7 +24,7 @@ impl<'a> Game {
     }
 
     pub fn default() -> Self {
-        let mut game = Game {
+        let game = Game {
             gears: Vec::new(),
             timer: Time::new(),
             camera_manager: CameraManagerGear::new(),
@@ -33,27 +33,25 @@ impl<'a> Game {
         //game.add_gear(RenderingGear);
         //game.add_gear(PhysicsGear);
 
-        let camera = Camera::new((0.0, 0.0, 0.0), cgmath::Deg(0.0), cgmath::Deg(0.0));
-        game.add_camera(camera);
-
         game
     }
 
     pub fn add_gear<T: Gear + 'static>(&mut self, gear: T) -> &mut Self {
-        self.gears.push(Rc::new(RefCell::new(gear)));
+        self.gears.push(Arc::new(Mutex::new(gear)));
         self
     }
 
     pub fn add_camera(&mut self, camera: Camera) -> &mut Self {
-        let camera = Rc::new(RefCell::new(camera)); 
+        let camera = Arc::new(Mutex::new(camera)); 
         self.camera_manager.add_camera(camera.clone());
+        self.gears.push(camera);
         self
     }
 
     pub(crate) fn dispatch_event(&mut self, event: GearEvent) {
         let mut gears = std::mem::take(&mut self.gears);
         for gear in &mut gears {
-            gear.borrow_mut().handle_event(&event, self);
+            gear.lock().unwrap().handle_event(&event, self);
         }
         self.gears = gears;
     }
@@ -76,8 +74,12 @@ impl<'a> Game {
         self.timer.update();
     }
 
-    pub fn get_camera(&mut self) -> Rc<RefCell<Camera>> {
+    pub fn get_camera(&mut self) -> Arc<Mutex<Camera>> {
         self.camera_manager.get_active_camera().expect("no camera found")
+    }
+
+    pub fn get_camera_id(&self) -> u64 {
+        self.camera_manager.get_active_camera_id()
     }
 
     pub fn set_active_camera(&mut self, index: usize) {
