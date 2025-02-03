@@ -7,7 +7,7 @@ use winit::{
     event::{
         DeviceEvent, Event, KeyEvent, WindowEvent
     },
-    event_loop::EventLoop
+    event_loop::EventLoop, keyboard::PhysicalKey
 };
 
 use std::iter;
@@ -108,7 +108,7 @@ impl GameLoop {
             match event {
                 Event::NewEvents(_) => {
                     game.update_time();
-                    game.dispatch_event(GearEvent::Update(game.delta_time()));
+                    game.dispatch_event(GearEvent::Update());
                     state.update(game.get_camera());
                     state.window().request_redraw();
                 }
@@ -135,8 +135,8 @@ impl GameLoop {
                             let _ = render(&state);
                         }
 
-                        WindowEvent::KeyboardInput { event: KeyEvent { .. }, .. } => {
-                            game.dispatch_event(GearEvent::KeyboardInput(event));
+                        WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
+                            game.dispatch_event(GearEvent::KeyboardInput(*key, *state));
                         }
                         _ => {}
                     }

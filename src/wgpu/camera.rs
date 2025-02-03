@@ -33,7 +33,7 @@ impl Camera {
         *id_counter += 1;
         let id = *id_counter;
 
-        Self {
+        let mut camera = Camera {
             id,
             position: position.into(),
             yaw: yaw.into(),
@@ -45,7 +45,11 @@ impl Camera {
             forward: vec3(0.0, 0.0, -1.0),
             right: Vector3::zero(),
             custom_handler: None,
-        }
+        };
+
+        camera.update_camera_vectors();
+        
+        camera
     }
 
     pub fn get_id(&self) -> u64 {

@@ -6,15 +6,10 @@ pub struct CamSwitch;
 
 impl Gear for CamSwitch {
     fn handle_event(&mut self, event: &GearEvent, game: &mut Game) {
-        if let GearEvent::KeyboardInput(window_event) = event {
-            match window_event {
-                WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
-                    if *key == KeyCode::KeyC && *state == ElementState::Pressed {
-                        let index = game.get_camera_index();
-                        game.set_active_camera((index + 1) % game.get_camera_cnt());
-                    }
-                }
-                _ => {},
+        if let GearEvent::KeyboardInput(key, state) = event {
+            if *key == KeyCode::KeyC && *state == ElementState::Pressed {
+                let index = game.get_camera_index();
+                game.set_active_camera((index + 1) % game.get_camera_cnt());
             }
         }
     }
@@ -24,9 +19,11 @@ impl Gear for CamSwitch {
 }
 
 
-fn custom_handle(camera: &mut Camera, _event: &GearEvent, game: &mut Game) {
-    if camera.get_id() == game.get_camera_id() {
-        println!("majmuneee");
+fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &mut Game) {
+    if let GearEvent::KeyboardInput(..) = event {
+        if camera.get_id() == game.get_camera_id() {
+            println!("majmuneee");
+        }
     }
 }
 

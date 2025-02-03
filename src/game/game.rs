@@ -14,26 +14,13 @@ pub struct Game {
     camera_manager: CameraManagerGear,
 }
 
-impl<'a> Game {
+impl Game {
     pub fn new() -> Self {
         Self {
             gears: Vec::new(),
             timer: Time::new(),
             camera_manager: CameraManagerGear::new(),
         }
-    }
-
-    pub fn default() -> Self {
-        let game = Game {
-            gears: Vec::new(),
-            timer: Time::new(),
-            camera_manager: CameraManagerGear::new(),
-        };
-
-        //game.add_gear(RenderingGear);
-        //game.add_gear(PhysicsGear);
-
-        game
     }
 
     pub fn add_gear<T: Gear + 'static>(&mut self, gear: T) -> &mut Self {
