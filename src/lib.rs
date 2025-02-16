@@ -1,8 +1,7 @@
 mod physics;
 mod wgpu;
 mod time;
-mod game;
-mod gears;
+mod rustygears;
 mod winit;
 
 use physics::*;
@@ -23,11 +22,6 @@ pub use cgmath::{
 };
 
 pub use time::Time;
-
-pub use game::*;
-
-pub use gears::*;
-
+pub use rustygears::*;
 pub use winit::*;
-
 pub use wgpu::*;

@@ -1,14 +1,14 @@
 use cgmath::*;
-use std::{f32::consts::FRAC_PI_2, sync::{Arc, Mutex}};
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::f32::consts::FRAC_PI_2;
 
 use crate::{Game, GearEvent};
 
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
-
 static ID_COUNTER: Mutex<u64> = Mutex::new(0);
 
-//#[derive(Copy, Clone)]
 pub struct Camera {
     id: u64,
     pub position: Point3<f32>,
@@ -161,48 +161,115 @@ impl Projection {
     }
 }
 
-pub struct CameraManagerGear {
-    cameras: Vec<Arc<Mutex<Camera>>>,
-    active_camera_index: usize,
-    active_camera_id: u64,
+//pub struct CameraManager {
+//    cameras: Vec<Arc<Mutex<Camera>>>,
+//    active_camera_index: u64,
+//    active_camera_id: u64,
+//}
+//
+//impl CameraManager {
+//    pub fn new() -> Self {
+//        Self {
+//            cameras: Vec::new(),
+//            active_camera_index: 0,
+//            active_camera_id: 0
+//        }
+//    }
+//
+//    pub fn add_camera(&mut self, camera: Arc<Mutex<Camera>>) {
+//        if self.cameras.is_empty() {
+//            self.active_camera_id = camera.lock().unwrap().get_id();
+//        }
+//        self.cameras.push(camera);
+//    }
+//
+//    pub fn set_active_camera(&mut self, index: u64) {
+//        if index < self.cameras.len() {
+//            self.active_camera_index = index;
+//            self.active_camera_id = self.cameras[index].lock().unwrap().get_id();
+//        }
+//    }
+//
+//    pub fn active_camera(&mut self) -> Arc<Mutex<Camera>> {
+//        self.cameras.get_mut(self.active_camera_index).cloned().expect("no camera found")
+//    }
+//
+//    pub fn active_camera_index(&self) -> u64 {
+//        self.active_camera_index
+//    }
+//
+//    pub fn active_camera_id(&self) -> u64 {
+//        self.active_camera_id
+//    }
+//
+//    pub fn count(&self) -> u64 {
+//        self.cameras.len()
+//    }
+//}
+
+
+pub struct CameraManager {
+    cameras: HashMap<u64, Arc<Mutex<Camera>>>,
+    active_camera_id: Option<u64>,
 }
 
-impl CameraManagerGear {
-    pub fn new() -> Self {
+impl CameraManager {
+    pub(crate) fn new() -> Self {
         Self {
-            cameras: Vec::new(),
-            active_camera_index: 0,
-            active_camera_id: 0
+            cameras: HashMap::new(),
+            active_camera_id: None,
         }
     }
 
-    pub fn add_camera(&mut self, camera: Arc<Mutex<Camera>>) {
+    pub(crate) fn add_camera(&mut self, camera: Arc<Mutex<Camera>>) {
+        let camera_id = camera.lock().unwrap().get_id();
         if self.cameras.is_empty() {
-            self.active_camera_id = camera.lock().unwrap().get_id();
+            self.active_camera_id = Some(camera_id);
         }
-        self.cameras.push(camera);
+        self.cameras.insert(camera_id, camera);
     }
 
-    pub fn set_active_camera(&mut self, index: usize) {
-        if index < self.cameras.len() {
-            self.active_camera_index = index;
-            self.active_camera_id = self.cameras[index].lock().unwrap().get_id();
+    /// Sets the active camera by its unique ID.
+    ///
+    /// If the specified `camera_id` exists in the manager, it will become the active camera.
+    ///
+    /// # Arguments
+    ///
+    /// * `camera_id` - The unique identifier of the camera to be set as active.
+
+    pub fn set_active_camera(&mut self, camera_id: u64) {
+        if self.cameras.contains_key(&camera_id) {
+            self.active_camera_id = Some(camera_id);
         }
     }
 
-    pub fn get_active_camera(&mut self) -> Option<Arc<Mutex<Camera>>> {
-        self.cameras.get_mut(self.active_camera_index).cloned()
+    /// Returns the currently active camera, if available.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the active camera wrapped in `Arc<Mutex<Camera>>` if an active camera exists.
+
+    pub fn active_camera(&self) -> Option<Arc<Mutex<Camera>>> {
+        self.active_camera_id.and_then(|id| self.cameras.get(&id).cloned())
     }
 
-    pub fn index(&self) -> usize {
-        self.active_camera_index
-    }
+    /// Returns the ID of the currently active camera.
+    ///
+    /// # Returns
+    ///
+    /// An `Option<u64>` containing the ID of the active camera, or `None` if no camera is active.
 
-    pub fn get_active_camera_id(&self) -> u64 {
+    pub fn active_camera_id(&self) -> Option<u64> {
         self.active_camera_id
     }
 
-    pub fn count(&self) -> usize {
-        self.cameras.len()
+    /// Returns the total number of cameras managed.
+    ///
+    /// # Returns
+    ///
+    /// A `u64` representing the number of cameras stored in the manager.
+
+    pub fn count(&self) -> u64 {
+        self.cameras.len() as u64
     }
 }

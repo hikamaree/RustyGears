@@ -12,7 +12,7 @@ pub struct Time {
 }
 
 impl Time {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Time {
             last_update: Instant::now(),
             total_time: Duration::new(0, 0),
@@ -25,7 +25,7 @@ impl Time {
         }
     }
 
-    pub fn update(&mut self) {
+    pub(crate) fn update(&mut self) {
         let now = Instant::now();
         let elapsed = now.duration_since(self.last_update);
         
@@ -49,13 +49,29 @@ impl Time {
         self.last_update = now;
     }
 
+
+    /// Returns the smoothed delta time in seconds.
+    /// 
+    /// This value represents the time elapsed between the last two frames,
+    /// averaged over the last 10 frames to reduce fluctuations.
+
     pub fn delta_time(&self) -> f32 {
         self.smoothed_delta_time
     }
 
+    /// Returns the frames per second (FPS).
+    /// 
+    /// FPS is updated once per second and represents
+    /// how many frames were rendered in the last second.
+
     pub fn fps(&self) -> f32 {
         self.fps
     }
+
+    /// Returns the total elapsed time in seconds.
+    /// 
+    /// This value represents the total time since the `Time` instance was created,
+    /// continuously increasing as the game runs.
 
     pub fn total_time(&self) -> f32 {
         self.total_time.as_secs_f32()

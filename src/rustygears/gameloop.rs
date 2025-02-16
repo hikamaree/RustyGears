@@ -10,7 +10,7 @@ use winit::{
     event_loop::EventLoop, keyboard::PhysicalKey
 };
 
-use std::iter;
+use std::{iter, sync::{Arc, Mutex}};
 
 use super::Game;
 
@@ -91,8 +91,6 @@ impl GameLoop {
     }
 
     async fn run_loop(&mut self, game: &mut Game) {
-        env_logger::init();
-
         let event_loop = EventLoop::new().unwrap();
         let title = env!("CARGO_PKG_NAME");
         let window = winit::window::WindowBuilder::new()
@@ -102,47 +100,50 @@ impl GameLoop {
         window.set_cursor_grab(winit::window::CursorGrabMode::Locked).expect("nema cursor");
         window.set_cursor_visible(false);
         
-        let mut state = State::new(&window, game.get_camera()).await;
+        let state = State::new(&window, game.cameras.active_camera().expect("no camera found")).await;
+        let state = Arc::new(Mutex::new(state));
+
+        let game = Arc::new(Mutex::new(std::mem::take(game)));
 
         event_loop.run(move |event, control_flow| {
             match event {
                 Event::NewEvents(_) => {
-                    game.update_time();
-                    game.dispatch_event(GearEvent::Update());
-                    state.update(game.get_camera());
-                    state.window().request_redraw();
+                    game.lock().unwrap().time.update();
+                    Game::dispatch_event(game.clone(), GearEvent::Update());
+                    state.lock().unwrap().update(game.lock().unwrap().cameras.active_camera().expect("no camera found"));
+                    state.lock().unwrap().window().request_redraw();
                 }
 
                 Event::DeviceEvent { event, .. } => {
                     match event {
                         DeviceEvent::MouseMotion { delta } => {
-                            game.dispatch_event(GearEvent::MouseMotion(delta.0, delta.1));
+                            Game::dispatch_event(game.clone(), GearEvent::MouseMotion(delta.0, delta.1));
                         }
                         _ => {}
                     }
                 }
 
-                Event::WindowEvent { ref event, window_id, } if window_id == state.window().id() => {
+                Event::WindowEvent { ref event, window_id, } if window_id == state.lock().unwrap().window().id() => {
                     match event {
                         WindowEvent::CloseRequested => control_flow.exit(),
 
                         WindowEvent::Resized(physical_size) => {
-                            state.resize(*physical_size);
+                            state.lock().unwrap().resize(*physical_size);
                         }
 
                         WindowEvent::RedrawRequested => {
-                            game.dispatch_event(GearEvent::RenderRequested());
-                            let _ = render(&state);
+                            Game::dispatch_event(game.clone(), GearEvent::RenderRequested());
+                            let _ = render(&state.lock().unwrap());
                         }
 
                         WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
-                            game.dispatch_event(GearEvent::KeyboardInput(*key, *state));
+                            Game::dispatch_event(game.clone(), GearEvent::KeyboardInput(*key, *state));
                         }
                         _ => {}
                     }
                 }
                 _ => {}
             }
-        }).unwrap();
+        }).expect("majmuneee");
     }
 }
