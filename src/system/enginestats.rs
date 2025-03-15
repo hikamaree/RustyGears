@@ -4,7 +4,6 @@ use crate::GearEvent;
 use crate::Game;
 use std::io;
 use std::io::Write;
-use std::any::Any;
 
 pub struct EngineStats {
     gpu: GpuInfo,
@@ -51,7 +50,4 @@ impl Gear for EngineStats {
             io::stdout().flush().unwrap();
         }
     }
-
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }

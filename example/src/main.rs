@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use rusty_gears::*;
 
 pub struct CamSwitch;
@@ -14,9 +12,6 @@ impl Gear for CamSwitch {
             }
         }
     }
-
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
 }
 
 fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &mut Game) {
