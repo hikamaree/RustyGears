@@ -23,10 +23,10 @@ fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &mut Game) {
 }
 
 pub fn main() {
-    let camera1 = Camera::new((0.0, 0.0, 0.0), Deg(0.0), Deg(0.0));
-    let camera2 = Camera::new((0.0, 0.0, 0.0), Deg(0.0), Deg(0.0));
+    let camera1 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+    let camera2 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
 
-    let mut camera3 = Camera::new((0.0, 0.0, 0.0), Deg(0.0), Deg(0.0));
+    let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
     camera3.set_handle(custom_handle);
 
     GameBuilder::new()

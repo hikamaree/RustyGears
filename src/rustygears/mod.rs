@@ -2,7 +2,6 @@ mod game;
 mod gamebuilder;
 mod gameloop;
 mod gear;
-mod cameragear;
 mod rendergear;
 
 pub use game::*;
