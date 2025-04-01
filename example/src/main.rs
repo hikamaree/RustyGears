@@ -30,11 +30,15 @@ pub fn main() {
     camera3.set_handle(custom_handle);
 
     GameBuilder::new()
-        .add_gear(RenderGear)
-        .add_gear(CamSwitch)
-        .add_gear(EngineStats::new())
-        .add_camera(camera1)
-        .add_camera(camera2)
-        .add_camera(camera3)
+        .setup(|game| {
+            game.add_gear(RenderGear);
+            game.add_gear(CamSwitch);
+            game.add_gear(EngineStats::new());
+        })
+        .setup(|game| {
+            game.add_camera(camera1);
+            game.add_camera(camera2);
+            game.add_camera(camera3);
+        })
         .run();
 }

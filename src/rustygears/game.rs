@@ -6,6 +6,7 @@ use crate::Camera;
 use crate::CameraManager;
 use crate::Gear;
 use crate::GearEvent;
+use crate::Scene;
 use crate::Time;
 
 pub struct Game {
@@ -13,6 +14,7 @@ pub struct Game {
     pub(crate) state: Arc<Mutex<State>>,
     pub time: Time,
     pub cameras: CameraManager,
+    pub scene: Scene,
 }
 
 impl Game {
@@ -22,8 +24,9 @@ impl Game {
             state: Arc::new(Mutex::new(state)),
             time: Time::new(),
             cameras: CameraManager::new(),
+            scene: Scene::new(),
         }
-    } 
+    }
 
     /// Adds a new gear to the game.
     /// # Arguments

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+use crate::Texture;
 use std::ops::Range;
 
 use super::texture;
@@ -53,14 +55,15 @@ impl Vertex for ModelVertex {
     }
 }
 
+#[derive(Clone)]
 pub struct Material {
     #[allow(unused)]
     pub name: String,
     #[allow(unused)]
-    pub diffuse_texture: texture::Texture,
+    pub diffuse_texture: Arc<Texture>,
     #[allow(unused)]
-    pub normal_texture: texture::Texture,
-    pub bind_group: wgpu::BindGroup,
+    pub normal_texture: Arc<Texture>,
+    pub bind_group: Arc<wgpu::BindGroup>,
 }
 
 impl Material {
@@ -96,22 +99,24 @@ impl Material {
 
         Self {
             name: String::from(name),
-            diffuse_texture,
-            normal_texture,
-            bind_group,
+            diffuse_texture: Arc::new(diffuse_texture),
+            normal_texture: Arc::new(normal_texture),
+            bind_group: Arc::new(bind_group),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct Mesh {
     #[allow(unused)]
     pub name: String,
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
+    pub vertex_buffer: Arc<wgpu::Buffer>,
+    pub index_buffer: Arc<wgpu::Buffer>,
     pub num_elements: u32,
     pub material: usize,
 }
 
+#[derive(Clone)]
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,

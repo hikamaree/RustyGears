@@ -1,10 +1,12 @@
 mod camera;
+mod graphics;
 mod physics;
 mod wgpu;
 mod time;
 mod rustygears;
 mod system;
 mod winit;
+mod scene;
 
 use physics::*;
 
@@ -29,3 +31,4 @@ pub use winit::*;
 pub use system::*;
 pub use wgpu::*;
 pub use camera::*;
+pub use scene::*;

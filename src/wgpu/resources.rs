@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::io::{BufReader, Cursor};
 
 use std::env;
@@ -192,8 +193,8 @@ pub async fn load_model(
 
         model::Mesh {
             name: file_name.to_string(),
-            vertex_buffer,
-            index_buffer,
+            vertex_buffer: Arc::new(vertex_buffer),
+            index_buffer: Arc::new(index_buffer),
             num_elements: m.mesh.indices.len() as u32,
             material: m.mesh.material_id.unwrap_or(0),
         }

@@ -1,4 +1,5 @@
-use std::sync::Mutex;
+use std::sync::atomic::Ordering;
+use std::sync::atomic::AtomicU64;
 use crate::GearEvent;
 use crate::Game;
 use crate::Projection;
@@ -14,7 +15,7 @@ use cgmath::InnerSpace;
 
 const SAFE_FRAC_PI_2: f32 = std::f32::consts::FRAC_PI_2 - 0.0001;
 
-static ID_COUNTER: Mutex<u64> = Mutex::new(0);
+static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// The `Camera` struct represents a camera in a 3D space.
 
@@ -45,12 +46,8 @@ impl Camera {
     /// Returns an instance of the camera.
 
     pub fn new(position: (f32, f32, f32), yaw: f32, pitch: f32) -> Self {
-        let mut id_counter = ID_COUNTER.lock().unwrap();
-        *id_counter += 1;
-        let id = *id_counter;
-
         let mut camera = Camera {
-            id,
+            id: ID_COUNTER.fetch_add(1, Ordering::Relaxed),
             position: position.into(),
             yaw: Rad(yaw),
             pitch: Rad(pitch),
