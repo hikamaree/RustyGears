@@ -1,10 +1,83 @@
+use super::buffer::*;
+use crate::graphics::render_pipeline::create_render_pipeline;
+use crate::LightUniform;
+use crate::Vertex;
+use crate::ModelVertex;
+use std::collections::HashMap;
+use crate::{Projection, RenderTag};
 use crate::Texture;
-use crate::window::RenderData;
 use std::sync::Mutex;
 use crate::Camera;
-use cgmath::Rotation3;
 use std::sync::Arc;
 use winit::window::Window;
+
+#[allow(dead_code)]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct InstanceRaw {
+    pub model: [[f32; 4]; 4],
+    pub normal: [[f32; 3]; 3],
+}
+
+impl Vertex for InstanceRaw {
+    fn desc() -> wgpu::VertexBufferLayout<'static> {
+        use std::mem;
+        wgpu::VertexBufferLayout {
+            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &[
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 5,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    shader_location: 6,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
+                    shader_location: 7,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
+                    shader_location: 8,
+                    format: wgpu::VertexFormat::Float32x4,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 19]>() as wgpu::BufferAddress,
+                    shader_location: 10,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 22]>() as wgpu::BufferAddress,
+                    shader_location: 11,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+            ],
+        }
+    }
+}
+
+
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindGroupLayoutKey {
+    Camera,
+    Texture,
+    Light,
+    Custom(&'static str),
+}
+
 
 pub(crate) struct Graphics {
     pub window: Arc<Window>,
@@ -12,6 +85,15 @@ pub(crate) struct Graphics {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
+    pub size: winit::dpi::PhysicalSize<u32>,
+    
+    pub depth_texture: Texture,
+    pub projection: Projection,
+
+    pub buffers: HashMap<String, Buffer>,
+    pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
+    pub bind_groups: HashMap<BindGroupLayoutKey, wgpu::BindGroup>,
+    pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
 }
 
 impl Graphics {
@@ -64,43 +146,294 @@ impl Graphics {
             view_formats: vec![],
         };
 
+        let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
-        let state = Graphics {
+        let projection = Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 1000.0);
+
+        let buffers = HashMap::new();
+        let bind_group_layouts = HashMap::new();
+        let bind_groups = HashMap::new();
+        let pipelines = HashMap::new();
+
+        let mut graphics = Graphics {
             window,
             surface,
             device,
             queue,
             config,
+            size,
+            depth_texture,
+            projection,
+            buffers,
+            bind_group_layouts,
+            bind_groups,
+            pipelines,
         };
 
-        state
+        graphics.initialize_default_resources();
+
+        graphics
     }
 
-    pub(crate) fn resize(&mut self, scene: &mut RenderData, new_size: winit::dpi::PhysicalSize<u32>) {
+
+    pub fn create_buffer(&mut self, name: &str, size: usize, usage: wgpu::BufferUsages, strategy: BufferStrategy) {
+        let buffer = Buffer::new(&self.device, size, usage, strategy, name);
+        self.buffers.insert(name.to_string(), buffer);
+    }
+
+    pub fn get_buffer(&self, name: &str) -> Option<&Buffer> {
+        self.buffers.get(name)
+    }
+    
+    pub fn get_buffer_mut(&mut self, name: &str) -> Option<&mut Buffer> {
+        self.buffers.get_mut(name)
+    }
+
+    pub fn get_pipeline(&self, tag: &RenderTag) -> Option<&wgpu::RenderPipeline> {
+        self.pipelines.get(tag)
+    }
+
+    pub fn create_bind_grouproup_layout(&mut self, key: BindGroupLayoutKey, entries: &[wgpu::BindGroupLayoutEntry], label: Option<&str>) {
+        let layout = self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label,
+            entries,
+        });
+        self.bind_group_layouts.insert(key, Arc::new(layout));
+    }
+
+    pub fn create_bind_group(&mut self, layout_key: BindGroupLayoutKey, entries: &[wgpu::BindGroupEntry], label: Option<&str>) -> Result<(), String> {
+        let layout = self.bind_group_layouts.get(&layout_key)
+            .ok_or_else(|| format!("Bind group layout {:?} not found", layout_key))?;
+
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label,
+            layout,
+            entries,
+        });
+
+        self.bind_groups.insert(layout_key, bind_group);
+        Ok(())
+    }
+
+    pub fn get_bind_group(&self, key: BindGroupLayoutKey) -> Option<&wgpu::BindGroup> {
+        self.bind_groups.get(&key)
+    }
+
+    pub fn create_render_pipeline(
+        &mut self,
+        render_tag: RenderTag,
+        layout: &wgpu::PipelineLayout,
+        vertex_layouts: &[wgpu::VertexBufferLayout],
+        shader_path: &str,
+    ) {
+        let shader_src = std::fs::read_to_string(shader_path)
+            .unwrap_or_else(|_| panic!("Failed to load shader at {}", shader_path));
+
+        let shader_label = format!("{:?} Shader", render_tag);
+        
+        let shader_desc = wgpu::ShaderModuleDescriptor {
+            label: Some(&shader_label),
+            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+        };
+
+        let pipeline = create_render_pipeline(
+            &self.device,
+            layout,
+            self.config.format,
+            Some(Texture::DEPTH_FORMAT),
+            vertex_layouts,
+            shader_desc,
+        );
+
+        self.pipelines.insert(render_tag, pipeline);
+    }
+
+    fn initialize_default_resources(&mut self) {
+        self.create_bind_grouproup_layout(
+            BindGroupLayoutKey::Texture,
+            &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            ],
+            Some("texture_bind_group_layout"),
+            );
+
+            self.create_buffer(
+                "camera",
+                DEFAULT_CAMERA_BUFFER_SIZE,
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                BufferStrategy::Single,
+            );
+
+            let mut buffers = std::mem::take(&mut self.buffers);
+
+            self.create_bind_grouproup_layout(
+                BindGroupLayoutKey::Camera,
+                &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                Some("camera_bind_group_layout"),
+            );
+
+            self.create_bind_group(
+                BindGroupLayoutKey::Camera,
+                &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.get_mut("camera").unwrap().get_current().as_entire_binding(),
+                }],
+                Some("camera_bind_group"),
+            ).unwrap();
+
+            self.buffers = buffers;
+
+            self.create_buffer(
+                "instance",
+                DEFAULT_INSTANCE_BUFFER_SIZE,
+                wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                BufferStrategy::Single,
+            );
+
+
+            let mut buffers = std::mem::take(&mut self.buffers);
+
+            if let Some(instance_buffer) = buffers.get_mut("instance") {
+                let zero_data = vec![0u8; DEFAULT_INSTANCE_BUFFER_SIZE];
+                instance_buffer.write(&self.queue, &zero_data);
+            }
+
+            self.buffers = buffers;
+
+            self.create_buffer(
+                "light",
+                std::mem::size_of::<LightUniform>(),
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                BufferStrategy::Single,
+            );
+
+            let light_uniform = LightUniform {
+                position: [2.0, 2.0, 2.0],
+                _padding: 0,
+                color: [1.0, 1.0, 1.0],
+                _padding2: 0,
+            };
+
+            self.buffers.get_mut("light").unwrap().write(&self.queue, bytemuck::cast_slice(&[light_uniform]));
+
+            self.create_bind_grouproup_layout(
+                BindGroupLayoutKey::Light,
+                &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                Some("light_bind_group_layout"),
+            );
+
+            let mut buffers = std::mem::take(&mut self.buffers);
+
+            self.create_bind_group(
+                BindGroupLayoutKey::Light,
+                &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.get_mut("light").unwrap().get_current().as_entire_binding(),
+                }],
+                Some("light_bind_group"),
+            ).expect("Failed to create light bind group");
+
+
+            let render_pipeline_layout = self.device.create_pipeline_layout(
+                &wgpu::PipelineLayoutDescriptor {
+                    label: Some("Default Render Pipeline Layout"),
+                    bind_group_layouts: &[
+                        self.bind_group_layouts.get(&BindGroupLayoutKey::Texture).expect("Texture bind group layout not found"),
+                        self.bind_group_layouts.get(&BindGroupLayoutKey::Camera).expect("Camera bind group layout not found"),
+                        self.bind_group_layouts.get(&BindGroupLayoutKey::Light).expect("Ligth bind group layout not found"),
+                    ],
+                    push_constant_ranges: &[],
+                });
+
+            let render_pipeline = {
+                let shader = wgpu::ShaderModuleDescriptor {
+                    label: Some("Default Shader"),
+                    source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                };
+
+                create_render_pipeline(
+                    &self.device,
+                    &render_pipeline_layout,
+                    self.config.format,
+                    Some(Texture::DEPTH_FORMAT),
+                    &[ ModelVertex::desc(), InstanceRaw::desc() ],
+                    shader,
+                )
+            };
+
+            self.pipelines.insert(RenderTag::PBR, render_pipeline);
+
+
+
+            self.buffers = buffers;
+    }
+
+    pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            scene.projection.resize(new_size.width, new_size.height);
-            scene.size = new_size;
+            self.projection.resize(new_size.width, new_size.height);
+            self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
-            scene.depth_texture = Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.depth_texture = Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
         }
     }
 
-    pub(crate) fn update(&mut self, scene: &mut RenderData, camera: Arc<Mutex<Camera>>) {
-        camera.lock().unwrap().update_view_proj(&scene.projection);
+    pub(crate) fn update(&mut self, camera: Arc<Mutex<Camera>>) {
+        camera.lock().unwrap().update_view_proj(&self.projection);
         self.queue.write_buffer(
-            &scene.camera_buffer,
+            &self.get_buffer("camera").expect("no camera buffer found").get_current(),
             0,
             &camera.lock().unwrap().get_uniform(),
-        );
-
-        let old_position: cgmath::Vector3<_> = scene.light_uniform.position.into();
-        scene.light_uniform.position = (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0)) * old_position).into();
-        self.queue.write_buffer(
-            &scene.light_buffer,
-            0,
-            bytemuck::cast_slice(&[scene.light_uniform]),
         );
     }
 }

@@ -2,7 +2,16 @@ use std::sync::Arc;
 use crate::Texture;
 use std::ops::Range;
 
-use super::texture;
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct LightUniform {
+    pub position: [f32; 3],
+    pub _padding: u32,
+    pub color: [f32; 3],
+    pub _padding2: u32,
+}
+
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -70,8 +79,8 @@ impl Material {
     pub fn new(
         device: &wgpu::Device,
         name: &str,
-        diffuse_texture: texture::Texture,
-        normal_texture: texture::Texture,
+        diffuse_texture: Texture,
+        normal_texture: Texture,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {

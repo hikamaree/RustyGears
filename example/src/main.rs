@@ -29,6 +29,12 @@ pub fn main() {
     let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
     camera3.set_handle(custom_handle);
 
+    let semi_transform = Transform {
+        position: Vector3::zero(),
+        rotation: Quaternion::one(),
+        scale: vec3(1.0, 1.0, 1.0),
+    };
+
     GameBuilder::new()
         .setup(|game| {
             game.add_gear(RenderGear);
@@ -37,8 +43,9 @@ pub fn main() {
         })
         .setup(|game| {
             game.add_camera(camera1);
-            game.add_camera(camera2);
-            game.add_camera(camera3);
+            if let Err(e) = game.spawn_model("semi.obj", semi_transform, vec![RenderTag::PBR]) {
+                eprintln!("Failed to spawn semi.obj model: {}", e);
+            }
         })
         .run();
-}
+    }

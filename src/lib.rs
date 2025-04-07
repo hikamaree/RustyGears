@@ -1,7 +1,6 @@
 mod camera;
 mod graphics;
 mod physics;
-mod wgpu;
 mod time;
 mod rustygears;
 mod system;
@@ -25,10 +24,11 @@ pub use cgmath::{
     One
 };
 
+pub use graphics::*;
+
 pub use time::Time;
 pub use rustygears::*;
 pub use winit::*;
 pub use system::*;
-pub use wgpu::*;
 pub use camera::*;
 pub use scene::*;

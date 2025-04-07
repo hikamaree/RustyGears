@@ -22,7 +22,7 @@ impl GameLoop {
     }
 
     async fn run_loop(game: Game, game_loop: EventLoop<()>) {
-        let state = game.state.clone();
+        // let graphics = game.graphics;
         let game = Arc::new(Mutex::new(game));
 
         game_loop.run(move |event, control_flow| {
@@ -30,8 +30,6 @@ impl GameLoop {
                 Event::NewEvents(_) => {
                     game.lock().unwrap().time.update();
                     Game::dispatch_event(game.clone(), GearEvent::Update());
-                    state.lock().unwrap().update(game.lock().unwrap().cameras.active_camera().expect("no camera found"));
-                    state.lock().unwrap().window().request_redraw();
                 }
 
                 Event::DeviceEvent { event, .. } => {
@@ -43,21 +41,23 @@ impl GameLoop {
                     }
                 }
 
-                Event::WindowEvent { ref event, window_id, } if window_id == state.lock().unwrap().window().id() => {
+                Event::WindowEvent { ref event, window_id, } if window_id == game.lock().unwrap().graphics.window.id() => {
                     match event {
                         WindowEvent::CloseRequested => control_flow.exit(),
 
                         WindowEvent::Resized(physical_size) => {
-                            state.lock().unwrap().resize(*physical_size);
+                            game.lock().unwrap().graphics.resize(*physical_size);
                         }
 
                         WindowEvent::RedrawRequested => {
+                            game.lock().unwrap().graphics.window.request_redraw();
                             Game::dispatch_event(game.clone(), GearEvent::RenderRequested());
                         }
 
                         WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
                             Game::dispatch_event(game.clone(), GearEvent::KeyboardInput(*key, *state));
                         }
+
                         _ => {}
                     }
                 }

@@ -1,11 +1,14 @@
+use crate::Mesh;
+use crate::ModelVertex;
+use crate::Model;
+use crate::Material;
+use crate::Texture;
 use std::sync::Arc;
 use std::io::{BufReader, Cursor};
 
 use std::env;
 
 use wgpu::util::DeviceExt;
-
-use super::*;
 
 pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
     let path = std::path::Path::new(&env::current_dir()?)
@@ -32,9 +35,9 @@ pub async fn load_texture(
     is_normal_map: bool,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> anyhow::Result<texture::Texture> {
+) -> anyhow::Result<Texture> {
     let data = load_binary(file_name).await?;
-    texture::Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
+    Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
 }
 
 pub async fn load_texture_color(
@@ -42,17 +45,17 @@ pub async fn load_texture_color(
     is_normal_map: bool,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> anyhow::Result<texture::Texture> {
-    texture::Texture::from_color(device, queue, color, Some("color"), is_normal_map)
+) -> anyhow::Result<Texture> {
+    Texture::from_color(device, queue, color, Some("color"), is_normal_map)
 }
 
 pub async fn load_default_texture(
     is_normal_map: bool,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> anyhow::Result<texture::Texture> {
+) -> anyhow::Result<Texture> {
     let data = load_binary("block.jpg").await?;
-    texture::Texture::from_bytes(device, queue, &data, "block.jpg", is_normal_map)
+    Texture::from_bytes(device, queue, &data, "block.jpg", is_normal_map)
 }
 
 
@@ -61,7 +64,7 @@ pub async fn load_model(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
-) -> anyhow::Result<model::Model> {
+) -> anyhow::Result<Model> {
     let obj_text = load_string(file_name).await?;
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
@@ -107,7 +110,7 @@ pub async fn load_model(
             ).await?
         };
 
-        materials.push(model::Material::new(
+        materials.push(Material::new(
                 device,
                 &m.name,
                 diffuse_texture,
@@ -118,7 +121,7 @@ pub async fn load_model(
 
     let meshes = models.into_iter().map(|m| {
         let mut vertices = (0..m.mesh.positions.len() / 3)
-            .map(|i| model::ModelVertex {
+            .map(|i| ModelVertex {
                 position: [
                     m.mesh.positions[i * 3],
                     m.mesh.positions[i * 3 + 1],
@@ -191,7 +194,7 @@ pub async fn load_model(
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        model::Mesh {
+        Mesh {
             name: file_name.to_string(),
             vertex_buffer: Arc::new(vertex_buffer),
             index_buffer: Arc::new(index_buffer),
@@ -201,5 +204,5 @@ pub async fn load_model(
     })
     .collect::<Vec<_>>();
 
-    Ok(model::Model { meshes, materials })
+    Ok(Model { meshes, materials })
 }

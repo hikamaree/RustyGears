@@ -1,27 +1,35 @@
+use crate::RenderTag;
+use crate::Transform;
+use crate::Instance;
+use crate::BindGroupLayoutKey;
+use crate::RenderObject;
+
+
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use crate::window::State;
 use crate::Camera;
 use crate::CameraManager;
 use crate::Gear;
 use crate::GearEvent;
+use crate::Graphics;
 use crate::Scene;
 use crate::Time;
 
+
 pub struct Game {
     gears: Vec<Arc<Mutex<dyn Gear>>>,
-    pub(crate) state: Arc<Mutex<State>>,
+    pub(crate) graphics: Graphics,
     pub time: Time,
     pub cameras: CameraManager,
     pub scene: Scene,
 }
 
 impl Game {
-    pub(crate) fn new(state: State) -> Self {
+    pub(crate) async fn new(window: Arc<winit::window::Window>) -> Self {
         Self {
             gears: Vec::new(),
-            state: Arc::new(Mutex::new(state)),
+            graphics: Graphics::new(window).await,
             time: Time::new(),
             cameras: CameraManager::new(),
             scene: Scene::new(),
@@ -84,5 +92,82 @@ impl Game {
 
         let mut game = self_arc.lock().unwrap();
         game.gears = gears;
+    }
+
+    // pub(crate) fn dispatch_event(game: &mut Game, event: GearEvent) {
+    //     let mut gears = std::mem::take(&mut game.gears);
+    //
+    //     for gear in &mut gears {
+    //         gear.handle_event(&event, game);
+    //     }
+    //
+    //     game.gears = gears;
+    // }
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    pub fn spawn_model(
+        &mut self,
+        file_path: &str,
+        transform: Transform,
+        render_tags: Vec<RenderTag>,
+    ) -> anyhow::Result<usize> {
+        if !self.scene.render_objects.contains_key(file_path) {
+            let _ = self.load_model(file_path);
+        }
+
+        let instance_id = self.generate_unique_id();
+
+        let instance = Instance {
+            id: instance_id,
+            object_name: file_path.to_string(),
+            transform,
+            render_tags,
+        };
+
+        self.scene.add_instance(instance);
+
+        Ok(instance_id)
+    }
+
+    fn load_model(&mut self, file_path: &str) -> anyhow::Result<()> {
+        let graphics = &self.graphics;
+        
+        let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)
+            .ok_or_else(|| anyhow::anyhow!("Texture bind group layout not found"))?;
+
+        let rt = tokio::runtime::Runtime::new()?;
+
+        let model = rt.block_on(async {
+            super::resources::load_model(
+                file_path,
+                &graphics.device,
+                &graphics.queue,
+                texture_layout,
+            ).await
+        })?;
+
+        self.scene.add_render_object(file_path.to_string(), RenderObject { model });
+        Ok(())
+    }
+
+    fn generate_unique_id(&self) -> usize {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(1);
+        COUNTER.fetch_add(1, Ordering::Relaxed)
     }
 }
