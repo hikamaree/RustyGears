@@ -1,6 +1,8 @@
+use winit::dpi::PhysicalSize;
+use hecs::CommandBuffer;
 use crate::ElementState;
 use crate::KeyCode;
-use crate::Game;
+use super::Game;
 
 /// # Gear Trait and GearEvent Enum
 ///
@@ -34,7 +36,7 @@ use crate::Game;
 ///
 pub trait Gear: Send + Sync {
     /// Processes an incoming `GearEvent` and updates the `Gear` state accordingly.
-    fn handle_event(&mut self, event: &GearEvent, game: &mut Game);
+    fn handle_event(&mut self, event: &GearEvent, game: &Game, commands: &mut CommandBuffer);
 }
 
 /// Represents different types of events that can occur in the system.
@@ -60,6 +62,8 @@ pub enum GearEvent {
     /// }
     /// ```
     RenderRequested(),
+
+    WindowResize(PhysicalSize<u32>),
 
     /// Dispatched when a keyboard key is pressed or released.
     ///

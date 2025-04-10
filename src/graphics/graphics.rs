@@ -1,13 +1,9 @@
-use super::buffer::*;
-use crate::graphics::render_pipeline::create_render_pipeline;
-use crate::LightUniform;
+use crate::graphics::pipeline::create_render_pipeline;
 use crate::Vertex;
 use crate::ModelVertex;
 use std::collections::HashMap;
 use crate::{Projection, RenderTag};
 use crate::Texture;
-use std::sync::Mutex;
-use crate::Camera;
 use std::sync::Arc;
 use winit::window::Window;
 
@@ -79,7 +75,7 @@ pub enum BindGroupLayoutKey {
 }
 
 
-pub(crate) struct Graphics {
+pub struct Graphics {
     pub window: Arc<Window>,
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
@@ -90,9 +86,9 @@ pub(crate) struct Graphics {
     pub depth_texture: Texture,
     pub projection: Projection,
 
-    pub buffers: HashMap<String, Buffer>,
+    // pub buffers: HashMap<String, Buffer>,
     pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
-    pub bind_groups: HashMap<BindGroupLayoutKey, wgpu::BindGroup>,
+    // pub bind_groups: HashMap<BindGroupLayoutKey, wgpu::BindGroup>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
 }
 
@@ -150,9 +146,9 @@ impl Graphics {
 
         let projection = Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 1000.0);
 
-        let buffers = HashMap::new();
+        // let buffers = HashMap::new();
         let bind_group_layouts = HashMap::new();
-        let bind_groups = HashMap::new();
+        // let bind_groups = HashMap::new();
         let pipelines = HashMap::new();
 
         let mut graphics = Graphics {
@@ -164,29 +160,15 @@ impl Graphics {
             size,
             depth_texture,
             projection,
-            buffers,
+            // buffers,
             bind_group_layouts,
-            bind_groups,
+            // bind_groups,
             pipelines,
         };
 
         graphics.initialize_default_resources();
 
         graphics
-    }
-
-
-    pub fn create_buffer(&mut self, name: &str, size: usize, usage: wgpu::BufferUsages, strategy: BufferStrategy) {
-        let buffer = Buffer::new(&self.device, size, usage, strategy, name);
-        self.buffers.insert(name.to_string(), buffer);
-    }
-
-    pub fn get_buffer(&self, name: &str) -> Option<&Buffer> {
-        self.buffers.get(name)
-    }
-    
-    pub fn get_buffer_mut(&mut self, name: &str) -> Option<&mut Buffer> {
-        self.buffers.get_mut(name)
     }
 
     pub fn get_pipeline(&self, tag: &RenderTag) -> Option<&wgpu::RenderPipeline> {
@@ -199,24 +181,6 @@ impl Graphics {
             entries,
         });
         self.bind_group_layouts.insert(key, Arc::new(layout));
-    }
-
-    pub fn create_bind_group(&mut self, layout_key: BindGroupLayoutKey, entries: &[wgpu::BindGroupEntry], label: Option<&str>) -> Result<(), String> {
-        let layout = self.bind_group_layouts.get(&layout_key)
-            .ok_or_else(|| format!("Bind group layout {:?} not found", layout_key))?;
-
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label,
-            layout,
-            entries,
-        });
-
-        self.bind_groups.insert(layout_key, bind_group);
-        Ok(())
-    }
-
-    pub fn get_bind_group(&self, key: BindGroupLayoutKey) -> Option<&wgpu::BindGroup> {
-        self.bind_groups.get(&key)
     }
 
     pub fn create_render_pipeline(
@@ -288,15 +252,6 @@ impl Graphics {
             Some("texture_bind_group_layout"),
             );
 
-            self.create_buffer(
-                "camera",
-                DEFAULT_CAMERA_BUFFER_SIZE,
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                BufferStrategy::Single,
-            );
-
-            let mut buffers = std::mem::take(&mut self.buffers);
-
             self.create_bind_grouproup_layout(
                 BindGroupLayoutKey::Camera,
                 &[wgpu::BindGroupLayoutEntry {
@@ -312,50 +267,6 @@ impl Graphics {
                 Some("camera_bind_group_layout"),
             );
 
-            self.create_bind_group(
-                BindGroupLayoutKey::Camera,
-                &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.get_mut("camera").unwrap().get_current().as_entire_binding(),
-                }],
-                Some("camera_bind_group"),
-            ).unwrap();
-
-            self.buffers = buffers;
-
-            self.create_buffer(
-                "instance",
-                DEFAULT_INSTANCE_BUFFER_SIZE,
-                wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                BufferStrategy::Single,
-            );
-
-
-            let mut buffers = std::mem::take(&mut self.buffers);
-
-            if let Some(instance_buffer) = buffers.get_mut("instance") {
-                let zero_data = vec![0u8; DEFAULT_INSTANCE_BUFFER_SIZE];
-                instance_buffer.write(&self.queue, &zero_data);
-            }
-
-            self.buffers = buffers;
-
-            self.create_buffer(
-                "light",
-                std::mem::size_of::<LightUniform>(),
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                BufferStrategy::Single,
-            );
-
-            let light_uniform = LightUniform {
-                position: [2.0, 2.0, 2.0],
-                _padding: 0,
-                color: [1.0, 1.0, 1.0],
-                _padding2: 0,
-            };
-
-            self.buffers.get_mut("light").unwrap().write(&self.queue, bytemuck::cast_slice(&[light_uniform]));
-
             self.create_bind_grouproup_layout(
                 BindGroupLayoutKey::Light,
                 &[wgpu::BindGroupLayoutEntry {
@@ -370,18 +281,6 @@ impl Graphics {
                 }],
                 Some("light_bind_group_layout"),
             );
-
-            let mut buffers = std::mem::take(&mut self.buffers);
-
-            self.create_bind_group(
-                BindGroupLayoutKey::Light,
-                &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.get_mut("light").unwrap().get_current().as_entire_binding(),
-                }],
-                Some("light_bind_group"),
-            ).expect("Failed to create light bind group");
-
 
             let render_pipeline_layout = self.device.create_pipeline_layout(
                 &wgpu::PipelineLayoutDescriptor {
@@ -411,10 +310,6 @@ impl Graphics {
             };
 
             self.pipelines.insert(RenderTag::PBR, render_pipeline);
-
-
-
-            self.buffers = buffers;
     }
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -426,14 +321,5 @@ impl Graphics {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture = Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
         }
-    }
-
-    pub(crate) fn update(&mut self, camera: Arc<Mutex<Camera>>) {
-        camera.lock().unwrap().update_view_proj(&self.projection);
-        self.queue.write_buffer(
-            &self.get_buffer("camera").expect("no camera buffer found").get_current(),
-            0,
-            &camera.lock().unwrap().get_uniform(),
-        );
     }
 }

@@ -1,3 +1,5 @@
+use hecs::CommandBuffer;
+
 use crate::system::gpu::*;
 use crate::Gear;
 use crate::GearEvent;
@@ -30,7 +32,7 @@ impl Drop for EngineStats {
 }
 
 impl Gear for EngineStats {
-    fn handle_event(&mut self, event: &GearEvent, game: &mut Game) {
+    fn handle_event(&mut self, event: &GearEvent, game: &Game, _cmd: &mut CommandBuffer) {
         if let GearEvent::Update() = event {
             if game.time.total_time() - self.lastupdate <= 1.0 {
                 return;

@@ -8,10 +8,10 @@ pub enum BufferStrategy {
 }
 
 pub struct Buffer {
-    buffers: Vec<wgpu::Buffer>,
-    current_idx: usize,
-    strategy: BufferStrategy,
-    label: String,
+    pub buffers: Vec<wgpu::Buffer>,
+    pub current_idx: usize,
+    pub strategy: BufferStrategy,
+    pub label: String,
 }
 
 impl Buffer {

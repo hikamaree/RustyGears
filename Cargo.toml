@@ -16,6 +16,7 @@ tokio = { version = "1.43.0", features = ["full"] }
 log = "0.4.25"
 sysinfo = "0.33.1"
 nvml-wrapper = "0.10.0"
+hecs = "0.10.5"
 
 [dependencies.image]
 version = "0.24"

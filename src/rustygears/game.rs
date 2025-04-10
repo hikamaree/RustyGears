@@ -1,9 +1,11 @@
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
+use hecs::CommandBuffer;
 use crate::RenderTag;
 use crate::Transform;
 use crate::Instance;
 use crate::BindGroupLayoutKey;
 use crate::RenderObject;
-
 
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -19,7 +21,7 @@ use crate::Time;
 
 pub struct Game {
     gears: Vec<Arc<Mutex<dyn Gear>>>,
-    pub(crate) graphics: Graphics,
+    pub graphics: Graphics,
     pub time: Time,
     pub cameras: CameraManager,
     pub scene: Scene,
@@ -27,13 +29,15 @@ pub struct Game {
 
 impl Game {
     pub(crate) async fn new(window: Arc<winit::window::Window>) -> Self {
-        Self {
+        let game = Game {
             gears: Vec::new(),
             graphics: Graphics::new(window).await,
             time: Time::new(),
             cameras: CameraManager::new(),
             scene: Scene::new(),
-        }
+        };
+
+        game
     }
 
     /// Adds a new gear to the game.
@@ -66,59 +70,21 @@ impl Game {
         self
     }
 
-    pub(crate) fn dispatch_event(self_arc: Arc<Mutex<Self>>, event: GearEvent) {
-        let gears = {
-            let mut game = self_arc.lock().unwrap();
-            std::mem::take(&mut game.gears)
-        };
+    pub fn dispatch_event(&self, event: GearEvent) {
+        let gears = self.gears.clone();
 
-        let handles: Vec<_> = gears
-            .iter()
+        let _command_buffers: Vec<CommandBuffer> = gears
+            .into_par_iter()
             .map(|gear| {
-                let gear = gear.clone();
-                let event = event.clone();
-                let game_arc = self_arc.clone();
-
-                std::thread::spawn(move || {
-                    let mut game = game_arc.lock().unwrap();
-                    gear.lock().unwrap().handle_event(&event, &mut game);
-                })
+                let mut cmd = CommandBuffer::new();
+                let mut gear = gear.lock().unwrap();
+                gear.handle_event(&event, &self, &mut cmd);
+                cmd
             })
-        .collect();
+            .collect();
 
-        for handle in handles {
-            let _ = handle.join();
-        }
-
-        let mut game = self_arc.lock().unwrap();
-        game.gears = gears;
+        // TODO: Apply all cmds
     }
-
-    // pub(crate) fn dispatch_event(game: &mut Game, event: GearEvent) {
-    //     let mut gears = std::mem::take(&mut game.gears);
-    //
-    //     for gear in &mut gears {
-    //         gear.handle_event(&event, game);
-    //     }
-    //
-    //     game.gears = gears;
-    // }
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     pub fn spawn_model(
         &mut self,
@@ -146,7 +112,7 @@ impl Game {
 
     fn load_model(&mut self, file_path: &str) -> anyhow::Result<()> {
         let graphics = &self.graphics;
-        
+
         let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)
             .ok_or_else(|| anyhow::anyhow!("Texture bind group layout not found"))?;
 
