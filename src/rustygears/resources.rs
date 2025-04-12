@@ -1,3 +1,5 @@
+use wgpu::Device;
+use wgpu::Queue;
 use crate::Mesh;
 use crate::ModelVertex;
 use crate::Model;
@@ -10,62 +12,44 @@ use std::env;
 
 use wgpu::util::DeviceExt;
 
-pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
-    let path = std::path::Path::new(&env::current_dir()?)
+pub async fn load_string(file_name: &str) -> String {
+    let path = std::path::Path::new(&env::current_dir()
+        .expect("Invalid current dir"))
         .join("res")
         .join(file_name);
-    //println!("{}", path.display());
-    let txt = std::fs::read_to_string(path)?;
 
-    Ok(txt)
+    std::fs::read_to_string(&path)
+        .expect(&format!("ERROR: Invalid path: {:?}", path))
 }
 
-pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
-    let path = std::path::Path::new(&env::current_dir()?)
+pub async fn load_binary(file_name: &str) -> Vec<u8> {
+    let path = std::path::Path::new(&env::current_dir()
+        .expect("Invalid current dir"))
         .join("res")
         .join(file_name);
-    //println!("{}", path.display());
-    let data = std::fs::read(path)?;
 
-    Ok(data)
+    std::fs::read(&path)
+        .expect(&format!("ERROR: Invalid path: {:?}", path))
 }
 
-pub async fn load_texture(
-    file_name: &str,
-    is_normal_map: bool,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-) -> anyhow::Result<Texture> {
-    let data = load_binary(file_name).await?;
+
+pub async fn load_texture(file_name: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
+    let data = load_binary(file_name).await;
     Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
 }
 
-pub async fn load_texture_color(
-    color: [f32; 4],
-    is_normal_map: bool,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-) -> anyhow::Result<Texture> {
+pub async fn load_texture_color(color: [f32; 4], is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
     Texture::from_color(device, queue, color, Some("color"), is_normal_map)
 }
 
-pub async fn load_default_texture(
-    is_normal_map: bool,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-) -> anyhow::Result<Texture> {
-    let data = load_binary("block.jpg").await?;
+pub async fn load_default_texture(is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
+    let data = load_binary("block.jpg").await;
     Texture::from_bytes(device, queue, &data, "block.jpg", is_normal_map)
 }
 
 
-pub async fn load_model(
-    file_name: &str,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-) -> anyhow::Result<Model> {
-    let obj_text = load_string(file_name).await?;
+pub async fn load_model(file_name: &str, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
+    let obj_text = load_string(file_name).await;
     let obj_cursor = Cursor::new(obj_text);
     let mut obj_reader = BufReader::new(obj_cursor);
 
@@ -77,37 +61,36 @@ pub async fn load_model(
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(&p).await.unwrap();
+            let mat_text = load_string(&p).await;
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
         },
-    )
-        .await?;
+    ).await.expect(&format!("ERROR: Failed to load obj model: {}", file_name));
 
     let mut materials = Vec::new();
 
-    for m in obj_materials? {
+    for m in obj_materials.expect(&format!("ERROR: Failed to load materials from obj model: {}", file_name)) {
         let diffuse_texture = if !m.diffuse_texture.is_empty() {
-            load_texture(&m.diffuse_texture, false, device, queue).await?
+            load_texture(&m.diffuse_texture, false, device, queue).await
         } else if m.diffuse.len() >= 3 {
             load_texture_color(
                 [ m.diffuse[0], m.diffuse[1], m.diffuse[2], 1.0 ],
                 false,
                 device,
                 queue,
-            ).await?
+            ).await
         } else {
-            load_default_texture(false, device, queue).await?
+            load_default_texture(false, device, queue).await
         };
 
         let normal_texture = if !m.normal_texture.is_empty() {
-            load_texture(&m.normal_texture, true, device, queue).await?
+            load_texture(&m.normal_texture, true, device, queue).await
         } else {
             load_texture_color(
                 [0.0, 0.0, 0.0, 0.0],
                 false,
                 device,
                 queue,
-            ).await?
+            ).await
         };
 
         materials.push(Material::new(
@@ -204,5 +187,8 @@ pub async fn load_model(
     })
     .collect::<Vec<_>>();
 
-    Ok(Model { meshes, materials })
+    Model {
+        meshes,
+        materials,
+    }
 }

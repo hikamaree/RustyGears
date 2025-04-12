@@ -1,5 +1,10 @@
-// use hecs::CommandBuffer;
-use cgmath::InnerSpace;
+use rusty_gears::math::InnerSpace;
+use rusty_gears::math::Rotation3;
+use rusty_gears::math::Quaternion;
+use rusty_gears::math::Zero;
+use rusty_gears::math::Deg;
+use rusty_gears::math::vec3;
+use rusty_gears::math::Vector3;
 use rusty_gears::*;
 
 pub struct CamSwitch;
@@ -31,7 +36,6 @@ pub fn main() {
     let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
     camera3.set_handle(custom_handle);
 
-
     GameBuilder::new().setup(|game| {
         game.add_gear(Render::new(&game.graphics));
         game.add_gear(EngineStats::new());
@@ -61,15 +65,8 @@ pub fn main() {
             })
             .collect::<Vec<_>>();
 
-
         for transform in transforms {
-            if let Err(e) = game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]) {
-                eprintln!("Failed to spawn semi.obj model: {}", e);
-            }
+            game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]);
         }
-
-
-
-
     }).run();
 }

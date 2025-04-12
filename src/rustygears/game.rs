@@ -1,15 +1,9 @@
-use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelIterator;
-use hecs::CommandBuffer;
 use crate::RenderTag;
 use crate::Transform;
 use crate::Instance;
 use crate::BindGroupLayoutKey;
 use crate::RenderObject;
-
-use std::sync::Arc;
-use std::sync::Mutex;
-
+use crate::CommandBuffer;
 use crate::Camera;
 use crate::CameraManager;
 use crate::Gear;
@@ -18,6 +12,11 @@ use crate::Graphics;
 use crate::Scene;
 use crate::Time;
 
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
 
 pub struct Game {
     gears: Vec<Arc<Mutex<dyn Gear>>>,
@@ -70,10 +69,10 @@ impl Game {
         self
     }
 
-    pub fn dispatch_event(&self, event: GearEvent) {
+    pub(crate) fn dispatch_event(&mut self, event: GearEvent) {
         let gears = self.gears.clone();
 
-        let _command_buffers: Vec<CommandBuffer> = gears
+        let command_buffers: Vec<CommandBuffer> = gears
             .into_par_iter()
             .map(|gear| {
                 let mut cmd = CommandBuffer::new();
@@ -83,15 +82,12 @@ impl Game {
             })
             .collect();
 
-        // TODO: Apply all cmds
+        for buffer in command_buffers {
+            buffer.apply(self);
+        }
     }
 
-    pub fn spawn_model(
-        &mut self,
-        file_path: &str,
-        transform: Transform,
-        render_tags: Vec<RenderTag>,
-    ) -> anyhow::Result<usize> {
+    pub fn spawn_model(&mut self, file_path: &str, transform: Transform, render_tags: Vec<RenderTag>) -> usize {
         if !self.scene.render_objects.contains_key(file_path) {
             let _ = self.load_model(file_path);
         }
@@ -107,16 +103,16 @@ impl Game {
 
         self.scene.add_instance(instance);
 
-        Ok(instance_id)
+        instance_id
     }
 
-    fn load_model(&mut self, file_path: &str) -> anyhow::Result<()> {
+    fn load_model(&mut self, file_path: &str) {
         let graphics = &self.graphics;
 
         let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)
-            .ok_or_else(|| anyhow::anyhow!("Texture bind group layout not found"))?;
+            .expect("Texture bind group layout not found");
 
-        let rt = tokio::runtime::Runtime::new()?;
+        let rt = tokio::runtime::Runtime::new().unwrap();
 
         let model = rt.block_on(async {
             super::resources::load_model(
@@ -125,10 +121,9 @@ impl Game {
                 &graphics.queue,
                 texture_layout,
             ).await
-        })?;
+        });
 
         self.scene.add_render_object(file_path.to_string(), RenderObject { model });
-        Ok(())
     }
 
     fn generate_unique_id(&self) -> usize {

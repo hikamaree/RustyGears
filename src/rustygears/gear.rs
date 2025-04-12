@@ -1,5 +1,5 @@
 use winit::dpi::PhysicalSize;
-use hecs::CommandBuffer;
+use crate::CommandBuffer;
 use crate::ElementState;
 use crate::KeyCode;
 use super::Game;
@@ -33,7 +33,7 @@ use super::Game;
 /// let event = GearEvent::Update();
 /// gear.handle_event(&event, &mut game);
 /// ```
-///
+
 pub trait Gear: Send + Sync {
     /// Processes an incoming `GearEvent` and updates the `Gear` state accordingly.
     fn handle_event(&mut self, event: &GearEvent, game: &Game, commands: &mut CommandBuffer);
@@ -63,6 +63,14 @@ pub enum GearEvent {
     /// ```
     RenderRequested(),
 
+    /// Dispatched when the window is resized.
+    ///
+    /// ### Example Usage
+    /// ```rust
+    /// if let GearEvent::WindowResize(size) = event {
+    ///     println!("New size: {}x{}", size.width, size.height);
+    /// }
+    /// ```
     WindowResize(PhysicalSize<u32>),
 
     /// Dispatched when a keyboard key is pressed or released.

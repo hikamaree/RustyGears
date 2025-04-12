@@ -6,22 +6,17 @@ mod rustygears;
 mod system;
 mod winit;
 mod scene;
+mod ecs;
+
+pub mod math {
+    pub use cgmath::*;
+}
 
 use physics::*;
 
 pub use physics::{
     PhysicsWorld,
     RigidBody,
-};
-
-pub use cgmath::{
-    Vector3,
-    vec3,
-    Rotation3,
-    Quaternion,
-    Deg,
-    Zero,
-    One
 };
 
 pub use graphics::*;
@@ -32,3 +27,4 @@ pub use winit::*;
 pub use system::*;
 pub use camera::*;
 pub use scene::*;
+pub use ecs::*;

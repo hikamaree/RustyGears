@@ -74,7 +74,6 @@ pub enum BindGroupLayoutKey {
     Custom(&'static str),
 }
 
-
 pub struct Graphics {
     pub window: Arc<Window>,
     pub surface: wgpu::Surface<'static>,
@@ -86,9 +85,7 @@ pub struct Graphics {
     pub depth_texture: Texture,
     pub projection: Projection,
 
-    // pub buffers: HashMap<String, Buffer>,
     pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
-    // pub bind_groups: HashMap<BindGroupLayoutKey, wgpu::BindGroup>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
 }
 

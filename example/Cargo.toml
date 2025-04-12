@@ -1,12 +1,7 @@
 [package]
 name = "game"
 version = "0.1.0"
-edition = "2021"
-#build = "build.rs"
+edition = "2024"
 
 [dependencies]
-async-std = "1.12.0"
-cgmath = "0.18.0"
-hecs = "0.10.5"
-libc = "0.2.169"
 rusty_gears = { path = "../" }

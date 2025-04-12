@@ -5,11 +5,8 @@ pub struct Time {
     total_time: Duration,
     fps_time: Duration,
     delta_time: f32,
-    smoothed_delta_time: f32,
     fps: f32,
     frame_count: u64,
-    delta_time_history: [f32; 10],
-    history_index: usize,
 }
 
 impl Time {
@@ -19,11 +16,8 @@ impl Time {
             total_time: Duration::new(0, 0),
             fps_time: Duration::new(0, 0),
             delta_time: 0.0,
-            smoothed_delta_time: 0.0,
             fps: 0.0,
             frame_count: 0,
-            delta_time_history: [0.0; 10],
-            history_index: 0,
         }
     }
 
@@ -32,11 +26,6 @@ impl Time {
         let elapsed = now.duration_since(self.last_update);
         
         self.delta_time = elapsed.as_secs_f32();
-
-        self.delta_time_history[self.history_index] = self.delta_time;
-        self.history_index = (self.history_index + 1) % self.delta_time_history.len();
-
-        self.smoothed_delta_time = self.delta_time_history.iter().sum::<f32>() / self.delta_time_history.len() as f32;
 
         self.total_time += elapsed;
         self.fps_time += elapsed;
@@ -52,14 +41,13 @@ impl Time {
         self.last_update = now;
     }
 
-
     /// Returns the smoothed delta time in seconds.
     /// 
     /// This value represents the time elapsed between the last two frames,
     /// averaged over the last 10 frames to reduce fluctuations.
 
     pub fn delta_time(&self) -> f32 {
-        self.smoothed_delta_time
+        self.delta_time
     }
 
     /// Returns the frames per second (FPS).

@@ -66,11 +66,8 @@ impl Vertex for ModelVertex {
 
 #[derive(Clone)]
 pub struct Material {
-    #[allow(unused)]
     pub name: String,
-    #[allow(unused)]
     pub diffuse_texture: Arc<Texture>,
-    #[allow(unused)]
     pub normal_texture: Arc<Texture>,
     pub bind_group: Arc<wgpu::BindGroup>,
 }
@@ -117,7 +114,6 @@ impl Material {
 
 #[derive(Clone)]
 pub struct Mesh {
-    #[allow(unused)]
     pub name: String,
     pub vertex_buffer: Arc<wgpu::Buffer>,
     pub index_buffer: Arc<wgpu::Buffer>,

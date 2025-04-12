@@ -1,62 +1,59 @@
-use crate::GearEvent;
-
-use tokio::runtime::Runtime;
-use winit::keyboard::PhysicalKey;
-use winit::event_loop::EventLoop;
-use winit::event::WindowEvent;
-use winit::event::KeyEvent;
-use winit::event::Event;
 use winit::event::DeviceEvent;
+use winit::event::DeviceId;
+use winit::event::WindowEvent;
+use winit::window::WindowId;
+use winit::event_loop::ActiveEventLoop;
+use winit::application::ApplicationHandler;
+use winit::keyboard::PhysicalKey;
+use winit::event::KeyEvent;
 
-use super::Game;
+use crate::GearEvent;
+use crate::Game;
 
-pub(crate) struct GameLoop;
+impl ApplicationHandler for Game {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
+        if window_id != self.graphics.window.id() {
+            return;
+        }
 
-impl GameLoop {
-    pub(crate) fn run(game: Game, game_loop: EventLoop<()>) {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(GameLoop::run_loop(game, game_loop));
+        match event {
+            winit::event::WindowEvent::CloseRequested => event_loop.exit(),
+
+            winit::event::WindowEvent::Resized(physical_size) => {
+                self.graphics.resize(physical_size);
+                Game::dispatch_event(self, GearEvent::WindowResize(physical_size));
+            }
+
+            winit::event::WindowEvent::RedrawRequested => {
+                Game::dispatch_event(self, GearEvent::RenderRequested());
+            }
+
+            winit::event::WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
+                Game::dispatch_event(self, GearEvent::KeyboardInput(key, state));
+            }
+
+            _ => {}
+        }
     }
 
-    async fn run_loop(mut game: Game, game_loop: EventLoop<()>) {
-        game_loop.run(move |event, control_flow| {
-            match event {
-                Event::NewEvents(_) => {
-                    game.time.update();
-                    Game::dispatch_event(&mut game, GearEvent::Update());
-                }
-
-                Event::DeviceEvent { event, .. } => {
-                    match event {
-                        DeviceEvent::MouseMotion { delta } => {
-                            Game::dispatch_event(&mut game, GearEvent::MouseMotion(delta.0, delta.1));
-                        }
-                        _ => {}
-                    }
-                }
-
-                Event::WindowEvent { ref event, window_id, } if window_id == game.graphics.window.id() => {
-                    match event {
-                        WindowEvent::CloseRequested => control_flow.exit(),
-
-                        WindowEvent::Resized(physical_size) => {
-                            game.graphics.resize(*physical_size);
-                            Game::dispatch_event(&mut game, GearEvent::WindowResize(*physical_size));
-                        }
-
-                        WindowEvent::RedrawRequested => {
-                            Game::dispatch_event(&mut game, GearEvent::RenderRequested());
-                        }
-
-                        WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
-                            Game::dispatch_event(&mut game, GearEvent::KeyboardInput(*key, *state));
-                        }
-
-                        _ => {}
-                    }
-                }
-                _ => {}
+    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                Game::dispatch_event(self, GearEvent::MouseMotion(delta.0, delta.1));
             }
-        }).expect("majmuneee");
+
+            _ => {}
+        }
+    }
+
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        self.time.update();
+        Game::dispatch_event(self, GearEvent::Update());
+    }
+
+    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
+        self.graphics.window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
+            .expect("failed to grab cursor");
+        self.graphics.window.set_cursor_visible(false);
     }
 }

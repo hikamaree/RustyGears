@@ -1,4 +1,6 @@
-use anyhow::*;
+// use anyhow::*;
+use wgpu::Queue;
+use wgpu::Device;
 use image::GenericImageView;
 
 pub struct Texture {
@@ -52,25 +54,13 @@ impl Texture {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn from_bytes(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        bytes: &[u8],
-        label: &str,
-        is_normal_map: bool,
-    ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
+    pub fn from_bytes(device: &Device, queue: &Queue, bytes: &[u8], label: &str, is_normal_map: bool) -> Self {
+        let img = image::load_from_memory(bytes)
+            .expect(&format!("ERROR: Image not found"));
         Self::from_image(device, queue, &img, Some(label), is_normal_map)
     }
 
-    pub fn from_image(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        img: &image::DynamicImage,
-        label: Option<&str>,
-        is_normal_map: bool,
-    ) -> Result<Self> {
+    pub fn from_image(device: &Device, queue: &Queue, img: &image::DynamicImage, label: Option<&str>, is_normal_map: bool) -> Self {
         let dimensions = img.dimensions();
         let rgba = img.to_rgba8();
 
@@ -122,20 +112,14 @@ impl Texture {
             ..Default::default()
         });
 
-        Ok(Self {
+        Self {
             texture,
             view,
             sampler,
-        })
+        }
     }
 
-    pub fn from_color(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        color: [f32; 4],
-        label: Option<&str>,
-        is_normal_map: bool,
-    ) -> Result<Self> {
+    pub fn from_color(device: &Device, queue: &Queue, color: [f32; 4], label: Option<&str>, is_normal_map: bool) -> Self {
         let rgba = [
             (color[0] * 255.0) as u8,
             (color[1] * 255.0) as u8,
@@ -194,10 +178,10 @@ impl Texture {
             ..Default::default()
         });
 
-        Ok(Self {
+        Self {
             texture,
             view,
             sampler,
-        })
+        }
     }
 }
