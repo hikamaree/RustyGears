@@ -143,9 +143,7 @@ impl Graphics {
 
         let projection = Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 1000.0);
 
-        // let buffers = HashMap::new();
         let bind_group_layouts = HashMap::new();
-        // let bind_groups = HashMap::new();
         let pipelines = HashMap::new();
 
         let mut graphics = Graphics {
@@ -157,9 +155,7 @@ impl Graphics {
             size,
             depth_texture,
             projection,
-            // buffers,
             bind_group_layouts,
-            // bind_groups,
             pipelines,
         };
 

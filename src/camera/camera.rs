@@ -1,7 +1,7 @@
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU64;
+use crate::GameView;
 use crate::GearEvent;
-use crate::Game;
 use crate::Projection;
 use cgmath::Zero;
 use cgmath::vec3;
@@ -30,7 +30,7 @@ pub struct Camera {
     sensitivity: f32,
     forward: Vector3<f32>,
     right: Vector3<f32>,
-    pub(super) custom_handler: Option<Box<dyn FnMut(&mut Camera, &GearEvent, &Game) + Send + Sync>>,
+    pub(super) custom_handler: Option<Box<dyn FnMut(&mut Camera, &GearEvent, &GameView) + Send + Sync>>,
 }
 
 impl Camera {
@@ -190,7 +190,7 @@ impl Camera {
     /// # Returns
     /// Returns a mutable reference to the camera instance.
 
-    pub fn set_handle(&mut self, handler: impl FnMut(&mut Camera, &GearEvent, &Game) + 'static + Send + Sync) -> &mut Self {
+    pub fn set_handle(&mut self, handler: impl FnMut(&mut Camera, &GearEvent, &GameView) + 'static + Send + Sync) -> &mut Self {
         self.custom_handler = Some(Box::new(handler));
         self
     }

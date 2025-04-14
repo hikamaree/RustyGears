@@ -2,7 +2,7 @@ use winit::dpi::PhysicalSize;
 use crate::CommandBuffer;
 use crate::ElementState;
 use crate::KeyCode;
-use super::Game;
+use super::GameView;
 
 /// # Gear Trait and GearEvent Enum
 ///
@@ -36,7 +36,7 @@ use super::Game;
 
 pub trait Gear: Send + Sync {
     /// Processes an incoming `GearEvent` and updates the `Gear` state accordingly.
-    fn handle_event(&mut self, event: &GearEvent, game: &Game, commands: &mut CommandBuffer);
+    fn handle_event(&mut self, event: &GearEvent, game: &GameView, commands: &mut CommandBuffer);
 }
 
 /// Represents different types of events that can occur in the system.

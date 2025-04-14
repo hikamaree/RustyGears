@@ -1,3 +1,4 @@
+use winit::window::WindowAttributes;
 use winit::event::DeviceEvent;
 use winit::event::DeviceId;
 use winit::event::WindowEvent;
@@ -9,10 +10,15 @@ use winit::event::KeyEvent;
 
 use crate::GearEvent;
 use crate::Game;
+use crate::Graphics;
 
 impl ApplicationHandler for Game {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
-        if window_id != self.graphics.window.id() {
+        let graphics = self.graphics
+            .as_mut()
+            .expect("ERROR: Graphics is not initialized");
+
+        if window_id != graphics.window.id() {
             return;
         }
 
@@ -20,7 +26,7 @@ impl ApplicationHandler for Game {
             winit::event::WindowEvent::CloseRequested => event_loop.exit(),
 
             winit::event::WindowEvent::Resized(physical_size) => {
-                self.graphics.resize(physical_size);
+                graphics.resize(physical_size);
                 Game::dispatch_event(self, GearEvent::WindowResize(physical_size));
             }
 
@@ -51,9 +57,29 @@ impl ApplicationHandler for Game {
         Game::dispatch_event(self, GearEvent::Update());
     }
 
-    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
-        self.graphics.window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
+    fn resumed(&mut self, game_loop: &ActiveEventLoop) {
+        let title = env!("CARGO_PKG_NAME");
+
+        let window_attributes = WindowAttributes::default()
+            .with_title(title);
+
+        #[allow(deprecated)]
+        let window = game_loop
+            .create_window(window_attributes)
+            .expect("failed to create window");
+
+        window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
             .expect("failed to grab cursor");
-        self.graphics.window.set_cursor_visible(false);
+        window.set_cursor_visible(false);
+
+        let graphics = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Graphics::new(window.into()));
+
+        self.graphics = Some(graphics);
+
+        while let Some(setup_fn) = self.setupfns.pop() {
+            setup_fn(self);
+        }
     }
 }

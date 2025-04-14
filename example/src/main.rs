@@ -21,7 +21,7 @@ pub struct CamSwitch;
 //     }
 // }
 
-fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &Game) {
+fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &GameView) {
     if let GearEvent::KeyboardInput(..) = event {
         if camera.get_id() == game.cameras.active_camera_id().expect("no camera found") {
             println!("majmuneee");
@@ -36,37 +36,38 @@ pub fn main() {
     let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
     camera3.set_handle(custom_handle);
 
-    GameBuilder::new().setup(|game| {
-        game.add_gear(Render::new(&game.graphics));
+    Game::new().setup(|game| {
+        game.add_gear(Render::new());
         game.add_gear(EngineStats::new());
         game.add_camera(camera1);
     }).setup(|game| {
         const SPACE_BETWEEN: f32 = 30.0;
         const NUM_INSTANCES_PER_ROW: usize = 10;
-        let transforms = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                    let position = Vector3 { x, y: 0.0, z };
+        for z in 0..NUM_INSTANCES_PER_ROW {
+            for x in 0..NUM_INSTANCES_PER_ROW {
+                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                    let rotation = if position.is_zero() {
-                        Quaternion::from_axis_angle(
-                            Vector3::unit_z(),
-                            Deg(0.0),
-                        )
-                    } else {
-                        Quaternion::from_axis_angle(position.normalize(), Deg(45.0))
-                    };
+                let position = Vector3 { x, y: 0.0, z };
 
-                    Transform { position, rotation, scale: vec3(1.0, 1.0, 1.0) }
-                })
-            })
-            .collect::<Vec<_>>();
+                let rotation = if position.is_zero() {
+                    Quaternion::from_axis_angle(
+                        Vector3::unit_z(),
+                        Deg(0.0),
+                    )
+                } else {
+                    Quaternion::from_axis_angle(position.normalize(), Deg(45.0))
+                };
 
-        for transform in transforms {
-            game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]);
+                let transform = Transform { 
+                    position,
+                    rotation,
+                    scale: vec3(1.0, 1.0, 1.0)
+                };
+
+                game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]);
+            }
         }
     }).run();
 }

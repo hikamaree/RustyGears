@@ -17,26 +17,53 @@ use std::sync::Mutex;
 
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
+use winit::event_loop::EventLoop;
+
+pub struct GameView<'a> {
+    pub graphics: &'a Graphics,
+    pub time: &'a Time,
+    pub scene: &'a Scene,
+    pub cameras: &'a CameraManager
+}
 
 pub struct Game {
+    pub(crate) setupfns: Vec<Box<dyn FnOnce(&mut Game) + Send>>,
     gears: Vec<Arc<Mutex<dyn Gear>>>,
-    pub graphics: Graphics,
+    pub graphics: Option<Graphics>,
     pub time: Time,
     pub cameras: CameraManager,
     pub scene: Scene,
 }
 
 impl Game {
-    pub(crate) async fn new(window: Arc<winit::window::Window>) -> Self {
-        let game = Game {
+
+    /// Creates a new `Game` instance with default components.
+    ///
+    /// # Returns
+    /// A new `Game` instance.
+
+    pub fn new() -> Self {
+        Game {
+            setupfns: Vec::new(),
             gears: Vec::new(),
-            graphics: Graphics::new(window).await,
+            graphics: None,
             time: Time::new(),
             cameras: CameraManager::new(),
             scene: Scene::new(),
-        };
+        }
+    }
 
-        game
+    /// Starts the main game loop using the event system.
+    ///
+    /// Creates a new `EventLoop` and begins running the application,
+    /// passing a mutable reference to `self`.
+    ///
+    /// # Panics
+    /// If the event loop fails to initialize or run.
+
+    pub fn run(mut self) {
+        let game_loop = EventLoop::new().expect("ERROR: Failed to crate game loop");
+        game_loop.run_app(&mut self).expect("ERROR: Failed to run game loop");
     }
 
     /// Adds a new gear to the game.
@@ -69,15 +96,48 @@ impl Game {
         self
     }
 
+    /// Queues a setup function to be called later during initialization.
+    ///
+    /// # Arguments
+    /// * `setupfn` - A closure that takes a mutable reference to the game instance
+    ///   and performs any desired setup logic (e.g. spawning models, adding systems).
+    ///
+    /// The setup functions are deferred and can be executed later in a controlled manner.
+    ///
+    /// # Returns
+    /// A new `Game` instance with the setup function added to its queue.
+
+    pub fn setup<F>(mut self, setupfn: F) -> Self 
+    where F: FnOnce(&mut Game) + Send + 'static {
+        self.setupfns.push(Box::new(setupfn));
+        self
+    }
+
+    /// Dispatches an event to all gears in the game.
+    ///
+    /// # Arguments
+    /// * `event` - A `GearEvent` to be handled by each gear.
+    ///
+    /// Clones the gear list and sends the event to each gear in parallel.
+    /// Each gear can emit commands via `CommandBuffer`, which are collected and applied
+    /// to the game after all event handling is done.
+
     pub(crate) fn dispatch_event(&mut self, event: GearEvent) {
         let gears = self.gears.clone();
+
+        let game = GameView {
+            graphics: self.graphics.as_ref().expect("ERROR: Graphics is not initialized"),
+            time: &self.time,
+            scene: &self.scene,
+            cameras: &self.cameras
+        };
 
         let command_buffers: Vec<CommandBuffer> = gears
             .into_par_iter()
             .map(|gear| {
                 let mut cmd = CommandBuffer::new();
                 let mut gear = gear.lock().unwrap();
-                gear.handle_event(&event, &self, &mut cmd);
+                gear.handle_event(&event, &game, &mut cmd);
                 cmd
             })
             .collect();
@@ -107,7 +167,7 @@ impl Game {
     }
 
     fn load_model(&mut self, file_path: &str) {
-        let graphics = &self.graphics;
+        let graphics = self.graphics.as_ref().expect("ERROR: Graphics is not initialized");
 
         let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)
             .expect("Texture bind group layout not found");
