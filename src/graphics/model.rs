@@ -69,7 +69,7 @@ pub struct Material {
     pub name: String,
     pub diffuse_texture: Arc<Texture>,
     pub normal_texture: Arc<Texture>,
-    pub bind_group: Arc<wgpu::BindGroup>,
+    pub bind_group: wgpu::BindGroup,
 }
 
 impl Material {
@@ -107,7 +107,7 @@ impl Material {
             name: String::from(name),
             diffuse_texture: Arc::new(diffuse_texture),
             normal_texture: Arc::new(normal_texture),
-            bind_group: Arc::new(bind_group),
+            bind_group,
         }
     }
 }

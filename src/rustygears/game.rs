@@ -5,7 +5,6 @@ use crate::BindGroupLayoutKey;
 use crate::RenderObject;
 use crate::CommandBuffer;
 use crate::Camera;
-use crate::CameraManager;
 use crate::Gear;
 use crate::GearEvent;
 use crate::Graphics;
@@ -23,15 +22,13 @@ pub struct GameView<'a> {
     pub graphics: &'a Graphics,
     pub time: &'a Time,
     pub scene: &'a Scene,
-    pub cameras: &'a CameraManager
 }
 
 pub struct Game {
     pub(crate) setupfns: Vec<Box<dyn FnOnce(&mut Game) + Send>>,
-    gears: Vec<Arc<Mutex<dyn Gear>>>,
+    pub(crate) gears: Vec<Arc<Mutex<dyn Gear>>>,
     pub graphics: Option<Graphics>,
     pub time: Time,
-    pub cameras: CameraManager,
     pub scene: Scene,
 }
 
@@ -48,7 +45,6 @@ impl Game {
             gears: Vec::new(),
             graphics: None,
             time: Time::new(),
-            cameras: CameraManager::new(),
             scene: Scene::new(),
         }
     }
@@ -83,7 +79,7 @@ impl Game {
     /// # Arguments
     /// * `camera` - An instance of `Camera`.
     ///
-    /// The camera is stored as a shared resource and is both managed by the camera manager
+    /// The camera is stored as a shared resource and is both managed by the scene
     /// and added to the gear list.
     ///
     /// # Returns
@@ -91,7 +87,7 @@ impl Game {
 
     pub fn add_camera(&mut self, camera: Camera) -> &mut Self {
         let camera = Arc::new(Mutex::new(camera)); 
-        self.cameras.add_camera(camera.clone());
+        self.scene.add_camera(camera.clone());
         self.gears.push(camera);
         self
     }
@@ -129,7 +125,6 @@ impl Game {
             graphics: self.graphics.as_ref().expect("ERROR: Graphics is not initialized"),
             time: &self.time,
             scene: &self.scene,
-            cameras: &self.cameras
         };
 
         let command_buffers: Vec<CommandBuffer> = gears
@@ -149,7 +144,7 @@ impl Game {
 
     pub fn spawn_model(&mut self, file_path: &str, transform: Transform, render_tags: Vec<RenderTag>) -> usize {
         if !self.scene.render_objects.contains_key(file_path) {
-            let _ = self.load_model(file_path);
+            self.load_model(file_path);
         }
 
         let instance_id = self.generate_unique_id();
@@ -166,7 +161,7 @@ impl Game {
         instance_id
     }
 
-    fn load_model(&mut self, file_path: &str) {
+    pub fn load_model(&mut self, file_path: &str) {
         let graphics = self.graphics.as_ref().expect("ERROR: Graphics is not initialized");
 
         let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)

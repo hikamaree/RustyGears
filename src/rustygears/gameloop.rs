@@ -40,6 +40,10 @@ impl ApplicationHandler for Game {
 
             _ => {}
         }
+
+        if let Some(graphics) = &self.graphics {
+            graphics.egui.lock().unwrap().handle_input(&graphics.window, &event);
+        }
     }
 
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {

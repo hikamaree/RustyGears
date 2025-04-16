@@ -1,54 +1,57 @@
-use crate::CommandBuffer;
-use crate::system::gpu::*;
+use egui::Color32;
+use egui::RichText;
+use egui::Rect;
+use egui::Vec2;
+use egui::Rgba;
+use egui::Area;
+
+use crate::Gui;
 use crate::GameView;
-use crate::Gear;
-use crate::GearEvent;
-use std::io;
-use std::io::Write;
+
+use super::gpu::GpuInfo;
 
 pub struct EngineStats {
     gpu: GpuInfo,
-    cl: u32,
-    lastupdate: f32,
 }
 
 impl EngineStats {
     pub fn new() -> Self {
-        print!("\n\n\n\n\n");
-        print!("\x1B[?25l");
         Self {
             gpu: GpuInfo::new(),
-            cl: 5,
-            lastupdate: 0.0,
         }
     }
 }
 
-impl Drop for EngineStats {
-    fn drop(&mut self) {
-        println!("\x1B[?25h");
-    }
-}
+impl Gui for EngineStats {
+    fn render_gui(&self, game: &GameView, ctx: &egui::Context) {
+        Area::new("game_stats".into())
+            .fixed_pos([0.0, 0.0])
+            .show(ctx, |ui| {
+                let padding = 10.0;
+                let text_size = Vec2::new(175.0, 80.0);
 
-impl Gear for EngineStats {
-    fn handle_event(&mut self, event: &GearEvent, game: &GameView, _cmd: &mut CommandBuffer) {
-        if let GearEvent::Update() = event {
-            if game.time.total_time() - self.lastupdate <= 1.0 {
-                return;
-            }
+                let rect = Rect::from_min_size(
+                    egui::pos2(0.0, 0.0),
+                    text_size + Vec2::splat(padding * 2.0)
+                );
 
-            self.lastupdate = game.time.total_time();
+                let bg_color = Rgba::from_rgba_premultiplied(0.0, 0.0, 0.0, 0.5);
+                ui.painter().rect_filled(
+                    rect,
+                    10.0,
+                    bg_color
+                );
 
-            print!("\x1B[{}A", self.cl);
-
-            for _ in 1..self.cl {
-                print!("\x1B[2K");
-            }
-
-            println!("FPS: {}", game.time.fps());
-            println!("{}", self.gpu.display());
-
-            io::stdout().flush().unwrap();
-        }
+                ui.put(rect.shrink(padding), |ui: &mut egui::Ui| {
+                    ui.vertical(|ui: &mut egui::Ui| -> egui::Response {
+                        ui.label(RichText::new(format!("FPS: {}", game.time.fps()))
+                            .monospace()
+                            .color(Color32::WHITE));
+                            ui.label(RichText::new(format!("{}", self.gpu.display()))
+                                .monospace()
+                                .color(Color32::WHITE))
+                    }).response
+                });
+            });
     }
 }

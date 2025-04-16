@@ -1,11 +1,16 @@
+use std::sync::Mutex;
 use crate::graphics::pipeline::create_render_pipeline;
 use crate::Vertex;
 use crate::ModelVertex;
 use std::collections::HashMap;
-use crate::{Projection, RenderTag};
+use crate::RenderTag;
 use crate::Texture;
 use std::sync::Arc;
+use wgpu::Adapter;
+use wgpu::Instance;
 use winit::window::Window;
+
+use super::EguiRenderer;
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -76,6 +81,8 @@ pub enum BindGroupLayoutKey {
 
 pub struct Graphics {
     pub window: Arc<Window>,
+    pub instance: Instance,
+    pub adapter: Adapter,
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -83,17 +90,18 @@ pub struct Graphics {
     pub size: winit::dpi::PhysicalSize<u32>,
     
     pub depth_texture: Texture,
-    pub projection: Projection,
 
     pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
+
+    pub egui: Arc<Mutex<EguiRenderer>>,
 }
 
 impl Graphics {
     pub(crate) async fn new(window: Arc<Window>) -> Graphics {
         let size = window.inner_size();
 
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
         });
@@ -141,22 +149,24 @@ impl Graphics {
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
 
-        let projection = Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 1000.0);
-
         let bind_group_layouts = HashMap::new();
         let pipelines = HashMap::new();
 
+        let egui = Arc::new(Mutex::new(EguiRenderer::new(&device, config.format, None, 1, &window)));
+
         let mut graphics = Graphics {
             window,
+            instance,
+            adapter,
             surface,
             device,
             queue,
             config,
             size,
             depth_texture,
-            projection,
             bind_group_layouts,
             pipelines,
+            egui,
         };
 
         graphics.initialize_default_resources();
@@ -307,7 +317,6 @@ impl Graphics {
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
-            self.projection.resize(new_size.width, new_size.height);
             self.size = new_size;
             self.config.width = new_size.width;
             self.config.height = new_size.height;
@@ -316,3 +325,4 @@ impl Graphics {
         }
     }
 }
+
