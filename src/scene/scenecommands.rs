@@ -1,8 +1,6 @@
 use crate::RenderTag;
 use crate::Transform;
 use crate::Command;
-use std::sync::Mutex;
-use std::sync::Arc;
 use crate::{Camera, Game};
 
 
@@ -24,9 +22,7 @@ pub struct AddCamera {
 
 impl Command for AddCamera {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let camera = Arc::new(Mutex::new(Camera::new(self.position, self.yaw, self.pitch)));
-        game.scene.add_camera(camera.clone());
-        game.gears.push(camera);
+        game.add_camera(Camera::new(self.position, self.yaw, self.pitch));
     }
 }
 

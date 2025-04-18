@@ -1,5 +1,9 @@
 use std::time::{Instant, Duration};
 
+/// The `Time` struct is used for tracking time-related information in an application,
+/// such as the time between frames (delta time), total elapsed time,
+/// and frames per second (FPS).
+
 pub struct Time {
     last_update: Instant,
     total_time: Duration,
@@ -10,6 +14,11 @@ pub struct Time {
 }
 
 impl Time {
+
+    /// Creates a new instance of the `Time` struct.
+    ///
+    /// Initializes all time-related values to zero and sets `last_update` to the current time.
+
     pub(crate) fn new() -> Self {
         Time {
             last_update: Instant::now(),
@@ -20,6 +29,12 @@ impl Time {
             frame_count: 0,
         }
     }
+
+    /// Updates the time tracking values.
+    ///
+    /// This method should be called once per frame. It calculates the `delta_time`,
+    /// accumulates the total elapsed time, and updates the FPS counter.
+    /// If more than one second has passed, it computes the current FPS and resets the frame counter.
 
     pub(crate) fn update(&mut self) {
         let now = Instant::now();

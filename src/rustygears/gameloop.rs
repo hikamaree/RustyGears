@@ -23,7 +23,9 @@ impl ApplicationHandler for Game {
         }
 
         match event {
-            winit::event::WindowEvent::CloseRequested => event_loop.exit(),
+            winit::event::WindowEvent::CloseRequested => {
+                event_loop.exit()
+            }
 
             winit::event::WindowEvent::Resized(physical_size) => {
                 graphics.resize(physical_size);
@@ -82,7 +84,7 @@ impl ApplicationHandler for Game {
 
         self.graphics = Some(graphics);
 
-        while let Some(setup_fn) = self.setupfns.pop() {
+        while let Some(setup_fn) = self.setupfns.pop_front() {
             setup_fn(self);
         }
     }

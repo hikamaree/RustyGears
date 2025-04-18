@@ -31,7 +31,7 @@ impl Gui for EngineStats {
                 let text_size = Vec2::new(175.0, 80.0);
 
                 let rect = Rect::from_min_size(
-                    egui::pos2(0.0, 0.0),
+                    egui::pos2(10.0, 10.0),
                     text_size + Vec2::splat(padding * 2.0)
                 );
 

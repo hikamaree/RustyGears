@@ -23,35 +23,21 @@ impl Gear for CamSwitch {
     }
 }
 
-
+#[derive(Debug, Default)]
 pub struct Spawner {
-    pub x: f32,
+    pub h: f32,
+    pub j: f32,
+    pub k: f32,
+    pub l: f32,
+
 }
 
 impl Gear for Spawner {
     fn handle_event(&mut self, event: &GearEvent, _game: &GameView, cmd: &mut CommandBuffer) {
         if let GearEvent::KeyboardInput(key, state) = event {
-            if *key == KeyCode::KeyI && *state == ElementState::Pressed {
-
+            if *key == KeyCode::KeyH && *state == ElementState::Pressed {
                 let transform = Transform {
-                    position: vec3(self.x, 30.0, 0.0),
-                    rotation: Quaternion::one(),
-                    scale: vec3(1.0, 1.0, 1.0) 
-                };
-
-                cmd.spawn( SpawnModel { 
-                    file_path: "ball.obj".to_string(),
-                    transform,
-                    render_tags: vec![RenderTag::PBR] 
-                });
-
-                self.x += 1.0;
-            }
-
-            if *key == KeyCode::KeyO && *state == ElementState::Pressed {
-
-                let transform = Transform {
-                    position: vec3(0.0, 30.0, self.x),
+                    position: vec3(0.0, 30.0, -self.h),
                     rotation: Quaternion::one(),
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
@@ -62,7 +48,55 @@ impl Gear for Spawner {
                     render_tags: vec![RenderTag::PBR] 
                 });
 
-                self.x += 1.0;
+                self.h += 1.0;
+            }
+
+            if *key == KeyCode::KeyJ && *state == ElementState::Pressed {
+                let transform = Transform {
+                    position: vec3(-self.j, 30.0, 0.0),
+                    rotation: Quaternion::one(),
+                    scale: vec3(1.0, 1.0, 1.0) 
+                };
+
+                cmd.spawn( SpawnModel { 
+                    file_path: "ball.obj".to_string(),
+                    transform,
+                    render_tags: vec![RenderTag::PBR] 
+                });
+
+                self.j += 1.0;
+            }
+
+            if *key == KeyCode::KeyK && *state == ElementState::Pressed {
+                let transform = Transform {
+                    position: vec3(self.k, 30.0, 0.0),
+                    rotation: Quaternion::one(),
+                    scale: vec3(1.0, 1.0, 1.0) 
+                };
+
+                cmd.spawn( SpawnModel { 
+                    file_path: "ball.obj".to_string(),
+                    transform,
+                    render_tags: vec![RenderTag::PBR] 
+                });
+
+                self.k += 1.0;
+            }
+
+            if *key == KeyCode::KeyL && *state == ElementState::Pressed {
+                let transform = Transform {
+                    position: vec3(0.0, 30.0, self.l),
+                    rotation: Quaternion::one(),
+                    scale: vec3(1.0, 1.0, 1.0) 
+                };
+
+                cmd.spawn( SpawnModel { 
+                    file_path: "block.obj".to_string(),
+                    transform,
+                    render_tags: vec![RenderTag::PBR] 
+                });
+
+                self.l += 1.0;
             }
         }
     }
@@ -84,10 +118,9 @@ pub fn main() {
     camera3.set_handle(custom_handle);
 
     Game::new().setup(|game| {
-        game.add_gear(Render::new());
-        // game.add_gear(EngineStats::new());
-        game.add_gear(CamSwitch);
-        game.add_gear(Spawner { x: 0.0 });
+        game.add_gear("render".into(), Render::new());
+        game.add_gear("camwitch".into(), CamSwitch);
+        game.add_gear("spawner".into(), Spawner::default());
         game.add_camera(camera1);
         game.add_camera(camera2);
         game.add_camera(camera3);
@@ -122,5 +155,11 @@ pub fn main() {
         }
 
         game.scene.add_gui(EngineStats::new());
+
+        game.use_gear::<Spawner, _>("spawner".into(), |spawner| {
+            spawner.j = 10.0;
+            println!("majmuneee");
+            println!("{}", spawner.h);
+        });
     }).run();
 }

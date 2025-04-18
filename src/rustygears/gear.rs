@@ -1,3 +1,4 @@
+use std::any::Any;
 use winit::dpi::PhysicalSize;
 use crate::CommandBuffer;
 use crate::ElementState;
@@ -41,7 +42,7 @@ use super::GameView;
 /// ## Thread Safety
 /// All `Gear` types must be both `Send` and `Sync`, ensuring they can be safely shared or mutated across threads.
 
-pub trait Gear: Send + Sync {
+pub trait Gear: Any + Send + Sync {
 
     /// Handles an incoming [`GearEvent`] by reading the game state and optionally queuing commands.
     ///

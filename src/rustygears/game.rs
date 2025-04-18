@@ -1,3 +1,6 @@
+use std::any::Any;
+use std::collections::HashMap;
+use std::collections::VecDeque;
 use crate::RenderTag;
 use crate::Transform;
 use crate::Instance;
@@ -25,8 +28,8 @@ pub struct GameView<'a> {
 }
 
 pub struct Game {
-    pub(crate) setupfns: Vec<Box<dyn FnOnce(&mut Game) + Send>>,
-    pub(crate) gears: Vec<Arc<Mutex<dyn Gear>>>,
+    pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
+    pub(crate) gears: HashMap<String, Arc<Mutex<dyn Gear>>>,
     pub graphics: Option<Graphics>,
     pub time: Time,
     pub scene: Scene,
@@ -41,8 +44,8 @@ impl Game {
 
     pub fn new() -> Self {
         Game {
-            setupfns: Vec::new(),
-            gears: Vec::new(),
+            setupfns: VecDeque::new(),
+            gears: HashMap::new(),
             graphics: None,
             time: Time::new(),
             scene: Scene::new(),
@@ -63,15 +66,53 @@ impl Game {
     }
 
     /// Adds a new gear to the game.
+    ///
+    /// The gear is stored in the internal gear map using the provided `id`.
+    ///
     /// # Arguments
+    /// * `id` - A unique identifier for the gear.
     /// * `gear` - An instance of a type that implements the `Gear` trait.
     ///
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
+    ///
+    /// # Panics
+    /// This function will overwrite an existing gear with the same `id` if one exists.
 
-    pub fn add_gear<T: Gear + 'static>(&mut self, gear: T) -> &mut Self {
-        self.gears.push(Arc::new(Mutex::new(gear)));
+    pub fn add_gear<T: Gear + 'static>(&mut self, id: String, gear: T) -> &mut Self {
+        self.gears.insert(id, Arc::new(Mutex::new(gear)));
         self
+    }
+
+    /// Accesses a gear by ID and allows safe, typed access to its internals.
+    ///
+    /// This method attempts to retrieve a gear by its `id` and downcast it to the specified type `T`.
+    /// If the gear exists and is of type `T`, the provided closure `f` is executed with a mutable reference to it.
+    ///
+    /// # Type Parameters
+    /// * `T` - The expected concrete type of the gear, which must implement `Gear`.
+    /// * `R` - The return type of the closure.
+    ///
+    /// # Arguments
+    /// * `id` - The unique identifier used to fetch the gear.
+    /// * `f` - A closure that operates on a mutable reference to the gear of type `T`.
+    ///
+    /// # Returns
+    /// `Some(R)` if the gear was found and successfully downcasted to `T`; otherwise, `None`.
+    ///
+    /// # Example
+    /// ```
+    /// game.use_gear::<Physics, _>("physics", |physics| {
+    ///     physics.gravity = 9.8;
+    /// });
+    /// ```
+
+    pub fn use_gear<T: Gear + 'static, R>(&self, id: &str, f: impl FnOnce(&mut T) -> R) -> Option<R> {
+        let gear = self.gears.get(id)?;
+        let mut lock = gear.lock().unwrap();
+        let any = &mut *lock as &mut dyn Any;
+        let typed_gear = any.downcast_mut::<T>()?;
+        Some(f(typed_gear))
     }
 
     /// Adds a new camera to the game.
@@ -86,9 +127,10 @@ impl Game {
     /// A mutable reference to the `Game` instance to allow method chaining.
 
     pub fn add_camera(&mut self, camera: Camera) -> &mut Self {
+        let id = format!("camera_{}", camera.get_id());
         let camera = Arc::new(Mutex::new(camera)); 
         self.scene.add_camera(camera.clone());
-        self.gears.push(camera);
+        self.gears.insert(id, camera);
         self
     }
 
@@ -104,10 +146,10 @@ impl Game {
     /// A new `Game` instance with the setup function added to its queue.
 
     pub fn setup<F>(mut self, setupfn: F) -> Self 
-    where F: FnOnce(&mut Game) + Send + 'static {
-        self.setupfns.push(Box::new(setupfn));
-        self
-    }
+        where F: FnOnce(&mut Game) + Send + 'static {
+            self.setupfns.push_back(Box::new(setupfn));
+            self
+        }
 
     /// Dispatches an event to all gears in the game.
     ///
@@ -129,13 +171,13 @@ impl Game {
 
         let command_buffers: Vec<CommandBuffer> = gears
             .into_par_iter()
-            .map(|gear| {
+            .map(|(_, gear)| {
                 let mut cmd = CommandBuffer::new();
                 let mut gear = gear.lock().unwrap();
                 gear.handle_event(&event, &game, &mut cmd);
                 cmd
             })
-            .collect();
+        .collect();
 
         for buffer in command_buffers {
             buffer.apply(self);
