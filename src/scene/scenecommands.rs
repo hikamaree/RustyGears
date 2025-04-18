@@ -37,3 +37,16 @@ impl Command for SpawnModel {
         game.spawn_model(&self.file_path, self.transform, self.render_tags);
     }
 }
+
+pub struct SetInstanceTransform {
+    pub id: usize,
+    pub transform: Transform,
+}
+
+impl Command for SetInstanceTransform {
+    fn apply(self: Box<Self>, game: &mut Game) {
+        if let Some(instance) = game.scene.instances.get_mut(&self.id) {
+            instance.transform = self.transform;
+        }
+    }
+}

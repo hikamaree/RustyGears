@@ -79,7 +79,8 @@ impl Game {
     /// # Panics
     /// This function will overwrite an existing gear with the same `id` if one exists.
 
-    pub fn add_gear<T: Gear + 'static>(&mut self, id: String, gear: T) -> &mut Self {
+    pub fn add_gear<T: Gear + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
+        gear.setup(self);
         self.gears.insert(id, Arc::new(Mutex::new(gear)));
         self
     }

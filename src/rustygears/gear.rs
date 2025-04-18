@@ -3,7 +3,8 @@ use winit::dpi::PhysicalSize;
 use crate::CommandBuffer;
 use crate::ElementState;
 use crate::KeyCode;
-use super::GameView;
+use crate::Game;
+use crate::GameView;
 
 /// # Gear Trait and GearEvent Enum
 ///
@@ -52,6 +53,15 @@ pub trait Gear: Any + Send + Sync {
     /// - `commands`: A command buffer used to queue changes or actions in response to the event.
 
     fn handle_event(&mut self, event: &GearEvent, game: &GameView, commands: &mut CommandBuffer);
+
+    /// Called when the gear is being initialized or added to the game.
+    /// 
+    /// # Parameters
+    /// - `game`: A mutable reference to the game state during setup. Can be used to register entities or modify initial state.
+
+    fn setup(&mut self, game: &mut Game) {
+        let _ = game;
+    }
 }
 
 /// Represents different types of events that can occur in the system.
@@ -68,7 +78,7 @@ pub enum GearEvent {
     ///     println!("Updating...");
     /// }
     /// ```
-    
+
     Update(),
 
     /// Dispatched when a new frame render is requested.
@@ -79,7 +89,7 @@ pub enum GearEvent {
     ///     println!("Rendering...");
     /// }
     /// ```
-    
+
     RenderRequested(),
 
     /// Dispatched when the window is resized.
@@ -90,7 +100,7 @@ pub enum GearEvent {
     ///     println!("New size: {}x{}", size.width, size.height);
     /// }
     /// ```
-    
+
     WindowResize(PhysicalSize<u32>),
 
     /// Dispatched when a keyboard key is pressed or released.
@@ -103,7 +113,7 @@ pub enum GearEvent {
     ///     println!("Key: {:?}, State: {:?}", key, state);
     /// }
     /// ```
-    
+
     KeyboardInput(KeyCode, ElementState),
 
     /// Dispatched when the mouse moves, providing the new coordinates.
@@ -114,6 +124,6 @@ pub enum GearEvent {
     ///     println!("Mouse moved: x = {}, y = {}", x, y);
     /// }
     /// ```
-    
+
     MouseMotion(f64, f64),
 }

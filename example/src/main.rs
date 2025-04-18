@@ -29,7 +29,6 @@ pub struct Spawner {
     pub j: f32,
     pub k: f32,
     pub l: f32,
-
 }
 
 impl Gear for Spawner {
@@ -102,29 +101,30 @@ impl Gear for Spawner {
     }
 }
 
-fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &GameView) {
-    if let GearEvent::KeyboardInput(..) = event {
-        if camera.get_id() == game.scene.active_camera_id().expect("no camera found") {
-            println!("majmuneee");
-        }
-    }
+#[derive(Default)]
+pub struct Kamiondzija {
+    kamioni: Vec<usize>,
 }
 
-pub fn main() {
-    let camera1 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
-    let camera2 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+impl Gear for Kamiondzija {
+    fn handle_event(&mut self, event: &GearEvent, game: &GameView, cmd: &mut CommandBuffer) {
+        if let GearEvent::KeyboardInput(key, state) = event {
+            if *key == KeyCode::KeyU && *state == ElementState::Pressed {
+                if let Some(kamion) = self.kamioni.get(0) {
+                    if let Some(instance) = game.scene.get_instance(*kamion) {
+                        let mut transform = instance.transform.clone();
+                        transform.position.x += 1.0;
+                        cmd.spawn(SetInstanceTransform {
+                            id: *kamion,
+                            transform
+                        });
+                    }
+                }
+            }
+        }
+    }
 
-    let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
-    camera3.set_handle(custom_handle);
-
-    Game::new().setup(|game| {
-        game.add_gear("render".into(), Render::new());
-        game.add_gear("camwitch".into(), CamSwitch);
-        game.add_gear("spawner".into(), Spawner::default());
-        game.add_camera(camera1);
-        game.add_camera(camera2);
-        game.add_camera(camera3);
-    }).setup(|game| {
+    fn setup(&mut self, game: &mut Game) {
         const SPACE_BETWEEN: f32 = 30.0;
         const NUM_INSTANCES_PER_ROW: usize = 10;
 
@@ -150,12 +150,37 @@ pub fn main() {
                     scale: vec3(1.0, 1.0, 1.0)
                 };
 
-                game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]);
+                self.kamioni.push(game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]));
             }
         }
+    }
+}
 
+fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &GameView) {
+    if let GearEvent::KeyboardInput(..) = event {
+        if camera.get_id() == game.scene.active_camera_id().expect("no camera found") {
+            println!("majmuneee");
+        }
+    }
+}
+
+pub fn main() {
+    let camera1 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+    let camera2 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+
+    let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+    camera3.set_handle(custom_handle);
+
+    Game::new().setup(|game| {
+        game.add_gear("render".into(), Render::new());
+        game.add_gear("camwitch".into(), CamSwitch);
+        game.add_gear("kamiondzija".into(), Kamiondzija::default());
+        game.add_gear("spawner".into(), Spawner::default());
+        game.add_camera(camera1);
+        game.add_camera(camera2);
+        game.add_camera(camera3);
+    }).setup(|game| {
         game.scene.add_gui(EngineStats::new());
-
         game.use_gear::<Spawner, _>("spawner".into(), |spawner| {
             spawner.j = 10.0;
             println!("majmuneee");
