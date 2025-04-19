@@ -1,3 +1,5 @@
+use crate::BoundingSphere;
+use cgmath::InnerSpace;
 use wgpu::Device;
 use wgpu::Queue;
 use crate::Mesh;
@@ -5,119 +7,111 @@ use crate::ModelVertex;
 use crate::Model;
 use crate::Material;
 use crate::Texture;
+use std::path::Path;
 use std::sync::Arc;
-use std::io::{BufReader, Cursor};
-
-use std::env;
 
 use wgpu::util::DeviceExt;
 
-pub async fn load_string(file_name: &str) -> String {
-    let path = std::path::Path::new(&env::current_dir()
-        .expect("Invalid current dir"))
-        .join("res")
-        .join(file_name);
-
-    std::fs::read_to_string(&path)
-        .expect(&format!("ERROR: Invalid path: {:?}", path))
-}
-
-pub async fn load_binary(file_name: &str) -> Vec<u8> {
-    let path = std::path::Path::new(&env::current_dir()
-        .expect("Invalid current dir"))
-        .join("res")
-        .join(file_name);
-
-    std::fs::read(&path)
-        .expect(&format!("ERROR: Invalid path: {:?}", path))
-}
-
-
-pub async fn load_texture(file_name: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
-    let data = load_binary(file_name).await;
-    Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
-}
-
-pub async fn load_texture_color(color: [f32; 4], is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
-    Texture::from_color(device, queue, color, Some("color"), is_normal_map)
-}
-
-pub async fn load_default_texture(is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
-    let data = load_binary("block.jpg").await;
-    Texture::from_bytes(device, queue, &data, "block.jpg", is_normal_map)
-}
-
-
 pub async fn load_model(file_name: &str, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
-    let obj_text = load_string(file_name).await;
-    let obj_cursor = Cursor::new(obj_text);
-    let mut obj_reader = BufReader::new(obj_cursor);
+    let obj_path = Path::new("res").join(file_name);
+    let base_dir = obj_path.parent().unwrap().to_path_buf();
 
-    let (models, obj_materials) = tobj::load_obj_buf_async(
-        &mut obj_reader,
+    let (models, obj_materials) = tobj::load_obj(
+        &obj_path,
         &tobj::LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
         },
-        |p| async move {
-            let mat_text = load_string(&p).await;
-            tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
-        },
-    ).await.expect(&format!("ERROR: Failed to load obj model: {}", file_name));
+    ).expect(&format!("Failed to load OBJ model at {:?}", obj_path));
+
+    let obj_materials = obj_materials.unwrap_or_default();
 
     let mut materials = Vec::new();
 
-    for m in obj_materials.expect(&format!("ERROR: Failed to load materials from obj model: {}", file_name)) {
-        let diffuse_texture = if !m.diffuse_texture.is_empty() {
-            load_texture(&m.diffuse_texture, false, device, queue).await
-        } else if m.diffuse.len() >= 3 {
-            load_texture_color(
-                [ m.diffuse[0], m.diffuse[1], m.diffuse[2], 1.0 ],
-                false,
-                device,
-                queue,
-            ).await
-        } else {
-            load_default_texture(false, device, queue).await
-        };
+    async fn load_texture(base_dir: &Path, path: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
+        let tex_path = base_dir.join(path);
+        let tex_path_str = tex_path.to_string_lossy();
+        let data = std::fs::read(&tex_path)
+            .expect(&format!("Failed to load texture: {:?}", tex_path));
+        Texture::from_bytes(device, queue, &data, &tex_path_str, is_normal_map)
+    }
 
-        let normal_texture = if !m.normal_texture.is_empty() {
-            load_texture(&m.normal_texture, true, device, queue).await
-        } else {
-            load_texture_color(
-                [0.0, 0.0, 0.0, 0.0],
-                false,
-                device,
-                queue,
-            ).await
-        };
+
+    if obj_materials.is_empty() {
+        let diffuse_texture = load_texture(&base_dir, "default.jpg", false, device, queue).await;
+        let normal_texture = Texture::from_color(device, queue, [0.0, 0.0, 0.0, 0.0], Some("color"), false);
 
         materials.push(Material::new(
                 device,
-                &m.name,
+                "default",
                 diffuse_texture,
                 normal_texture,
                 layout,
         ));
+    } else {
+        for m in obj_materials {
+            let diffuse_texture = match &m.diffuse_texture {
+                Some(path) if !path.is_empty() => {
+                    load_texture(&base_dir, path, false, device, queue).await
+                }
+                _ => {
+                    match &m.diffuse {
+                        Some(color) => {
+                            Texture::from_color(device, queue, [color[0], color[1], color[2], 1.0], Some("color"), false)
+                        }
+                        _ => {
+                            load_texture(&base_dir, "default.jpg", false, device, queue).await
+                        }
+                    }
+                }
+            };
+
+            let normal_texture = match &m.normal_texture {
+                Some(path) if !path.is_empty() => {
+                    load_texture(&base_dir, path, true, device, queue).await
+                }
+                _ => {
+                    Texture::from_color(device, queue, [0.0, 0.0, 0.0, 0.0], Some("color"), false)
+                }
+            };
+
+            materials.push(Material::new(
+                    device,
+                    &m.name,
+                    diffuse_texture,
+                    normal_texture,
+                    layout,
+            ));
+        }
     }
 
     let meshes = models.into_iter().map(|m| {
+        let has_texcoords = !m.mesh.texcoords.is_empty();
+
         let mut vertices = (0..m.mesh.positions.len() / 3)
-            .map(|i| ModelVertex {
-                position: [
-                    m.mesh.positions[i * 3],
-                    m.mesh.positions[i * 3 + 1],
-                    m.mesh.positions[i * 3 + 2],
-                ],
-                tex_coords: [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]],
-                normal: [
-                    m.mesh.normals[i * 3],
-                    m.mesh.normals[i * 3 + 1],
-                    m.mesh.normals[i * 3 + 2],
-                ],
-                tangent: [0.0; 3],
-                bitangent: [0.0; 3],
+            .map(|i| {
+                let tex_coords = if has_texcoords {
+                    [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
+                } else {
+                    [0.0, 0.0]
+                };
+
+                ModelVertex {
+                    position: [
+                        m.mesh.positions[i * 3],
+                        m.mesh.positions[i * 3 + 1],
+                        m.mesh.positions[i * 3 + 2],
+                    ],
+                    tex_coords,
+                    normal: [
+                        m.mesh.normals[i * 3],
+                        m.mesh.normals[i * 3 + 1],
+                        m.mesh.normals[i * 3 + 2],
+                    ],
+                    tangent: [0.0; 3],
+                    bitangent: [0.0; 3],
+                }
             })
         .collect::<Vec<_>>();
 
@@ -177,12 +171,34 @@ pub async fn load_model(file_name: &str, device: &Device, queue: &Queue, layout:
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let mut min = cgmath::Vector3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = cgmath::Vector3::new(f32::MIN, f32::MIN, f32::MIN);
+
+        for v in &vertices {
+            let p: cgmath::Vector3<_> = v.position.into();
+            min = min.zip(p, |a, b| a.min(b));
+            max = max.zip(p, |a, b| a.max(b));
+        }
+
+        let center = (min + max) * 0.5;
+        let mut radius = 0.0;
+        for v in &vertices {
+            let p: cgmath::Vector3<_> = v.position.into();
+            let dist = (p - center).magnitude();
+            if dist > radius {
+                radius = dist;
+            }
+        }
+        let bounding_sphere = BoundingSphere { center, radius };
+
+
         Mesh {
             name: file_name.to_string(),
             vertex_buffer: Arc::new(vertex_buffer),
             index_buffer: Arc::new(index_buffer),
             num_elements: m.mesh.indices.len() as u32,
             material: m.mesh.material_id.unwrap_or(0),
+            bounding_sphere,
         }
     })
     .collect::<Vec<_>>();

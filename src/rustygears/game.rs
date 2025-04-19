@@ -1,6 +1,4 @@
-use std::any::Any;
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use crate::GameView;
 use crate::RenderTag;
 use crate::Transform;
 use crate::Instance;
@@ -16,16 +14,13 @@ use crate::Time;
 
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::any::Any;
+use std::collections::HashMap;
+use std::collections::VecDeque;
 
 use rayon::iter::ParallelIterator;
 use rayon::iter::IntoParallelIterator;
 use winit::event_loop::EventLoop;
-
-pub struct GameView<'a> {
-    pub graphics: &'a Graphics,
-    pub time: &'a Time,
-    pub scene: &'a Scene,
-}
 
 pub struct Game {
     pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
@@ -164,11 +159,7 @@ impl Game {
     pub(crate) fn dispatch_event(&mut self, event: GearEvent) {
         let gears = self.gears.clone();
 
-        let game = GameView {
-            graphics: self.graphics.as_ref().expect("ERROR: Graphics is not initialized"),
-            time: &self.time,
-            scene: &self.scene,
-        };
+        let game = GameView::create(self);
 
         let command_buffers: Vec<CommandBuffer> = gears
             .into_par_iter()
@@ -190,18 +181,17 @@ impl Game {
             self.load_model(file_path);
         }
 
-        let instance_id = self.generate_unique_id();
-
-        let instance = Instance {
-            id: instance_id,
-            object_name: file_path.to_string(),
+        let instance = Instance::new(
+            file_path.to_string(),
             transform,
             render_tags,
-        };
+        );
+
+        let id = instance.id();
 
         self.scene.add_instance(instance);
 
-        instance_id
+        id
     }
 
     pub fn load_model(&mut self, file_path: &str) {
@@ -222,11 +212,5 @@ impl Game {
         });
 
         self.scene.add_render_object(file_path.to_string(), RenderObject { model });
-    }
-
-    fn generate_unique_id(&self) -> usize {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static COUNTER: AtomicUsize = AtomicUsize::new(1);
-        COUNTER.fetch_add(1, Ordering::Relaxed)
     }
 }

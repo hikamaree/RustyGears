@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 cgmath = "0.18.0"
 rayon = "1.10.0"
-tobj = { version = "3.2", features = ["async"]}
+tobj = { version = "4.0.3", features = ["tokio"]}
 wgpu = "24.0.3"
 winit = { version = "0.30.9", features = ["rwh_06"] }
 bytemuck = { version = "1.16", features = [ "derive" ] }

@@ -1,8 +1,10 @@
+use cgmath::Matrix;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU64;
 use crate::GameView;
 use crate::GearEvent;
 use crate::Projection;
+use cgmath::vec4;
 use cgmath::Zero;
 use cgmath::vec3;
 use cgmath::Vector3;
@@ -30,6 +32,7 @@ pub struct Camera {
     sensitivity: f32,
     forward: Vector3<f32>,
     right: Vector3<f32>,
+    frustum: [cgmath::Vector4<f32>; 6],
     pub(super) custom_handler: Option<Box<dyn FnMut(&mut Camera, &GearEvent, &GameView) + Send + Sync>>,
 }
 
@@ -44,7 +47,6 @@ impl Camera {
     ///
     /// # Returns
     /// Returns an instance of the camera.
-
     pub fn new(position: (f32, f32, f32), yaw: f32, pitch: f32) -> Self {
         let mut camera = Camera {
             id: ID_COUNTER.fetch_add(1, Ordering::Relaxed),
@@ -58,6 +60,7 @@ impl Camera {
             forward: vec3(0.0, 0.0, -1.0),
             right: Vector3::zero(),
             custom_handler: None,
+            frustum: [vec4(0.0, 0.0, 0.0, 0.0); 6],
         };
 
         camera.update_camera_vectors();
@@ -66,7 +69,6 @@ impl Camera {
     }
 
     /// Returns the camera's ID.
-    
     pub fn get_id(&self) -> u64 {
         self.id
     }
@@ -75,7 +77,6 @@ impl Camera {
     ///
     /// # Returns
     /// A view matrix that determines how objects will be rendered in relation to the camera.
-    
     pub fn calc_matrix(&self) -> Matrix4<f32> {
         let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
         let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
@@ -87,21 +88,65 @@ impl Camera {
         )
     }
 
+    /// Updates the camera's view frustum planes from the current view-projection matrix.
+    ///
+    /// This method extracts six clipping planes (left, right, bottom, top, near, far) from
+    /// the combined view-projection matrix and normalizes them. These planes are used for
+    /// frustum culling, allowing efficient visibility checks against objects in the scene.
+    pub fn update_frustum(&mut self) {
+        let m = cgmath::Matrix4::from(self.view_proj);
+
+        let planes = [
+            m.row(3) + m.row(0), // Left
+            m.row(3) - m.row(0), // Right
+            m.row(3) + m.row(1), // Bottom
+            m.row(3) - m.row(1), // Top
+            m.row(3) + m.row(2), // Near
+            m.row(3) - m.row(2), // Far
+        ];
+
+        self.frustum = planes.map(|v| {
+            let normal = v.truncate();
+            let length = normal.magnitude();
+            v / length
+        });
+    }
+
+    /// Checks if a bounding sphere is inside or intersects the camera's view frustum.
+    ///
+    /// # Parameters
+    /// - `center`: The center of the sphere in world space.
+    /// - `radius`: The radius of the sphere.
+    ///
+    /// # Returns
+    /// - `true` if the sphere is at least partially inside the view frustum.
+    /// - `false` if the sphere is completely outside and can be culled.
+    ///
+    /// The `radius` is scaled by 20.0 as a conservative threshold to account for object size variance.
+    pub fn can_see(&self, center: Vector3<f32>, radius: f32) -> bool {
+        for plane in &self.frustum {
+            let distance = plane.truncate().dot(center) + plane.w;
+            if distance < -radius * 20.0 {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Updates the camera's view and projection matrix.
     ///
     /// # Arguments
     /// * `projection` - The projection used to update the projection matrix.
-
     pub fn update_view_proj(&mut self, projection: &Projection) {
         self.view_position = self.position.to_homogeneous().into();
-        self.view_proj = (projection.calc_matrix() * self.calc_matrix()).into()
+        self.view_proj = (projection.calc_matrix() * self.calc_matrix()).into();
+        self.update_frustum();
     }
 
     /// Returns the camera's uniform containing view and projection data.
     ///
     /// # Returns
     /// A uniform that contains the camera's position and matrices as a byte slice.
-
     pub fn get_uniform(&self) -> Box<[u8]> {
         bytemuck::cast_slice(&[
             self.view_position[0],
@@ -119,7 +164,6 @@ impl Camera {
     ///
     /// # Arguments
     /// * `dt` - The time delta used to move the camera.
-
     pub fn move_forward(&mut self, dt: f32) {
         self.position += self.forward * self.speed * dt;
     }
@@ -128,7 +172,6 @@ impl Camera {
     ///
     /// # Arguments
     /// * `dt` - The time delta used to move the camera.
-
     pub fn move_backward(&mut self, dt: f32) {
         self.position += -self.forward * self.speed * dt;
     }
@@ -137,7 +180,6 @@ impl Camera {
     ///
     /// # Arguments
     /// * `dt` - The time delta used to move the camera.
-
     pub fn move_left(&mut self, dt: f32) {
         self.position += -self.right * self.speed * dt;
     }
@@ -146,7 +188,6 @@ impl Camera {
     ///
     /// # Arguments
     /// * `dt` - The time delta used to move the camera.
-
     pub fn move_right(&mut self, dt: f32) {
         self.position += self.right * self.speed * dt;
     }
@@ -157,15 +198,13 @@ impl Camera {
     /// * `xpos` - The horizontal mouse movement.
     /// * `ypos` - The vertical mouse movement.
     /// * `dt` - The time delta used for rotation.
-
     pub fn rotate(&mut self, xpos: f32, ypos: f32, dt: f32) {
         self.yaw += Rad(xpos) * self.sensitivity * dt;
         self.pitch += Rad(-ypos) * self.sensitivity * dt;
         self.update_camera_vectors();
     }
-    
-    /// Updates the camera's orientation based on the current yaw and pitch values.
 
+    /// Updates the camera's orientation based on the current yaw and pitch values.
     fn update_camera_vectors(&mut self) {
         if self.pitch < -Rad(SAFE_FRAC_PI_2) {
             self.pitch = -Rad(SAFE_FRAC_PI_2);
@@ -189,7 +228,6 @@ impl Camera {
     ///
     /// # Returns
     /// Returns a mutable reference to the camera instance.
-
     pub fn set_handle(&mut self, handler: impl FnMut(&mut Camera, &GearEvent, &GameView) + 'static + Send + Sync) -> &mut Self {
         self.custom_handler = Some(Box::new(handler));
         self

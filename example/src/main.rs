@@ -35,19 +35,18 @@ impl Gear for Spawner {
     fn handle_event(&mut self, event: &GearEvent, _game: &GameView, cmd: &mut CommandBuffer) {
         if let GearEvent::KeyboardInput(key, state) = event {
             if *key == KeyCode::KeyH && *state == ElementState::Pressed {
+                self.h += 30.0;
                 let transform = Transform {
-                    position: vec3(0.0, 30.0, -self.h),
+                    position: vec3(0.0, self.h, 0.0),
                     rotation: Quaternion::one(),
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
 
                 cmd.spawn( SpawnModel { 
-                    file_path: "block.obj".to_string(),
+                    file_path: "city/town4new.obj".to_string(),
                     transform,
                     render_tags: vec![RenderTag::PBR] 
                 });
-
-                self.h += 1.0;
             }
 
             if *key == KeyCode::KeyJ && *state == ElementState::Pressed {
@@ -58,7 +57,7 @@ impl Gear for Spawner {
                 };
 
                 cmd.spawn( SpawnModel { 
-                    file_path: "ball.obj".to_string(),
+                    file_path: "ball/ball.obj".to_string(),
                     transform,
                     render_tags: vec![RenderTag::PBR] 
                 });
@@ -74,7 +73,7 @@ impl Gear for Spawner {
                 };
 
                 cmd.spawn( SpawnModel { 
-                    file_path: "ball.obj".to_string(),
+                    file_path: "ball/ball.obj".to_string(),
                     transform,
                     render_tags: vec![RenderTag::PBR] 
                 });
@@ -90,7 +89,7 @@ impl Gear for Spawner {
                 };
 
                 cmd.spawn( SpawnModel { 
-                    file_path: "block.obj".to_string(),
+                    file_path: "block/block.obj".to_string(),
                     transform,
                     render_tags: vec![RenderTag::PBR] 
                 });
@@ -119,6 +118,11 @@ impl Gear for Kamiondzija {
                             transform
                         });
                     }
+
+                    game.use_gear::<Spawner, _>("spawner".into(), |spawner| {
+                        spawner.j = 10.0;
+                        println!("{:?}", spawner);
+                    });
                 }
             }
         }
@@ -150,7 +154,7 @@ impl Gear for Kamiondzija {
                     scale: vec3(1.0, 1.0, 1.0)
                 };
 
-                self.kamioni.push(game.spawn_model("semi.obj", transform, vec![RenderTag::PBR]));
+                self.kamioni.push(game.spawn_model("truck/semi.obj", transform, vec![RenderTag::PBR]));
             }
         }
     }
@@ -165,10 +169,10 @@ fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &GameView) {
 }
 
 pub fn main() {
-    let camera1 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
-    let camera2 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+    let camera1 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
+    let camera2 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
 
-    let mut camera3 = Camera::new((0.0, 0.0, 0.0), 0.0, 0.0);
+    let mut camera3 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
     camera3.set_handle(custom_handle);
 
     Game::new().setup(|game| {
@@ -181,10 +185,13 @@ pub fn main() {
         game.add_camera(camera3);
     }).setup(|game| {
         game.scene.add_gui(EngineStats::new());
-        game.use_gear::<Spawner, _>("spawner".into(), |spawner| {
-            spawner.j = 10.0;
-            println!("majmuneee");
-            println!("{}", spawner.h);
-        });
+
+        // let transform = Transform { 
+        //     position: vec3(0.0, 0.0, 0.0),
+        //     rotation: Quaternion::one(),
+        //     scale: vec3(0.0001, 0.0001, 0.0001)
+        // };
+
+        // game.spawn_model("powerplant/powerplant.obj", transform, vec![RenderTag::PBR]);
     }).run();
 }
