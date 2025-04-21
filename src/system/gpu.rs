@@ -1,6 +1,3 @@
-#[cfg(target_os = "windows")]
-use wmi::{COMLibrary, WMIConnection};
-
 use std::fs;
 use std::path::Path;
 
@@ -97,60 +94,44 @@ fn get_gpu_vram(gpu: Option<String>) -> String {
     "N/A".to_string()
 }
 
-#[cfg(target_os = "windows")]
-fn get_gpu_usage() -> u32 {
-    let com_con = COMLibrary::new().unwrap();
-    let wmi_con = WMIConnection::new(com_con).unwrap();
-    
-    let results: Vec<wmi::GPU> = wmi_con
-        .raw_query("SELECT LoadPercentage FROM Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapter")
-        .unwrap_or_default();
-    
-    results.first().map(|gpu| gpu.LoadPercentage).unwrap_or(0)
-}
-
-#[cfg(target_os = "windows")]
-fn get_gpu_vendor() -> String {
-    let com_con = COMLibrary::new().unwrap();
-    let wmi_con = WMIConnection::new(com_con).unwrap();
-    
-    let results: Vec<wmi::GPU> = wmi_con.raw_query("SELECT Name FROM Win32_VideoController").unwrap_or_default();
-    
-    results
-        .first()
-        .map(|gpu| gpu.Name.clone())
-        .unwrap_or("Unknown".to_string())
-}
-
-#[cfg(target_os = "windows")]
-fn get_gpu_temperature(gpu: Option<String>) -> u32 {
-    0
-}
-
-#[cfg(target_os = "windows")]
-fn get_gpu_vram(gpu: Option<String>) -> String {
-    "N/A".to_string()
-}
-
 pub(super) struct GpuInfo {
     pub gpu: Option<String>,
     pub vendor: String,
+    pub usage: u32,
+    pub temp: u32,
+    pub vram: String,
+    pub lastupdate: f32,
 }
 
 impl GpuInfo {
     pub fn new() -> Self {
         let gpu = detect_active_gpu();
         let vendor = get_gpu_vendor(gpu.clone());
+        let usage = get_gpu_usage(gpu.clone());
+        let temp = get_gpu_temperature(gpu.clone());
+        let vram = get_gpu_vram(gpu.clone());
         Self {
             gpu,
             vendor,
+            usage,
+            temp,
+            vram,
+            lastupdate: 0.0,
         }
     }
 
+    pub fn update(&mut self, curr_time: f32) {
+        if curr_time - self.lastupdate <= 1.0 {
+            return;
+        }
+
+        self.lastupdate = curr_time;
+        self.usage = get_gpu_usage(self.gpu.clone());
+        self.temp = get_gpu_temperature(self.gpu.clone());
+        self.vram = get_gpu_vram(self.gpu.clone());
+    }
+
     pub fn display(&self) -> String {
-        let usage = get_gpu_usage(self.gpu.clone());
-        let temp = get_gpu_temperature(self.gpu.clone());
-        let vram = get_gpu_vram(self.gpu.clone());
-        return format!("GPU: {}\n  Usage: {}\n  Temp: {}\n  Vram: {}",self.vendor, usage, temp, vram);
+        return format!("GPU: {}\n  Usage: {}\n  Temp: {}\n  Vram: {}",self.vendor, self.usage, self.temp, self.vram);
     }
 }

@@ -43,7 +43,7 @@ impl Gear for Spawner {
                 };
 
                 cmd.spawn( SpawnModel { 
-                    file_path: "city/town4new.obj".to_string(),
+                    file_path: "block/block.obj".to_string(),
                     transform,
                     render_tags: vec![RenderTag::PBR] 
                 });
@@ -170,19 +170,18 @@ fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &GameView) {
 
 pub fn main() {
     let camera1 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
-    let camera2 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
 
-    let mut camera3 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
-    camera3.set_handle(custom_handle);
+    let mut camera2 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
+    camera2.set_handle(custom_handle);
 
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::new());
-        game.add_gear("camwitch".into(), CamSwitch);
+        // game.add_gear("camwitch".into(), CamSwitch);
         game.add_gear("kamiondzija".into(), Kamiondzija::default());
-        game.add_gear("spawner".into(), Spawner::default());
+        // game.add_gear("spawner".into(), Spawner::default());
         game.add_camera(camera1);
-        game.add_camera(camera2);
-        game.add_camera(camera3);
+        // game.add_camera(camera2);
+        // game.add_camera(camera3);
     }).setup(|game| {
         game.scene.add_gui(EngineStats::new());
 
@@ -192,6 +191,6 @@ pub fn main() {
         //     scale: vec3(0.0001, 0.0001, 0.0001)
         // };
 
-        // game.spawn_model("powerplant/powerplant.obj", transform, vec![RenderTag::PBR]);
+        // game.spawn_model("truck/semi.obj", transform, vec![RenderTag::PBR]);
     }).run();
 }

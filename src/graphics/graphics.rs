@@ -1,5 +1,6 @@
 use std::sync::Mutex;
 use crate::graphics::pipeline::create_render_pipeline;
+use crate::Command;
 use crate::Vertex;
 use crate::ModelVertex;
 use std::collections::HashMap;
@@ -95,6 +96,8 @@ pub struct Graphics {
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
 
     pub egui: Arc<Mutex<EguiRenderer>>,
+
+    pub t_count: u32,
 }
 
 impl Graphics {
@@ -167,6 +170,7 @@ impl Graphics {
             bind_group_layouts,
             pipelines,
             egui,
+            t_count: 0,
         };
 
         graphics.initialize_default_resources();
@@ -326,3 +330,14 @@ impl Graphics {
     }
 }
 
+pub struct SetTrianglesCount {
+    pub count: u32,
+}
+
+impl Command for SetTrianglesCount {
+    fn apply(self: Box<Self>, game: &mut crate::Game) {
+        if let Some(graphics) = &mut game.graphics {
+            graphics.t_count = self.count;
+        }
+    }
+}

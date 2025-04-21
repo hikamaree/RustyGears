@@ -158,7 +158,7 @@ pub trait DrawModel<'a> {
         light_bind_group: &'a wgpu::BindGroup,
         camera: &'a Camera,
         instances: &Vec<InstanceRaw>,
-    );
+    ) -> u32;
 
     #[allow(unused)]
     fn draw_model(
@@ -176,7 +176,7 @@ pub trait DrawModel<'a> {
         light_bind_group: &'a wgpu::BindGroup,
         camera: &'a Camera,
         instances: &Vec<InstanceRaw>,
-    );
+    ) -> u32;
     #[allow(unused)]
     fn draw_model_instanced_with_material(
         &mut self,
@@ -190,9 +190,7 @@ pub trait DrawModel<'a> {
 }
 
 impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
-where
-    'b: 'a,
-{
+where 'b: 'a {
     fn draw_mesh(
         &mut self,
         mesh: &'b Mesh,
@@ -213,7 +211,7 @@ where
         light_bind_group: &'b wgpu::BindGroup,
         camera: &'a Camera,
         insts: &Vec<InstanceRaw>,
-    ) {
+    ) -> u32 {
         let visible_indices: Vec<u32> = insts
             .iter()
             .enumerate()
@@ -239,7 +237,7 @@ where
         .collect();
 
         if visible_indices.is_empty() {
-            return;
+            return 0;
         }
 
         fn group_contiguous_ranges(indices: &[u32]) -> Vec<Range<u32>> {
@@ -272,6 +270,10 @@ where
         for range in instance_ranges {
             self.draw_indexed(0..mesh.num_elements, 0, range);
         }
+
+        let triangle_count_per_instance = mesh.num_elements / 3;
+        let total = triangle_count_per_instance * visible_indices.len() as u32;
+        total
     }
 
     fn draw_model(
@@ -292,10 +294,11 @@ where
         light_bind_group: &'b wgpu::BindGroup,
         camera: &'a Camera,
         insts: &Vec<InstanceRaw>,
-    ) {
+    ) -> u32 {
+        let mut total_triangles = 0;
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(
+            total_triangles += self.draw_mesh_instanced(
                 mesh,
                 material,
                 camera_bind_group,
@@ -304,6 +307,7 @@ where
                 insts,
             );
         }
+        total_triangles
     }
 
     fn draw_model_instanced_with_material(

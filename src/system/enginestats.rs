@@ -10,25 +10,30 @@ use crate::GameView;
 
 use super::gpu::GpuInfo;
 
+use std::sync::Mutex;
+
 pub struct EngineStats {
-    gpu: GpuInfo,
+    gpu: Mutex<GpuInfo>,
 }
 
 impl EngineStats {
     pub fn new() -> Self {
         Self {
-            gpu: GpuInfo::new(),
+            gpu: Mutex::new(GpuInfo::new()),
         }
     }
 }
 
 impl Gui for EngineStats {
     fn render_gui(&self, game: &GameView, ctx: &egui::Context) {
+        let mut gpu = self.gpu.lock().unwrap();
+        gpu.update(game.time.total_time());
+
         Area::new("game_stats".into())
             .fixed_pos([0.0, 0.0])
             .show(ctx, |ui| {
                 let padding = 10.0;
-                let text_size = Vec2::new(175.0, 80.0);
+                let text_size = Vec2::new(200.0, 100.0);
 
                 let rect = Rect::from_min_size(
                     egui::pos2(10.0, 10.0),
@@ -47,9 +52,12 @@ impl Gui for EngineStats {
                         ui.label(RichText::new(format!("FPS: {}", game.time.fps()))
                             .monospace()
                             .color(Color32::WHITE));
-                            ui.label(RichText::new(format!("{}", self.gpu.display()))
-                                .monospace()
-                                .color(Color32::WHITE))
+                        ui.label(RichText::new(format!("{}", gpu.display()))
+                            .monospace()
+                            .color(Color32::WHITE));
+                        ui.label(RichText::new(format!("Engine:\n  Triangles: {}", game.graphics.t_count))
+                            .monospace()
+                            .color(Color32::WHITE))
                     }).response
                 });
             });

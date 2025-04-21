@@ -126,7 +126,7 @@ impl Camera {
     pub fn can_see(&self, center: Vector3<f32>, radius: f32) -> bool {
         for plane in &self.frustum {
             let distance = plane.truncate().dot(center) + plane.w;
-            if distance < -radius * 20.0 {
+            if distance < -radius {
                 return false;
             }
         }
