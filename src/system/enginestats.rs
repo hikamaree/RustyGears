@@ -55,7 +55,7 @@ impl Gui for EngineStats {
                         ui.label(RichText::new(format!("{}", gpu.display()))
                             .monospace()
                             .color(Color32::WHITE));
-                        ui.label(RichText::new(format!("Engine:\n  Triangles: {}", game.graphics.t_count))
+                        ui.label(RichText::new(format!("Rendering:\n  Triangles: {}", game.graphics.t_count))
                             .monospace()
                             .color(Color32::WHITE))
                     }).response

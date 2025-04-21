@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 use crate::graphics::pipeline::create_render_pipeline;
 use crate::Command;
+use crate::Projection;
 use crate::Vertex;
 use crate::ModelVertex;
 use std::collections::HashMap;
@@ -91,6 +92,7 @@ pub struct Graphics {
     pub size: winit::dpi::PhysicalSize<u32>,
     
     pub depth_texture: Texture,
+    pub projection: Projection,
 
     pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
@@ -151,6 +153,7 @@ impl Graphics {
         };
 
         let depth_texture = Texture::create_depth_texture(&device, &config, "depth_texture");
+        let projection = Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 1000.0);
 
         let bind_group_layouts = HashMap::new();
         let pipelines = HashMap::new();
@@ -167,6 +170,7 @@ impl Graphics {
             config,
             size,
             depth_texture,
+            projection,
             bind_group_layouts,
             pipelines,
             egui,
@@ -326,6 +330,7 @@ impl Graphics {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
             self.depth_texture = Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.projection.resize(new_size.width, new_size.height);
         }
     }
 }

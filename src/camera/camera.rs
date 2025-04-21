@@ -1,8 +1,6 @@
 use cgmath::Matrix;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU64;
-use crate::GameView;
-use crate::GearEvent;
 use crate::Projection;
 use cgmath::vec4;
 use cgmath::Zero;
@@ -21,19 +19,20 @@ static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 /// The `Camera` struct represents a camera in a 3D space.
 
+#[derive(Clone)]
 pub struct Camera {
-    id: u64,
+    pub id: u64,
     pub position: Point3<f32>,
-    yaw: Rad<f32>,
-    pitch: Rad<f32>,
+    pub yaw: Rad<f32>,
+    pub pitch: Rad<f32>,
+    pub roll: Rad<f32>,
     view_position: [f32; 4],
     view_proj: [[f32; 4]; 4],
-    speed: f32,
-    sensitivity: f32,
-    forward: Vector3<f32>,
-    right: Vector3<f32>,
+    pub speed: f32,
+    pub sensitivity: f32,
+    pub forward: Vector3<f32>,
+    pub right: Vector3<f32>,
     frustum: [cgmath::Vector4<f32>; 6],
-    pub(super) custom_handler: Option<Box<dyn FnMut(&mut Camera, &GearEvent, &GameView) + Send + Sync>>,
 }
 
 impl Camera {
@@ -53,13 +52,13 @@ impl Camera {
             position: position.into(),
             yaw: Rad(yaw),
             pitch: Rad(pitch),
+            roll: Rad(0.0),
             view_position: [0.0; 4],
             view_proj: cgmath::Matrix4::identity().into(),
             speed: 40.0,
             sensitivity: 0.4,
             forward: vec3(0.0, 0.0, -1.0),
             right: Vector3::zero(),
-            custom_handler: None,
             frustum: [vec4(0.0, 0.0, 0.0, 0.0); 6],
         };
 
@@ -160,6 +159,17 @@ impl Camera {
         ]).into()
     }
 
+    pub fn set_position(&mut self, position: Point3<f32>) {
+        self.position = position;
+    }
+
+    pub fn set_rotation(&mut self, yaw: Rad<f32>, pitch: Rad<f32>, roll: Rad<f32>) {
+        self.yaw = yaw;
+        self.pitch = pitch;
+        self.roll = roll;
+        self.update_camera_vectors();
+    }
+
     /// Moves the camera forward based on the current orientation.
     ///
     /// # Arguments
@@ -192,20 +202,40 @@ impl Camera {
         self.position += self.right * self.speed * dt;
     }
 
-    /// Rotates the camera based on mouse movement.
-    ///
+    /// Rotates the camera around the Y axis (yaw) by specified angle in radians
+    /// 
     /// # Arguments
-    /// * `xpos` - The horizontal mouse movement.
-    /// * `ypos` - The vertical mouse movement.
-    /// * `dt` - The time delta used for rotation.
-    pub fn rotate(&mut self, xpos: f32, ypos: f32, dt: f32) {
-        self.yaw += Rad(xpos) * self.sensitivity * dt;
-        self.pitch += Rad(-ypos) * self.sensitivity * dt;
-        self.update_camera_vectors();
+    /// * `angle` - Angle in radians to rotate
+    pub fn rotate_yaw(&mut self, angle: f32) {
+        self.yaw += Rad(angle);
+        self.yaw = Rad(self.yaw.0.rem_euclid(2.0 * std::f32::consts::PI));
+    }
+
+    /// Rotates the camera around the X axis (pitch) by specified angle in radians
+    /// 
+    /// # Arguments
+    /// * `angle` - Angle in radians to rotate
+    /// 
+    /// # Note
+    /// Automatically clamps pitch between -89° and +89° to prevent gimbal lock
+    pub fn rotate_pitch(&mut self, angle: f32) {
+        self.pitch += Rad(angle);
+    }
+
+    /// Rotates the camera around the Z axis (roll) by specified angle in radians
+    /// 
+    /// # Arguments
+    /// * `angle` - Angle in radians to rotate
+    /// 
+    /// # Note
+    /// This is less common in FPS-style cameras but useful for flight simulators
+    pub fn rotate_roll(&mut self, angle: f32) {
+        self.roll += Rad(angle);
+        self.roll = Rad(self.roll.0.rem_euclid(2.0 * std::f32::consts::PI));
     }
 
     /// Updates the camera's orientation based on the current yaw and pitch values.
-    fn update_camera_vectors(&mut self) {
+    pub fn update_camera_vectors(&mut self) {
         if self.pitch < -Rad(SAFE_FRAC_PI_2) {
             self.pitch = -Rad(SAFE_FRAC_PI_2);
         } else if self.pitch > Rad(SAFE_FRAC_PI_2) {
@@ -219,17 +249,5 @@ impl Camera {
         }.normalize();
 
         self.right = self.forward.cross(Vector3::unit_y()).normalize();
-    }
-
-    /// Sets a custom handler function that will be called for specific camera-related events.
-    ///
-    /// # Arguments
-    /// * `handler` - A function that will be called for events related to the camera.
-    ///
-    /// # Returns
-    /// Returns a mutable reference to the camera instance.
-    pub fn set_handle(&mut self, handler: impl FnMut(&mut Camera, &GearEvent, &GameView) + 'static + Send + Sync) -> &mut Self {
-        self.custom_handler = Some(Box::new(handler));
-        self
     }
 }

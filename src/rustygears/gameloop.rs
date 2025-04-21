@@ -60,6 +60,10 @@ impl ApplicationHandler for Game {
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         self.time.update();
+        let projection = &self.graphics.as_ref().unwrap().projection;
+        self.scene.active_camera_mut()
+            .expect("ERROR: no camera found")
+            .update_view_proj(&projection);
         Game::dispatch_event(self, GearEvent::Update());
     }
 

@@ -161,28 +161,16 @@ impl Gear for Kamiondzija {
     }
 }
 
-fn custom_handle(camera: &mut Camera, event: &GearEvent, game: &GameView) {
-    if let GearEvent::KeyboardInput(..) = event {
-        if camera.get_id() == game.scene.active_camera_id().expect("no camera found") {
-            println!("majmuneee");
-        }
-    }
-}
-
 pub fn main() {
     let camera1 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
-
-    let mut camera2 = Camera::new((0.0, 10.0, 0.0), 0.0, 0.0);
-    camera2.set_handle(custom_handle);
 
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::new());
         // game.add_gear("camwitch".into(), CamSwitch);
         game.add_gear("kamiondzija".into(), Kamiondzija::default());
         game.add_gear("spawner".into(), Spawner::default());
-        game.add_camera(camera1);
-        // game.add_camera(camera2);
-        // game.add_camera(camera3);
+        game.add_gear("cameracontroller".into(), CameraController);
+        game.scene.add_camera(camera1);
     }).setup(|game| {
         game.scene.add_gui(EngineStats::new());
 

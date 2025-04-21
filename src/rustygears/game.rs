@@ -5,7 +5,6 @@ use crate::Instance;
 use crate::BindGroupLayoutKey;
 use crate::RenderObject;
 use crate::CommandBuffer;
-use crate::Camera;
 use crate::Gear;
 use crate::GearEvent;
 use crate::Graphics;
@@ -109,25 +108,6 @@ impl Game {
         let any = &mut *lock as &mut dyn Any;
         let typed_gear = any.downcast_mut::<T>()?;
         Some(f(typed_gear))
-    }
-
-    /// Adds a new camera to the game.
-    ///
-    /// # Arguments
-    /// * `camera` - An instance of `Camera`.
-    ///
-    /// The camera is stored as a shared resource and is both managed by the scene
-    /// and added to the gear list.
-    ///
-    /// # Returns
-    /// A mutable reference to the `Game` instance to allow method chaining.
-
-    pub fn add_camera(&mut self, camera: Camera) -> &mut Self {
-        let id = format!("camera_{}", camera.get_id());
-        let camera = Arc::new(Mutex::new(camera)); 
-        self.scene.add_camera(camera.clone());
-        self.gears.insert(id, camera);
-        self
     }
 
     /// Queues a setup function to be called later during initialization.

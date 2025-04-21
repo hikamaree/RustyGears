@@ -22,7 +22,7 @@ pub struct AddCamera {
 
 impl Command for AddCamera {
     fn apply(self: Box<Self>, game: &mut Game) {
-        game.add_camera(Camera::new(self.position, self.yaw, self.pitch));
+        game.scene.add_camera(Camera::new(self.position, self.yaw, self.pitch));
     }
 }
 
