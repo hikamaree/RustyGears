@@ -159,10 +159,21 @@ impl Camera {
         ]).into()
     }
 
+    /// Sets the camera's position in 3D space.
+    /// 
+    /// # Arguments
+    /// * `position` - A 3D point (Point3<f32>) representing the new camera position
     pub fn set_position(&mut self, position: Point3<f32>) {
         self.position = position;
     }
 
+    /// Sets the camera's rotation using yaw, pitch, and roll angles.
+    /// Automatically updates the camera's orientation vectors after setting the new rotation.
+    /// 
+    /// # Arguments
+    /// * `yaw` - Rotation around the vertical axis (in radians)
+    /// * `pitch` - Rotation around the lateral axis (in radians)
+    /// * `roll` - Rotation around the longitudinal axis (in radians)
     pub fn set_rotation(&mut self, yaw: Rad<f32>, pitch: Rad<f32>, roll: Rad<f32>) {
         self.yaw = yaw;
         self.pitch = pitch;
@@ -170,72 +181,8 @@ impl Camera {
         self.update_camera_vectors();
     }
 
-    /// Moves the camera forward based on the current orientation.
-    ///
-    /// # Arguments
-    /// * `dt` - The time delta used to move the camera.
-    pub fn move_forward(&mut self, dt: f32) {
-        self.position += self.forward * self.speed * dt;
-    }
-
-    /// Moves the camera backward based on the current orientation.
-    ///
-    /// # Arguments
-    /// * `dt` - The time delta used to move the camera.
-    pub fn move_backward(&mut self, dt: f32) {
-        self.position += -self.forward * self.speed * dt;
-    }
-
-    /// Moves the camera left based on the current orientation.
-    ///
-    /// # Arguments
-    /// * `dt` - The time delta used to move the camera.
-    pub fn move_left(&mut self, dt: f32) {
-        self.position += -self.right * self.speed * dt;
-    }
-
-    /// Moves the camera right based on the current orientation.
-    ///
-    /// # Arguments
-    /// * `dt` - The time delta used to move the camera.
-    pub fn move_right(&mut self, dt: f32) {
-        self.position += self.right * self.speed * dt;
-    }
-
-    /// Rotates the camera around the Y axis (yaw) by specified angle in radians
-    /// 
-    /// # Arguments
-    /// * `angle` - Angle in radians to rotate
-    pub fn rotate_yaw(&mut self, angle: f32) {
-        self.yaw += Rad(angle);
-        self.yaw = Rad(self.yaw.0.rem_euclid(2.0 * std::f32::consts::PI));
-    }
-
-    /// Rotates the camera around the X axis (pitch) by specified angle in radians
-    /// 
-    /// # Arguments
-    /// * `angle` - Angle in radians to rotate
-    /// 
-    /// # Note
-    /// Automatically clamps pitch between -89° and +89° to prevent gimbal lock
-    pub fn rotate_pitch(&mut self, angle: f32) {
-        self.pitch += Rad(angle);
-    }
-
-    /// Rotates the camera around the Z axis (roll) by specified angle in radians
-    /// 
-    /// # Arguments
-    /// * `angle` - Angle in radians to rotate
-    /// 
-    /// # Note
-    /// This is less common in FPS-style cameras but useful for flight simulators
-    pub fn rotate_roll(&mut self, angle: f32) {
-        self.roll += Rad(angle);
-        self.roll = Rad(self.roll.0.rem_euclid(2.0 * std::f32::consts::PI));
-    }
-
     /// Updates the camera's orientation based on the current yaw and pitch values.
-    pub fn update_camera_vectors(&mut self) {
+    fn update_camera_vectors(&mut self) {
         if self.pitch < -Rad(SAFE_FRAC_PI_2) {
             self.pitch = -Rad(SAFE_FRAC_PI_2);
         } else if self.pitch > Rad(SAFE_FRAC_PI_2) {

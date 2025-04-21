@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use crate::graphics::pipeline::create_render_pipeline;
 use crate::Command;
 use crate::Projection;
@@ -11,8 +10,6 @@ use std::sync::Arc;
 use wgpu::Adapter;
 use wgpu::Instance;
 use winit::window::Window;
-
-use super::EguiRenderer;
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -97,8 +94,6 @@ pub struct Graphics {
     pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
 
-    pub egui: Arc<Mutex<EguiRenderer>>,
-
     pub t_count: u32,
 }
 
@@ -158,8 +153,6 @@ impl Graphics {
         let bind_group_layouts = HashMap::new();
         let pipelines = HashMap::new();
 
-        let egui = Arc::new(Mutex::new(EguiRenderer::new(&device, config.format, None, 1, &window)));
-
         let mut graphics = Graphics {
             window,
             instance,
@@ -173,7 +166,6 @@ impl Graphics {
             projection,
             bind_group_layouts,
             pipelines,
-            egui,
             t_count: 0,
         };
 

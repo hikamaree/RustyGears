@@ -126,4 +126,6 @@ pub enum GearEvent {
     /// ```
 
     MouseMotion(f64, f64),
+
+    WindowEvent(winit::event::WindowEvent),
 }

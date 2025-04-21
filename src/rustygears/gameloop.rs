@@ -22,6 +22,7 @@ impl ApplicationHandler for Game {
             return;
         }
 
+
         match event {
             winit::event::WindowEvent::CloseRequested => {
                 event_loop.exit()
@@ -43,9 +44,7 @@ impl ApplicationHandler for Game {
             _ => {}
         }
 
-        if let Some(graphics) = &self.graphics {
-            graphics.egui.lock().unwrap().handle_input(&graphics.window, &event);
-        }
+        Game::dispatch_event(self, GearEvent::WindowEvent(event.clone()));
     }
 
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {

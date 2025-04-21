@@ -1,7 +1,5 @@
 use crate::GameView;
 use crate::Gui;
-use std::sync::Mutex;
-use std::sync::Arc;
 use egui::epaint::Shadow;
 use egui::{Context, Visuals};
 use egui_wgpu::ScreenDescriptor;
@@ -15,7 +13,7 @@ use egui_winit::winit::window::Window;
 
 pub struct EguiRenderer {
     pub context: Context,
-    pub state: Arc<Mutex<State>>,
+    pub state: State,
     pub renderer: Renderer,
 }
 
@@ -49,13 +47,13 @@ impl EguiRenderer {
 
         EguiRenderer {
             context: egui_context,
-            state: Arc::new(Mutex::new(egui_state)),
+            state: egui_state,
             renderer: egui_renderer,
         }
     }
 
     pub fn handle_input(&mut self, window: &Window, event: &WindowEvent) {
-        let _ = self.state.lock().unwrap().on_window_event(window, event);
+        let _ = self.state.on_window_event(window, event);
     }
 
     pub fn draw<'a>(
@@ -69,7 +67,7 @@ impl EguiRenderer {
         run_ui: &Vec<Box<dyn Gui + Send + Sync>>,
         game: &GameView,
     ) {
-        let raw_input = self.state.lock().unwrap().take_egui_input(&window);
+        let raw_input = self.state.take_egui_input(&window);
         let full_output = self.context.run(raw_input, |_ui| {
             self.context.set_cursor_icon(egui::CursorIcon::None);
             for gui_component in run_ui {
@@ -77,7 +75,7 @@ impl EguiRenderer {
             }
         });
 
-        self.state.lock().unwrap()
+        self.state
             .handle_platform_output(&window, full_output.platform_output);
 
         let tris = self
