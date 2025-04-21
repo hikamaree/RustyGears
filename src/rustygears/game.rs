@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 
 use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelIterator;
+use rayon::iter::IntoParallelRefIterator;
 use winit::event_loop::EventLoop;
 
 pub struct Game {
@@ -162,7 +162,7 @@ impl Game {
         let game = GameView::create(self);
 
         let command_buffers: Vec<CommandBuffer> = gears
-            .into_par_iter()
+            .par_iter()
             .map(|(_, gear)| {
                 let mut cmd = CommandBuffer::new();
                 let mut gear = gear.lock().unwrap();

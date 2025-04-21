@@ -1,12 +1,22 @@
+use crate::RenderObject;
 use crate::InstanceRaw;
-use cgmath::InnerSpace;
-use cgmath::Vector3;
-use cgmath::Matrix4;
 use std::sync::Arc;
 use crate::Texture;
-use crate::Camera;
 use std::ops::Range;
 
+
+#[derive(Debug)]
+pub struct MeshRenderRange {
+    pub mesh_index: usize,
+    pub visible_instance_ranges: Vec<Range<u32>>,
+}
+
+pub struct ModelRenderData<'a> {
+    pub render_object: &'a RenderObject,
+    pub instance_data: Arc<[InstanceRaw]>,
+    pub mesh_ranges: Vec<MeshRenderRange>,
+    pub object_name: String,
+}
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -147,17 +157,15 @@ pub trait DrawModel<'a> {
         material: &'a Material,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
     );
+
     fn draw_mesh_instanced(
         &mut self,
         mesh: &'a Mesh,
         material: &'a Material,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
+        ranges: &MeshRenderRange
     ) -> u32;
 
     #[allow(unused)]
@@ -166,27 +174,16 @@ pub trait DrawModel<'a> {
         model: &'a Model,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
+        ranges: MeshRenderRange
     );
+
     fn draw_model_instanced(
         &mut self,
         model: &'a Model,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
+        ranges: &Vec<MeshRenderRange>
     ) -> u32;
-    #[allow(unused)]
-    fn draw_model_instanced_with_material(
-        &mut self,
-        model: &'a Model,
-        material: &'a Material,
-        camera_bind_group: &'a wgpu::BindGroup,
-        light_bind_group: &'a wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
-    );
 }
 
 impl<'a, 'b> DrawModel<'b> for wgpu::RenderPass<'a>
@@ -197,83 +194,44 @@ where 'b: 'a {
         material: &'b Material,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
     ) {
-        self.draw_mesh_instanced(mesh, material, camera_bind_group, light_bind_group, &camera, instances);
+        self.draw_mesh_instanced(
+            mesh,
+            material,
+            camera_bind_group,
+            light_bind_group,
+            &MeshRenderRange {
+                mesh_index: 0,
+                visible_instance_ranges: vec![0..1]
+            });
     }
 
     fn draw_mesh_instanced(
         &mut self,
-        mesh: &'b Mesh,
-        material: &'b Material,
-        camera_bind_group: &'b wgpu::BindGroup,
-        light_bind_group: &'b wgpu::BindGroup,
-        camera: &'a Camera,
-        insts: &Vec<InstanceRaw>,
+        mesh: &'a Mesh,
+        material: &'a Material,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+        ranges: &MeshRenderRange,
     ) -> u32 {
-        let visible_indices: Vec<u32> = insts
-            .iter()
-            .enumerate()
-            .filter_map(|(i, raw)| {
-                let model = Matrix4::from(raw.model);
-                let center_local = mesh.bounding_sphere.center.extend(1.0);
-                let center_world = model * center_local;
-                let center = center_world.truncate();
-
-                let scale_x = Vector3::new(model.x.x, model.x.y, model.x.z).magnitude();
-                let scale_y = Vector3::new(model.y.x, model.y.y, model.y.z).magnitude();
-                let scale_z = Vector3::new(model.z.x, model.z.y, model.z.z).magnitude();
-                let max_scale = scale_x.max(scale_y).max(scale_z);
-
-                let radius = mesh.bounding_sphere.radius * max_scale;
-
-                if camera.can_see(center, radius) {
-                    Some(i as u32)
-                } else {
-                    None
-                }
-            })
-        .collect();
-
-        if visible_indices.is_empty() {
-            return 0;
-        }
-
-        fn group_contiguous_ranges(indices: &[u32]) -> Vec<Range<u32>> {
-            let mut ranges = Vec::new();
-            let mut start = indices[0];
-            let mut prev = start;
-
-            for &i in &indices[1..] {
-                if i == prev + 1 {
-                    prev = i;
-                } else {
-                    ranges.push(start..prev + 1);
-                    start = i;
-                    prev = i;
-                }
-            }
-
-            ranges.push(start..prev + 1);
-            ranges
-        }
-
-        let instance_ranges = group_contiguous_ranges(&visible_indices);
-
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, camera_bind_group, &[]);
         self.set_bind_group(2, light_bind_group, &[]);
 
-        for range in instance_ranges {
-            self.draw_indexed(0..mesh.num_elements, 0, range);
+        for instance_range in &ranges.visible_instance_ranges {
+            self.draw_indexed(0..mesh.num_elements, 0, instance_range.clone());
         }
 
         let triangle_count_per_instance = mesh.num_elements / 3;
-        let total = triangle_count_per_instance * visible_indices.len() as u32;
-        total
+        let instances_visible: u32 = ranges
+            .visible_instance_ranges
+            .iter()
+            .map(|r| r.end - r.start)
+            .sum();
+
+        triangle_count_per_instance * instances_visible
     }
 
     fn draw_model(
@@ -281,10 +239,9 @@ where 'b: 'a {
         model: &'b Model,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,
-        camera: &'a Camera,
-        instances: &Vec<InstanceRaw>,
+        ranges: MeshRenderRange,
     ) {
-        self.draw_model_instanced(model, camera_bind_group, light_bind_group, &camera, instances);
+        self.draw_model_instanced(model, camera_bind_group, light_bind_group, &vec![ranges]);
     }
 
     fn draw_model_instanced(
@@ -292,42 +249,23 @@ where 'b: 'a {
         model: &'b Model,
         camera_bind_group: &'b wgpu::BindGroup,
         light_bind_group: &'b wgpu::BindGroup,
-        camera: &'a Camera,
-        insts: &Vec<InstanceRaw>,
+        ranges: &Vec<MeshRenderRange>
     ) -> u32 {
         let mut total_triangles = 0;
-        for mesh in &model.meshes {
+
+        for mesh_range in ranges {
+            let mesh = &model.meshes[mesh_range.mesh_index];
             let material = &model.materials[mesh.material];
+
             total_triangles += self.draw_mesh_instanced(
                 mesh,
                 material,
                 camera_bind_group,
                 light_bind_group,
-                &camera,
-                insts,
+                mesh_range,
             );
         }
-        total_triangles
-    }
 
-    fn draw_model_instanced_with_material(
-        &mut self,
-        model: &'b Model,
-        material: &'b Material,
-        camera_bind_group: &'b wgpu::BindGroup,
-        light_bind_group: &'b wgpu::BindGroup,
-        camera: &'a Camera,
-        insts: &Vec<InstanceRaw>,
-    ) {
-        for mesh in &model.meshes {
-            self.draw_mesh_instanced(
-                mesh,
-                material,
-                camera_bind_group,
-                light_bind_group,
-                &camera,
-                insts,
-            );
-        }
+        total_triangles
     }
 }

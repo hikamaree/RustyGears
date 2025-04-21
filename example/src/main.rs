@@ -155,6 +155,7 @@ impl Gear for Kamiondzija {
                 };
 
                 self.kamioni.push(game.spawn_model("truck/semi.obj", transform, vec![RenderTag::PBR]));
+                // self.kamioni.push(game.spawn_model("block/block.obj", transform, vec![RenderTag::PBR]));
             }
         }
     }
@@ -178,7 +179,7 @@ pub fn main() {
         game.add_gear("render".into(), Render::new());
         // game.add_gear("camwitch".into(), CamSwitch);
         game.add_gear("kamiondzija".into(), Kamiondzija::default());
-        // game.add_gear("spawner".into(), Spawner::default());
+        game.add_gear("spawner".into(), Spawner::default());
         game.add_camera(camera1);
         // game.add_camera(camera2);
         // game.add_camera(camera3);
