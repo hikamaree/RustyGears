@@ -15,3 +15,4 @@ image = { version = "0.24", default-features = false, features = ["png", "jpeg"]
 egui = "0.31.1"
 egui-winit = { version = "0.31.1", default-features = false }
 egui-wgpu = "0.31.1"
+crossbeam = "0.8.4"

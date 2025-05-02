@@ -1,3 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// This file is part of Rusty Gears.
+//
+// Rusty Gears is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Rusty Gears is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use winit::window::WindowAttributes;
 use winit::event::DeviceEvent;
 use winit::event::DeviceId;
@@ -11,6 +28,7 @@ use winit::event::KeyEvent;
 use crate::GearEvent;
 use crate::Game;
 use crate::Graphics;
+use crate::EguiRenderer;
 
 impl ApplicationHandler for Game {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
@@ -22,7 +40,6 @@ impl ApplicationHandler for Game {
             return;
         }
 
-
         match event {
             winit::event::WindowEvent::CloseRequested => {
                 event_loop.exit()
@@ -30,11 +47,16 @@ impl ApplicationHandler for Game {
 
             winit::event::WindowEvent::Resized(physical_size) => {
                 graphics.resize(physical_size);
-                Game::dispatch_event(self, GearEvent::WindowResize(physical_size));
             }
 
             winit::event::WindowEvent::RedrawRequested => {
-                Game::dispatch_event(self, GearEvent::RenderRequested());
+                let camera = self.scene.active_camera_mut()
+                    .expect("ERROR: no camera found");
+                let projection = &self.graphics.as_ref().unwrap().projection;
+                camera.update_view_proj(&projection);
+                self.graphics.as_mut().unwrap().update(camera);
+                self.time.update();
+                Game::dispatch_event(self, GearEvent::Update());
             }
 
             winit::event::WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
@@ -57,22 +79,12 @@ impl ApplicationHandler for Game {
         }
     }
 
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        self.time.update();
-        let projection = &self.graphics.as_ref().unwrap().projection;
-        self.scene.active_camera_mut()
-            .expect("ERROR: no camera found")
-            .update_view_proj(&projection);
-        Game::dispatch_event(self, GearEvent::Update());
-    }
-
     fn resumed(&mut self, game_loop: &ActiveEventLoop) {
         let title = env!("CARGO_PKG_NAME");
 
         let window_attributes = WindowAttributes::default()
             .with_title(title);
 
-        #[allow(deprecated)]
         let window = game_loop
             .create_window(window_attributes)
             .expect("failed to create window");
@@ -85,7 +97,11 @@ impl ApplicationHandler for Game {
             .unwrap()
             .block_on(Graphics::new(window.into()));
 
+        let egui = EguiRenderer::new(&graphics.device, graphics.config.format, None, 1, &graphics.window);
+
         self.graphics = Some(graphics);
+
+        self.gui = Some(egui);
 
         while let Some(setup_fn) = self.setupfns.pop_front() {
             setup_fn(self);

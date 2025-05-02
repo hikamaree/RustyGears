@@ -45,3 +45,6 @@ cargo run --release
 
 The simulation starts when you fire the first bullet, and bullets can be fired by pressing the `F` key.
 Movement in the simulation can be controlled using the W, A, S, D keys and mouse. 
+
+## License
+This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](./LICENSE) file for more information.

@@ -1,9 +1,27 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// This file is part of Rusty Gears.
+//
+// Rusty Gears is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Rusty Gears is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use std::time::{Instant, Duration};
 
 /// The `Time` struct is used for tracking time-related information in an application,
 /// such as the time between frames (delta time), total elapsed time,
 /// and frames per second (FPS).
 
+#[derive(Debug, Clone, Copy)]
 pub struct Time {
     last_update: Instant,
     total_time: Duration,

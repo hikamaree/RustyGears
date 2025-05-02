@@ -1,3 +1,20 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// This file is part of Rusty Gears.
+//
+// Rusty Gears is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Rusty Gears is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use cgmath::Matrix;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU64;
@@ -46,12 +63,12 @@ impl Camera {
     ///
     /// # Returns
     /// Returns an instance of the camera.
-    pub fn new(position: (f32, f32, f32), yaw: f32, pitch: f32) -> Self {
+    pub fn new() -> Self {
         let mut camera = Camera {
             id: ID_COUNTER.fetch_add(1, Ordering::Relaxed),
-            position: position.into(),
-            yaw: Rad(yaw),
-            pitch: Rad(pitch),
+            position: Point3::new(0.0, 0.0, 0.0),
+            yaw: Rad(0.0),
+            pitch: Rad(0.0),
             roll: Rad(0.0),
             view_position: [0.0; 4],
             view_proj: cgmath::Matrix4::identity().into(),

@@ -1,3 +1,25 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// This file is part of Rusty Gears.
+//
+// Rusty Gears is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Rusty Gears is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use crate::Camera;
+use crate::DEFAULT_CAMERA_BUFFER_SIZE;
+use crate::LightUniform;
+use crate::BufferStrategy;
+use crate::Buffer;
 use crate::graphics::pipeline::create_render_pipeline;
 use crate::Command;
 use crate::Projection;
@@ -78,11 +100,12 @@ pub enum BindGroupLayoutKey {
     Custom(&'static str),
 }
 
+#[derive(Clone)]
 pub struct Graphics {
     pub window: Arc<Window>,
     pub instance: Instance,
     pub adapter: Adapter,
-    pub surface: wgpu::Surface<'static>,
+    pub surface: Arc<wgpu::Surface<'static>>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
@@ -93,6 +116,10 @@ pub struct Graphics {
 
     pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
+
+    pub buffers: HashMap<String, Buffer>,
+    pub bind_groups: HashMap<BindGroupLayoutKey, wgpu::BindGroup>,
+
 
     pub t_count: u32,
 }
@@ -157,7 +184,7 @@ impl Graphics {
             window,
             instance,
             adapter,
-            surface,
+            surface: Arc::new(surface),
             device,
             queue,
             config,
@@ -166,6 +193,8 @@ impl Graphics {
             projection,
             bind_group_layouts,
             pipelines,
+            buffers: HashMap::new(),
+            bind_groups: HashMap::new(),
             t_count: 0,
         };
 
@@ -186,6 +215,30 @@ impl Graphics {
         self.bind_group_layouts.insert(key, Arc::new(layout));
     }
 
+
+    pub fn create_buffer(&mut self, name: &str, size: usize, usage: wgpu::BufferUsages, strategy: BufferStrategy) {
+        let buffer = Buffer::new(&self.device, size, usage, strategy, name);
+        self.buffers.insert(name.to_string(), buffer);
+    }
+
+    pub fn create_bind_group(&mut self, layout_key: BindGroupLayoutKey, entries: &[wgpu::BindGroupEntry], label: Option<&str>) -> Result<(), String> {
+        let layout = self.bind_group_layouts.get(&layout_key)
+            .ok_or_else(|| format!("Bind group layout {:?} not found", layout_key))?;
+
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label,
+            layout,
+            entries,
+        });
+
+        self.bind_groups.insert(layout_key, bind_group);
+        Ok(())
+    }
+
+
+
+
+
     pub fn create_render_pipeline(
         &mut self,
         render_tag: RenderTag,
@@ -197,7 +250,7 @@ impl Graphics {
             .unwrap_or_else(|_| panic!("Failed to load shader at {}", shader_path));
 
         let shader_label = format!("{:?} Shader", render_tag);
-        
+
         let shader_desc = wgpu::ShaderModuleDescriptor {
             label: Some(&shader_label),
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
@@ -313,7 +366,62 @@ impl Graphics {
             };
 
             self.pipelines.insert(RenderTag::PBR, render_pipeline);
+
+
+            self.create_buffer(
+                "camera",
+                DEFAULT_CAMERA_BUFFER_SIZE,
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                BufferStrategy::Single,
+            );
+
+            self.create_buffer(
+                "light",
+                std::mem::size_of::<LightUniform>(),
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                BufferStrategy::Single,
+            );
+
+            let light_uniform = LightUniform {
+                position: [2.0, 2.0, 2.0],
+                _padding: 0,
+                color: [1.0, 1.0, 1.0],
+                _padding2: 0,
+            };
+
+            self.buffers.get_mut("light").unwrap().write(&self.queue, bytemuck::cast_slice(&[light_uniform]));
+
+            let mut buffers = std::mem::take(&mut self.buffers);
+
+            self.create_bind_group(
+                BindGroupLayoutKey::Camera,
+                &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.get_mut("camera").unwrap().current().as_entire_binding(),
+                }],
+                Some("camera_bind_group"),
+            ).unwrap();
+
+            self.create_bind_group(
+                BindGroupLayoutKey::Light,
+                &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.get_mut("light").unwrap().current().as_entire_binding(),
+                }],
+                Some("light_bind_group"),
+            ).expect("Failed to create light bind group");
+
+            self.buffers = buffers;
     }
+
+    pub(crate) fn update(&mut self, camera: &Camera) {
+        self.queue.write_buffer(
+            &self.buffers.get("camera").expect("no camera buffer found").current(),
+            0,
+            &camera.get_uniform(),
+        );
+    }
+
 
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
