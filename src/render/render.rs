@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::RenderTag;
 use crate::Command;
 use crate::RenderCommand;
 use crate::ModelRenderData;
@@ -101,111 +102,129 @@ impl Render {
             ranges
         }
 
-        let camera = game.scene.active_camera()
-            .expect("no camera found");
-        let prepared_models: Vec<ModelRenderData> = game.scene.render_objects.par_iter()
-            .filter_map(|(object_name, render_object)| {
-                let key = (crate::RenderTag::PBR, object_name.to_string());
-                let instance_ids = game.scene.render_tag_object_to_instances.get(&key)?;
-                if instance_ids.is_empty() {
-                    return None;
-                }
+        let camera = game.scene.active_camera().expect("no camera found");
 
-                let all_instances: Vec<InstanceRaw> = instance_ids.iter()
-                    .filter_map(|id| game.scene.instances.get(id))
-                    .map(|instance| instance.to_raw())
-                    .collect();
+        let mut pipelines_to_objects: HashMap<RenderTag, HashSet<String>> = HashMap::new();
+        for ((tag, object_name), _) in &game.scene.render_tag_object_to_instances {
+            pipelines_to_objects
+                .entry(tag.clone())
+                .or_default()
+                .insert(object_name.clone());
+            }
 
-                let transforms: Vec<_> = all_instances
-                    .iter()
-                    .map(|raw| Matrix4::from(raw.model))
-                    .collect();
+        for (tag, object_names) in pipelines_to_objects {
+            let prepared_models: Vec<ModelRenderData> = object_names
+                .par_iter()
+                .filter_map(|object_name| {
+                    let key = (tag.clone(), object_name.clone());
+                    let render_object = game.scene.render_objects.get(object_name)?;
+                    let instance_ids = game.scene.render_tag_object_to_instances.get(&key)?;
 
-                let mesh_results: Vec<_> = render_object.model.meshes
-                    .par_iter()
-                    .enumerate()
-                    .filter_map(|(mesh_index, mesh)| {
-                        let center_local = mesh.bounding_sphere.center.extend(1.0);
-                        let radius_base = mesh.bounding_sphere.radius;
+                    if instance_ids.is_empty() {
+                        return None;
+                    }
 
-                        let visible_indices: Vec<u32> = transforms
-                            .iter()
-                            .enumerate()
-                            .filter_map(|(i, model)| {
-                                let center_world = model * center_local;
-                                let center = center_world.truncate();
-
-                                let max_scale = model.x.magnitude()
-                                    .max(model.y.magnitude())
-                                    .max(model.z.magnitude());
-
-                                let radius = radius_base * max_scale;
-
-                                camera.can_see(center, radius).then_some(i as u32)
-                            })
+                    let all_instances: Vec<InstanceRaw> = instance_ids.iter()
+                        .filter_map(|id| game.scene.instances.get(id))
+                        .map(|instance| instance.to_raw())
                         .collect();
 
-                        (!visible_indices.is_empty())
-                            .then(|| (mesh_index, visible_indices))
-                    })
-                .collect();
+                    let transforms: Vec<_> = all_instances
+                        .iter()
+                        .map(|raw| Matrix4::from(raw.model))
+                        .collect();
 
-                if mesh_results.is_empty() {
-                    return None;
-                }
+                    let mesh_results: Vec<_> = render_object.model.meshes
+                        .par_iter()
+                        .enumerate()
+                        .filter_map(|(mesh_index, mesh)| {
+                            let center_local = mesh.bounding_sphere.center.extend(1.0);
+                            let radius_base = mesh.bounding_sphere.radius;
 
-                let mut used_indices: HashSet<usize> = HashSet::new();
-                for (_, indices) in &mesh_results {
-                    for &i in indices {
-                        used_indices.insert(i as usize);
-                    }
-                }
+                            let visible_indices: Vec<u32> = transforms
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(i, model)| {
+                                    let center_world = model * center_local;
+                                    let center = center_world.truncate();
 
-                let mut used_indices_sorted: Vec<usize> = used_indices.into_iter().collect();
-                used_indices_sorted.sort_unstable();
+                                    let max_scale = model.x.magnitude()
+                                        .max(model.y.magnitude())
+                                        .max(model.z.magnitude());
 
-                let index_map: HashMap<usize, u32> = used_indices_sorted
-                    .par_iter()
-                    .enumerate()
-                    .map(|(new_idx, &old_idx)| (old_idx, new_idx as u32))
-                    .collect();
+                                    let radius = radius_base * max_scale;
 
-                let instance_data: Arc<[InstanceRaw]> = used_indices_sorted
-                    .par_iter()
-                    .map(|&i| all_instances[i].clone())
-                    .collect::<Vec<_>>()
-                    .into();
-
-                let mesh_ranges: Vec<_> = mesh_results
-                    .into_iter()
-                    .map(|(mesh_index, old_indices)| {
-                        let new_indices: Vec<u32> = old_indices
-                            .into_iter()
-                            .filter_map(|old| index_map.get(&(old as usize)).copied())
+                                    camera.can_see(center, radius).then_some(i as u32)
+                                })
                             .collect();
 
-                        MeshRenderRange {
-                            mesh_index,
-                            visible_instance_ranges: group_contiguous_ranges(&new_indices),
+                            (!visible_indices.is_empty())
+                                .then(|| (mesh_index, visible_indices))
+                        })
+                    .collect();
+
+                    if mesh_results.is_empty() {
+                        return None;
+                    }
+
+                    let mut used_indices: HashSet<usize> = HashSet::new();
+                    for (_, indices) in &mesh_results {
+                        for &i in indices {
+                            used_indices.insert(i as usize);
                         }
+                    }
+
+                    let mut used_indices_sorted: Vec<usize> = used_indices.into_iter().collect();
+                    used_indices_sorted.sort_unstable();
+
+                    let index_map: HashMap<usize, u32> = used_indices_sorted
+                        .par_iter()
+                        .enumerate()
+                        .map(|(new_idx, &old_idx)| (old_idx, new_idx as u32))
+                        .collect();
+
+                    let instance_data: Arc<[InstanceRaw]> = used_indices_sorted
+                        .par_iter()
+                        .map(|&i| all_instances[i].clone())
+                        .collect::<Vec<_>>()
+                        .into();
+
+                    let mesh_ranges: Vec<_> = mesh_results
+                        .into_iter()
+                        .map(|(mesh_index, old_indices)| {
+                            let new_indices: Vec<u32> = old_indices
+                                .into_iter()
+                                .filter_map(|old| index_map.get(&(old as usize)).copied())
+                                .collect();
+
+                            MeshRenderRange {
+                                mesh_index,
+                                visible_instance_ranges: group_contiguous_ranges(&new_indices),
+                            }
+                        })
+                    .collect();
+
+                    Some(ModelRenderData {
+                        render_object: render_object.clone(),
+                        instance_data,
+                        mesh_ranges,
+                        object_name: object_name.clone(),
                     })
-                .collect();
-
-                Some(ModelRenderData {
-                    render_object: render_object.clone(),
-                    instance_data,
-                    mesh_ranges,
-                    object_name: object_name.clone(),
                 })
-            })
-        .collect();
+            .collect();
 
-        let cmd = RenderCommand {
-            prepared_models,
-            camera: camera.clone(),
-        };
+            if !prepared_models.is_empty() {
+                let cmd = RenderCommand {
+                    prepared_models,
+                    camera: camera.clone(),
+                    tag: tag.clone(),
+                };
 
-        self.sender.as_ref().unwrap().send(Box::new(cmd)).expect("usro se render");
+                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                    eprintln!("Failed to send RenderCommand command: {}", e);
+                }
+            }
+        }
     }
 }
 

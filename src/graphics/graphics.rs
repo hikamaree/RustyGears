@@ -235,39 +235,6 @@ impl Graphics {
         Ok(())
     }
 
-
-
-
-
-    pub fn create_render_pipeline(
-        &mut self,
-        render_tag: RenderTag,
-        layout: &wgpu::PipelineLayout,
-        vertex_layouts: &[wgpu::VertexBufferLayout],
-        shader_path: &str,
-    ) {
-        let shader_src = std::fs::read_to_string(shader_path)
-            .unwrap_or_else(|_| panic!("Failed to load shader at {}", shader_path));
-
-        let shader_label = format!("{:?} Shader", render_tag);
-
-        let shader_desc = wgpu::ShaderModuleDescriptor {
-            label: Some(&shader_label),
-            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-        };
-
-        let pipeline = create_render_pipeline(
-            &self.device,
-            layout,
-            self.config.format,
-            Some(Texture::DEPTH_FORMAT),
-            vertex_layouts,
-            shader_desc,
-        );
-
-        self.pipelines.insert(render_tag, pipeline);
-    }
-
     fn initialize_default_resources(&mut self) {
         self.create_bind_grouproup_layout(
             BindGroupLayoutKey::Texture,
@@ -349,7 +316,7 @@ impl Graphics {
                     push_constant_ranges: &[],
                 });
 
-            let render_pipeline = {
+            let pbr_pipeline = {
                 let shader = wgpu::ShaderModuleDescriptor {
                     label: Some("Default Shader"),
                     source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -365,8 +332,7 @@ impl Graphics {
                 )
             };
 
-            self.pipelines.insert(RenderTag::PBR, render_pipeline);
-
+            self.pipelines.insert(RenderTag::PBR, pbr_pipeline);
 
             self.create_buffer(
                 "camera",

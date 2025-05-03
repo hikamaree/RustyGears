@@ -25,6 +25,7 @@ use crate::GameView;
 use crate::Command;
 use crate::Camera;
 use crate::ModelRenderData;
+use crate::RenderTag;
 
 /// A render command containing all the data necessary to draw a frame.
 ///
@@ -47,6 +48,9 @@ pub struct RenderCommand {
 
     /// The active camera used for rendering the current frame.
     pub camera: Camera,
+
+    /// Indicates which render pipeline is being used for this render command.
+    pub tag: RenderTag,
 }
 
 impl Command for RenderCommand {
@@ -91,7 +95,7 @@ impl Command for RenderCommand {
                 timestamp_writes: None,
             });
 
-            render_pass.set_pipeline(graphics.pipelines.get(&crate::RenderTag::PBR).unwrap());
+            render_pass.set_pipeline(graphics.pipelines.get(&self.tag).unwrap());
 
             for model_data in &self.prepared_models {
                 let buffer = graphics.buffers.entry(model_data.object_name.clone())

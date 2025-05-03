@@ -44,7 +44,7 @@ impl MyGame {
         let cmd = SetDefaultCamera { id };
         println!("Switching camera: {} -> {}", index, id);
         if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-            eprintln!("Failed to send render command: {}", e);
+            eprintln!("Failed to send SetDefaultCamera command: {}", e);
         }
     }
 }
@@ -94,7 +94,7 @@ impl Gear for MyGame {
         if yaw != camera.yaw || pich != camera.pitch {
             let cmd = SetCameraRotation { id, yaw, pich, roll: Rad(0.0) };
             if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-                eprintln!("Failed to send render command: {}", e);
+                eprintln!("Failed to send SetCameraRotation command: {}", e);
             }
         }
     }
@@ -141,7 +141,7 @@ impl Gear for MyGame {
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-                    eprintln!("Failed to send render command: {}", e);
+                    eprintln!("Failed to send SpawnModel command: {}", e);
                 }
                 self.h += 1.0;
             }
@@ -160,7 +160,7 @@ impl Gear for MyGame {
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-                    eprintln!("Failed to send render command: {}", e);
+                    eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
                 self.j += 1.0;
@@ -180,7 +180,7 @@ impl Gear for MyGame {
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-                    eprintln!("Failed to send render command: {}", e);
+                    eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
                 self.k += 1.0;
@@ -200,7 +200,7 @@ impl Gear for MyGame {
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-                    eprintln!("Failed to send render command: {}", e);
+                    eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
                 self.l += 1.0;
@@ -212,7 +212,7 @@ impl Gear for MyGame {
         if position != camera.position {
             let cmd = SetCameraPosition { id, position };
             if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-                eprintln!("Failed to send render command: {}", e);
+                eprintln!("Failed to send SetCameraPosition command: {}", e);
             }
         }
     }
