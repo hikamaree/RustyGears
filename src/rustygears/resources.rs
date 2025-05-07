@@ -29,18 +29,18 @@ use std::sync::Arc;
 
 use wgpu::util::DeviceExt;
 
-pub async fn load_model(file_name: &str, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
-    let obj_path = Path::new("res").join(file_name);
-    let base_dir = obj_path.parent().unwrap().to_path_buf();
+pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
+    // let obj_path = Path::new("res").join(file_name);
+    let base_dir = path.parent().unwrap().to_path_buf();
 
     let (models, obj_materials) = tobj::load_obj(
-        &obj_path,
+        &path,
         &tobj::LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
         },
-    ).expect(&format!("Failed to load OBJ model at {:?}", obj_path));
+    ).expect(&format!("Failed to load OBJ model at {:?}", path));
 
     let obj_materials = obj_materials.unwrap_or_default();
 
@@ -178,12 +178,12 @@ pub async fn load_model(file_name: &str, device: &Device, queue: &Queue, layout:
         }
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("{:?} Vertex Buffer", file_name)),
+            label: Some(&format!("{:?} Vertex Buffer", path)),
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("{:?} Index Buffer", file_name)),
+            label: Some(&format!("{:?} Index Buffer", path)),
             contents: bytemuck::cast_slice(&m.mesh.indices),
             usage: wgpu::BufferUsages::INDEX,
         });
@@ -210,7 +210,7 @@ pub async fn load_model(file_name: &str, device: &Device, queue: &Queue, layout:
 
 
         Mesh {
-            name: file_name.to_string(),
+            name: path.to_string_lossy().to_string(),
             vertex_buffer: Arc::new(vertex_buffer),
             index_buffer: Arc::new(index_buffer),
             num_elements: m.mesh.indices.len() as u32,

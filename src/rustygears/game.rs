@@ -27,19 +27,19 @@ use crate::GearEvent;
 use crate::Graphics;
 use crate::Scene;
 use crate::Time;
+use crate::GameView;
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::thread::JoinHandle;
+use std::path::Path;
+use std::path::PathBuf;
 
-use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelRefIterator;
 use winit::event_loop::EventLoop;
 
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
-use super::GameView;
 
 pub struct MajmunskiEvent {
     pub gear_event: GearEvent,
@@ -165,7 +165,7 @@ impl Game {
     /// # Panics
     /// Will panic if sending on any gear channel fails (indicates a crashed gear thread).
     pub fn dispatch_event(&mut self, event: GearEvent) {
-        self.gear_channels.par_iter().for_each(|(_, sender)| {
+        self.gear_channels.iter().for_each(|(_, sender)| {
             sender.send(MajmunskiEvent {
                 gear_event: event.clone(),
                 game: GameView {
@@ -201,7 +201,7 @@ impl Game {
         id
     }
 
-    pub fn load_model(&mut self, file_path: &str) {
+    pub fn load_model(&mut self, name: &str) {
         let graphics = self.graphics.as_ref().expect("ERROR: Graphics is not initialized");
 
         let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)
@@ -209,15 +209,36 @@ impl Game {
 
         let rt = tokio::runtime::Runtime::new().unwrap();
 
-        let model = rt.block_on(async {
-            super::resources::load_model(
-                file_path,
-                &graphics.device,
-                &graphics.queue,
-                texture_layout,
-            ).await
-        });
+        let base_path = Path::new("resources").join(name);
+        let parent_dir = base_path.parent().expect("Invalid model path");
+        let stem = base_path.file_stem().expect("Invalid file name").to_str().unwrap();
 
-        self.scene.add_render_object(file_path.to_string(), RenderObject { model });
+        let mut obj_paths: Vec<PathBuf> = std::fs::read_dir(parent_dir)
+            .expect("Failed to read model directory")
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                let filename = path.file_name()?.to_str()?;
+                if filename.starts_with(stem) && path.extension()?.to_str()? == "obj" {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+        .collect();
+
+        obj_paths.sort();
+
+        let lods: Vec<_> = obj_paths.into_iter().map(|path| {
+            rt.block_on(async {
+                super::resources::load_model(
+                    &path,
+                    &graphics.device,
+                    &graphics.queue,
+                    texture_layout,
+                ).await
+            })
+        }).collect();
+
+        self.scene.add_render_object(name.to_string(), RenderObject { lods });
     }
 }

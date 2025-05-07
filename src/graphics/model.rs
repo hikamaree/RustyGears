@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::RenderObject;
 use crate::InstanceRaw;
 use std::sync::Arc;
 use crate::Texture;
@@ -29,10 +28,10 @@ pub struct MeshRenderRange {
 }
 
 pub struct ModelRenderData {
-    pub render_object: RenderObject,
     pub instance_data: Arc<[InstanceRaw]>,
     pub mesh_ranges: Vec<MeshRenderRange>,
     pub object_name: String,
+    pub lod_index: usize,
 }
 
 #[repr(C)]

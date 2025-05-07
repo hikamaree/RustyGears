@@ -16,7 +16,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::InstanceRaw;
-use cgmath::Matrix4;
 
 /// A struct representing a 3D transformation that combines position, rotation, and scale.
 ///
@@ -35,22 +34,24 @@ pub struct Transform {
 }
 
 impl Transform {
-    /// Converts the `Transform` into a 4x4 matrix that represents the object's position, rotation, and scale.
+    /// Converts the `Transform` to an `InstanceRaw` for raw rendering data.
     ///
-    /// The resulting matrix can be used in rendering, world transformations, or other graphics operations.
-    /// It combines the translation (position), rotation (orientation), and scale into a single matrix.
+    /// This method prepares the instance's transformation (position, rotation, scale)
+    /// in a format that can be used for rendering in the graphics pipeline.
     ///
     /// # Returns
-    /// A `Matrix4<f32>` representing the combined transformation.
-    pub fn to_matrix(&self) -> Matrix4<f32> {
-        let translation = Matrix4::from_translation(self.position);
-        let rotation = Matrix4::from(self.rotation);
-        let scale = Matrix4::from_nonuniform_scale(
-            self.scale.x,
-            self.scale.y,
-            self.scale.z,
-        );
-        translation * rotation * scale
+    /// An `InstanceRaw` struct containing the instance's model and normal matrix.
+    pub fn raw(&self) -> InstanceRaw {
+        InstanceRaw {
+            model: (cgmath::Matrix4::from_translation(self.position)
+                * cgmath::Matrix4::from(self.rotation)
+                * cgmath::Matrix4::from_nonuniform_scale(
+                    self.scale.x,
+                    self.scale.y,
+                    self.scale.z
+                )).into(),
+            normal: cgmath::Matrix3::from(self.rotation).into(),
+        }
     }
 }
 
@@ -66,7 +67,7 @@ impl Transform {
 /// - `Wireframe`: Indicates the object should be rendered in wireframe mode (lines only).
 /// - `ShadowMap`: A tag for objects used in shadow mapping for lighting purposes.
 /// - `Custom(String)`: Allows for a custom render tag identified by a string value.
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum RenderTag {
     PBR,
     Unlit,
@@ -90,6 +91,7 @@ pub enum RenderTag {
 pub struct Instance {
     id: usize,
     pub transform: Transform,
+    pub raw: InstanceRaw,
     pub render_tags: Vec<RenderTag>,
     pub name: String,
 }
@@ -110,25 +112,9 @@ impl Instance {
         Self {
             id: Instance::gen_id(),
             transform,
+            raw: transform.raw(),
             render_tags,
             name,
-        }
-    }
-
-    /// Converts the `Instance` to an `InstanceRaw` for raw rendering data.
-    ///
-    /// This method prepares the instance's transformation (position, rotation, scale)
-    /// in a format that can be used for rendering in the graphics pipeline.
-    ///
-    /// # Returns
-    /// An `InstanceRaw` struct containing the instance's model and normal matrix.
-    pub fn to_raw(&self) -> InstanceRaw {
-        InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.transform.position)
-                * cgmath::Matrix4::from(self.transform.rotation)
-                * cgmath::Matrix4::from_nonuniform_scale(self.transform.scale.x, self.transform.scale.y, self.transform.scale.z))
-            .into(),
-            normal: cgmath::Matrix3::from(self.transform.rotation).into(),
         }
     }
 

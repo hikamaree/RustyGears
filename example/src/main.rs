@@ -54,7 +54,7 @@ impl Gear for MyGame {
         self.sender = Some(sender);
 
         const SPACE_BETWEEN: f32 = 30.0;
-        const NUM_INSTANCES_PER_ROW: usize = 10;
+        const NUM_INSTANCES_PER_ROW: usize = 100;
 
         for z in 0..NUM_INSTANCES_PER_ROW {
             for x in 0..NUM_INSTANCES_PER_ROW {
@@ -78,7 +78,7 @@ impl Gear for MyGame {
                     scale: vec3(1.0, 1.0, 1.0)
                 };
 
-                self.kamioni.push(game.spawn_model("truck/semi.obj", transform, vec![RenderTag::PBR]));
+                self.kamioni.push(game.spawn_model("truck/semi", transform, vec![RenderTag::PBR]));
             }
         }
     }

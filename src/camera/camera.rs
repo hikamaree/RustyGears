@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use cgmath::Vector4;
 use cgmath::Matrix;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::AtomicU64;
@@ -137,16 +138,14 @@ impl Camera {
     /// # Returns
     /// - `true` if the sphere is at least partially inside the view frustum.
     /// - `false` if the sphere is completely outside and can be culled.
-    ///
-    /// The `radius` is scaled by 20.0 as a conservative threshold to account for object size variance.
     pub fn can_see(&self, center: Vector3<f32>, radius: f32) -> bool {
-        for plane in &self.frustum {
-            let distance = plane.truncate().dot(center) + plane.w;
-            if distance < -radius {
-                return false;
-            }
-        }
-        true
+        self.frustum.iter().all(|plane| {
+            plane.x * center.x + plane.y * center.y + plane.z * center.z + plane.w >= -radius
+        })
+    }
+
+    pub fn can_see4(&self, center: Vector4<f32>, radius: f32) -> bool {
+        self.frustum.iter().all(|plane| plane.dot(center) >= -radius)
     }
 
     /// Updates the camera's view and projection matrix.

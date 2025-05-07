@@ -23,15 +23,35 @@ use crate::InstanceRaw;
 use crate::Game;
 use crate::GameView;
 use crate::Command;
-use crate::Camera;
 use crate::ModelRenderData;
 use crate::RenderTag;
 
-/// A render command containing all the data necessary to draw a frame.
+/// A batch of models that share the same render pipeline and camera.
 ///
-/// This command is typically created by the built-in `Render` gear, which prepares
-/// models for rendering based on visibility checks, camera frustum culling,
-/// and instance data.
+/// Each `RenderBatch` contains all instance data, mesh visibility info,
+/// and associated rendering metadata needed to draw a group of models
+/// using the same `RenderTag` (i.e., pipeline configuration).
+///
+/// These batches are grouped by the `Render` gear when preparing a `RenderCommand` to optimize rendering.
+///
+/// # Fields
+/// - `prepared_models`: Models and their per-instance data that passed frustum culling.
+/// - `tag`: The render pipeline tag used to select the appropriate GPU pipeline.
+pub struct RenderBatch {
+    /// A list of models and associated instance data that are ready to be drawn.
+    /// Each entry contains the mesh, instance transforms, and per-mesh visibility info.
+    pub prepared_models: Vec<ModelRenderData>,
+
+    /// Identifies the render pipeline (shaders, layout, etc.) to use for this batch.
+    /// Models with the same `RenderTag` can be drawn together.
+    pub tag: RenderTag,
+}
+
+/// A render command containing all data necessary to draw the entire frame.
+///
+/// This is the top-level command issued to the renderer each frame,
+/// typically produced by the `Render` gear. It consists of one or more `RenderBatch`es,
+/// each of which groups models by compatible pipeline and camera settings to improve draw efficiency.
 ///
 /// # Note
 /// This command should **only** be constructed and sent by the default `Render` gear.
@@ -40,22 +60,19 @@ use crate::RenderTag;
 /// this command manually.
 ///
 /// # Fields
-/// - `prepared_models`: A list of models and associated instance data that are ready to be rendered.
-/// - `camera`: The camera used to render the scene, including view and projection matrices.
+/// - `batches`: A list of render batches grouped by pipeline and camera. Each batch
+///   contains preprocessed model/instance data ready to be drawn.
 pub struct RenderCommand {
-    /// Models and their instance data to be drawn this frame.
-    pub prepared_models: Vec<ModelRenderData>,
-
-    /// The active camera used for rendering the current frame.
-    pub camera: Camera,
-
-    /// Indicates which render pipeline is being used for this render command.
-    pub tag: RenderTag,
+    /// A list of render batches, each representing a group of models that share the same
+    /// render pipeline and camera.
+    ///
+    /// Batches help reduce GPU state changes by grouping compatible draw calls together.
+    pub batches: Vec<RenderBatch>,
 }
 
 impl Command for RenderCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let graphics = &mut game.graphics.as_mut().unwrap();
+        let graphics = game.graphics.as_mut().unwrap();
         graphics.t_count = 0;
 
         let output = match graphics.surface.get_current_texture() {
@@ -95,32 +112,37 @@ impl Command for RenderCommand {
                 timestamp_writes: None,
             });
 
-            render_pass.set_pipeline(graphics.pipelines.get(&self.tag).unwrap());
+            for batch in &self.batches {
+                render_pass.set_pipeline(graphics.pipelines.get(&batch.tag).unwrap());
 
-            for model_data in &self.prepared_models {
-                let buffer = graphics.buffers.entry(model_data.object_name.clone())
-                    .and_modify(|b| {
-                        b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
-                        b.next();
-                        b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
-                    }).or_insert_with(|| {
-                        Buffer::new(
-                            &graphics.device,
-                            model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
-                            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                            BufferStrategy::Single,
-                            &model_data.object_name,
-                        )
-                    });
+                for model_data in &batch.prepared_models {
+                    let key = format!("{}:lod{}", model_data.object_name, model_data.lod_index);
+                    let buffer = graphics.buffers.entry(key)
+                        .and_modify(|b| {
+                            b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
+                            b.next();
+                            b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
+                        }).or_insert_with(|| {
+                            Buffer::new(
+                                &graphics.device,
+                                model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
+                                wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                                BufferStrategy::Single,
+                                &model_data.object_name,
+                            )
+                        });
 
-                render_pass.set_vertex_buffer(1, buffer.current().slice(..));
+                    render_pass.set_vertex_buffer(1, buffer.current().slice(..));
 
-                graphics.t_count += render_pass.draw_model_instanced(
-                    &model_data.render_object.model,
-                    camera_bg,
-                    light_bg,
-                    &model_data.mesh_ranges,
-                );
+                    if let Some(render_object) = game.scene.get_render_object(&model_data.object_name) {
+                        graphics.t_count += render_pass.draw_model_instanced(
+                            &render_object.lods[model_data.lod_index],
+                            camera_bg,
+                            light_bg,
+                            &model_data.mesh_ranges,
+                        );
+                    }
+                }
             }
         }
 
