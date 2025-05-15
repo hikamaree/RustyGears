@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::cell::UnsafeCell;
+use std::sync::Arc;
 use winit::window::WindowAttributes;
 use winit::event::DeviceEvent;
 use winit::event::DeviceId;
@@ -32,11 +34,7 @@ use crate::EguiRenderer;
 
 impl ApplicationHandler for Game {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
-        let graphics = self.graphics
-            .as_mut()
-            .expect("ERROR: Graphics is not initialized");
-
-        if window_id != graphics.window.id() {
+        if window_id != self.graphics().window.id() {
             return;
         }
 
@@ -46,16 +44,11 @@ impl ApplicationHandler for Game {
             }
 
             winit::event::WindowEvent::Resized(physical_size) => {
-                graphics.resize(physical_size);
+                self.graphics().resize(physical_size);
             }
 
             winit::event::WindowEvent::RedrawRequested => {
-                let camera = self.scene.active_camera_mut()
-                    .expect("ERROR: no camera found");
-                let projection = &self.graphics.as_ref().unwrap().projection;
-                camera.update_view_proj(&projection);
-                self.graphics.as_mut().unwrap().update(camera);
-                self.time.update();
+                self.update();
                 Game::dispatch_event(self, GearEvent::Update());
             }
 
@@ -99,7 +92,7 @@ impl ApplicationHandler for Game {
 
         let egui = EguiRenderer::new(&graphics.device, graphics.config.format, None, 1, &graphics.window);
 
-        self.graphics = Some(graphics);
+        self.graphics = Arc::new(UnsafeCell::new(Some(graphics)));
 
         self.gui = Some(egui);
 

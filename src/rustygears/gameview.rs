@@ -17,20 +17,21 @@
 
 use crate::Graphics;
 use crate::Time;
-use crate::Scene;
+// use crate::Scene;
+use crate::WorldScene;
 
 /// A read-only view of the current game state, provided to [`Gear`]s when handling events.
 ///
 /// `GameView` allows gears to inspect parts of the game world such as other gears, graphics state, timing information,
 /// and the scene. It provides safe access without allowing direct mutation of the game.
 
-pub struct GameView {
+pub struct GameView<'a> {
     /// A reference to the graphics context, used for rendering-related information or operations.
-    pub graphics: Graphics,
+    pub graphics: &'a Graphics,
 
     /// A reference to the time subsystem, providing timing and delta-time information.
     pub time: Time,
 
     /// A reference to the current scene, which may contain entities or spatial information.
-    pub scene: Scene,
+    pub scene: &'a WorldScene,
 }

@@ -15,7 +15,27 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Model;
 use crate::InstanceRaw;
+
+/// Represents a renderable object in the scene, which may have multiple
+/// levels of detail (LODs) depending on camera distance or rendering strategy.
+///
+/// This structure holds a list of `Model` instances, where each `Model`
+/// corresponds to a specific LOD. LOD index 0 is the highest quality,
+/// and higher indices represent lower detail versions of the model.
+///
+/// LOD selection is typically based on distance from the camera,
+/// allowing the engine to improve performance by reducing geometric complexity
+/// for far-away objects.
+///
+/// # Fields
+/// - `lods`: A list of models sorted by LOD level, from high to low quality.
+///           Each `Model` contains mesh data and GPU-ready geometry.
+#[derive(Clone)]
+pub struct RenderObject {
+    pub lods: Vec<Model>,
+}
 
 /// A struct representing a 3D transformation that combines position, rotation, and scale.
 ///

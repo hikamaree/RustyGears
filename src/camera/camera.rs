@@ -144,6 +144,19 @@ impl Camera {
         })
     }
 
+    /// Checks if a bounding sphere is inside or intersects the camera's view frustum using homogeneous coordinates.
+    ///
+    /// This method is similar to [`can_see`] but operates on a 4D position vector (e.g., when working in clip space or
+    /// with pre-transformed coordinates). Each plane is treated as a 4D vector, and visibility is determined using
+    /// a dot product between the plane and the sphere center in homogeneous space.
+    ///
+    /// # Parameters
+    /// - `center`: The center of the bounding sphere as a homogeneous 4D vector (`x, y, z, 1.0`).
+    /// - `radius`: The radius of the bounding sphere.
+    ///
+    /// # Returns
+    /// - `true` if the sphere is at least partially inside the view frustum.
+    /// - `false` if the sphere is completely outside the frustum and can be culled.
     pub fn can_see4(&self, center: Vector4<f32>, radius: f32) -> bool {
         self.frustum.iter().all(|plane| plane.dot(center) >= -radius)
     }

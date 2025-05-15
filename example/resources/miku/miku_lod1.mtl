@@ -1,0 +1,94 @@
+# Blender 4.4.0 MTL File: 'None'
+# www.blender.org
+
+newmtl Body
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 1.000000 1.000000 1.000000
+Ni 1.500000
+illum 3
+map_Kd body.png
+map_d body.png
+
+newmtl Cloth
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 1.000000 1.000000 1.000000
+Ni 1.500000
+illum 3
+map_Kd Cloth_ColorV2.png
+map_d Cloth_ColorV2.png
+map_Bump Cloth_Normalf.png
+
+newmtl Cloth_Trance
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 1.000000 1.000000 1.000000
+Ni 1.500000
+illum 3
+map_Kd Cloth_ColorV2.png
+map_d Cloth_ColorV2.png
+map_Bump Cloth_Normalf.png
+
+newmtl Face
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 3
+map_Kd Face.png
+map_d Face.png
+
+newmtl Hair
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 3
+map_Kd hair_col.png
+map_d hair_col.png
+
+newmtl Hair_Shadow_1
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Kd 1.000000 0.799931 0.778302
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+
+newmtl Hair_Stencil
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 3
+map_Kd hair_col.png
+map_d hair_col.png
+
+newmtl Stencil_eye
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 3
+map_Kd Face.png
+map_d Face.png
+
+newmtl Stencil_eyebrow
+Ns 200.000000
+Ka 1.000000 1.000000 1.000000
+Ks 1.000000 1.000000 1.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 3
+map_Kd Face.png
+map_d Face.png

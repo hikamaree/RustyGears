@@ -349,7 +349,7 @@ impl Graphics {
             );
 
             let light_uniform = LightUniform {
-                position: [2.0, 2.0, 2.0],
+                position: [0.0, 100.0, -20.0],
                 _padding: 0,
                 color: [1.0, 1.0, 1.0],
                 _padding2: 0,
@@ -407,8 +407,6 @@ pub struct SetTrianglesCount {
 
 impl Command for SetTrianglesCount {
     fn apply(self: Box<Self>, game: &mut crate::Game) {
-        if let Some(graphics) = &mut game.graphics {
-            graphics.t_count = self.count;
-        }
+        game.graphics().t_count = self.count;
     }
 }

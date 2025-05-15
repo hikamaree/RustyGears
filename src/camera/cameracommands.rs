@@ -18,6 +18,9 @@
 use cgmath::Point3;
 use cgmath::Rad;
 use crate::Command;
+use crate::Entity;
+use crate::Camera;
+use crate::Game;
 
 /// A command that sets the position of a camera in the scene.
 ///
@@ -30,15 +33,15 @@ use crate::Command;
 /// - `position`: The new position for the camera in world space.
 pub struct SetCameraPosition {
     /// The ID of the camera to modify.
-    pub id: u64,
+    pub entity: Entity,
 
     /// The new position to set, in world space.
     pub position: Point3<f32>,
 }
 
 impl Command for SetCameraPosition {
-    fn apply(self: Box<Self>, game: &mut crate::Game) {
-        if let Some(camera) = game.scene.get_camera_mut(self.id) {
+    fn apply(self: Box<Self>, game: &mut Game) {
+        if let Some(camera) = game.scene().world.get_mut::<Camera>(self.entity) {
             camera.set_position(self.position);
         }
     }
@@ -56,22 +59,22 @@ impl Command for SetCameraPosition {
 /// - `roll`: Rotation around the longitudinal axis (Z-axis).
 pub struct SetCameraRotation {
     /// The ID of the camera to modify.
-    pub id: u64,
+    pub entity: Entity,
 
     /// Yaw angle in radians (rotation around Y-axis).
     pub yaw: Rad<f32>,
 
     /// Pitch angle in radians (rotation around X-axis).
-    pub pich: Rad<f32>, // ← ako je typo u nazivu polja, mogu da ti ponudim i ispravku
+    pub pitch: Rad<f32>, // ← ako je typo u nazivu polja, mogu da ti ponudim i ispravku
 
     /// Roll angle in radians (rotation around Z-axis).
     pub roll: Rad<f32>,
 }
 
 impl Command for SetCameraRotation {
-    fn apply(self: Box<Self>, game: &mut crate::Game) {
-        if let Some(camera) = game.scene.get_camera_mut(self.id) {
-            camera.set_rotation(self.yaw, self.pich, self.roll);
+    fn apply(self: Box<Self>, game: &mut Game) {
+        if let Some(camera) = game.scene().world.get_mut::<Camera>(self.entity) {
+            camera.set_rotation(self.yaw, self.pitch, self.roll);
         }
     }
 }

@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// This file is part of Rusty Gears.
+//
+// Rusty Gears is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Rusty Gears is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use std::collections::HashMap;
+
+use crate::World;
+use crate::Entity;
+use crate::Instance;
+use crate::Camera;
+use crate::RenderObject;
+use crate::Gui;
+
+/// Represents the state of a scene in the game engine using an ECS-based architecture.
+///
+/// `WorldScene` holds all entities, components, renderable objects,
+/// active camera information, and GUI elements. It acts as the central
+/// container for both logic and rendering data tied to the current scene.
+///
+/// This structure is intended to be used per scene or level and is
+/// responsible for managing entities, components, and render metadata.
+///
+/// # Fields
+/// - `world`: ECS `World` containing all entities and their components.
+/// - `render_objects`: A map from string identifiers to `RenderObject` values,
+///   which contain geometry and LOD information for rendering.
+/// - `active_camera`: The currently active camera entity, if any.
+/// - `render_gui`: A list of GUI components to be rendered, each implementing the `Gui` trait.
+#[derive(Default)]
+pub struct WorldScene {
+    pub world: World,
+    pub render_objects: HashMap<String, RenderObject>,
+    pub active_camera: Option<Entity>,
+    pub render_gui: Vec<Box<dyn Gui + Send + Sync>>,
+}
+
+
+impl WorldScene {
+    /// Adds a new `RenderObject` to the scene.
+    ///
+    /// # Parameters
+    /// - `name`: A unique string identifier for the render object.
+    /// - `object`: The `RenderObject` to add.
+    pub fn add_render_object(&mut self, name: String, object: RenderObject) {
+        self.render_objects.insert(name, object);
+    }
+
+    /// Retrieves a reference to a render object by name.
+    ///
+    /// # Parameters
+    /// - `name`: The name of the render object to retrieve.
+    ///
+    /// # Returns
+    /// - `Some(&RenderObject)` if found, or `None` otherwise.
+    pub fn get_render_object(&self, name: &str) -> Option<&RenderObject> {
+        self.render_objects.get(name)
+    }
+
+    /// Adds a new instance (with transform, name, and render tags) to the world.
+    ///
+    /// # Parameters
+    /// - `instance`: The instance data to insert.
+    ///
+    /// # Returns
+    /// - The created `Entity` handle.
+    pub fn add_instance(&mut self, instance: Instance) -> Entity {
+        let entity = self.world.spawn();
+
+        self.world.insert(entity, instance.transform);
+        self.world.insert(entity, instance.name);
+        self.world.insert(entity, instance.render_tags);
+
+        entity
+    }
+
+    /// Sets the active camera for the scene if the provided entity has a `Camera` component.
+    ///
+    /// # Parameters
+    /// - `entity`: The entity to set as the active camera.
+    pub fn set_active_camera(&mut self, entity: Entity) {
+        if self.world.has::<Camera>(entity) {
+            self.active_camera = Some(entity);
+        }
+    }
+
+    /// Adds a new camera to the world.
+    ///
+    /// If no active camera is currently set, this camera becomes the active one.
+    ///
+    /// # Parameters
+    /// - `camera`: The camera component to add.
+    ///
+    /// # Returns
+    /// - The created `Entity` handle.
+    pub fn add_camera(&mut self, camera: Camera) -> Entity {
+        let entity = self.world.spawn();
+        self.world.insert(entity, camera);
+        if self.active_camera.is_none() {
+            self.active_camera = Some(entity);
+        }
+        entity
+    }
+
+    /// Retrieves a reference to the active camera, if one exists.
+    ///
+    /// # Returns
+    /// - `Some(&Camera)` if an active camera is set and found, or `None` otherwise.
+    pub fn active_camera(&self) -> Option<&Camera> {
+        self.active_camera
+            .and_then(|e| self.world.get::<Camera>(e))
+    }
+
+    /// Retrieves a mutable reference to the active camera, if one exists.
+    ///
+    /// # Returns
+    /// - `Some(&mut Camera)` if an active camera is set and found, or `None` otherwise.
+    pub fn active_camera_mut(&mut self) -> Option<&mut Camera> {
+        self.active_camera
+            .and_then(|e| self.world.get_mut::<Camera>(e))
+    }
+
+    /// Retrieves a reference to a specific camera component by entity.
+    ///
+    /// # Parameters
+    /// - `entity`: The entity to look up.
+    ///
+    /// # Returns
+    /// - `Some(&Camera)` if found, or `None` otherwise.
+    pub fn get_camera(&self, entity: Entity) -> Option<&Camera> {
+        self.world.get::<Camera>(entity)
+    }
+
+    /// Retrieves a mutable reference to a specific camera component by entity.
+    ///
+    /// # Parameters
+    /// - `entity`: The entity to look up.
+    ///
+    /// # Returns
+    /// - `Some(&mut Camera)` if found, or `None` otherwise.
+    pub fn get_camera_mut(&mut self, entity: Entity) -> Option<&mut Camera> {
+        self.world.get_mut::<Camera>(entity)
+    }
+
+    /// Adds a GUI element to the scene.
+    ///
+    /// GUI elements are drawn after the main 3D scene and are used for overlays,
+    /// HUDs, editors, and more. GUI objects must implement the `Gui` trait.
+    ///
+    /// # Parameters
+    /// - `gui`: The GUI component to add.
+    ///
+    /// # Returns
+    /// - A mutable reference to self, enabling method chaining.
+    pub fn add_gui<T: Gui + 'static>(&mut self, gui: T) -> &mut Self {
+        self.render_gui.push(Box::new(gui));
+        self
+    }
+}

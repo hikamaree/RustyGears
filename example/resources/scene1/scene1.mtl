@@ -1,0 +1,112 @@
+# Blender 4.4.3 MTL File: 'None'
+# www.blender.org
+
+newmtl STONE_a
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/stone_wall_baked.jpeg
+
+newmtl bridge
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/bridge_baked.jpeg
+
+newmtl bush
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd textures/bush_merged.jpg
+map_d textures/bush_merged_opak.jpg
+
+newmtl charcters
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/character_baked.jpeg
+map_Ke textures/character_emission.jpeg
+
+newmtl house
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/house_baked.jpeg
+map_Ke textures/house_emission.jpeg
+
+newmtl terrain_left
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.213699 0.213699 0.213699
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/terrain_left_baked.jpeg
+
+newmtl terrain_right
+Ns 0.000000
+Ka 0.068493 0.068493 0.068493
+Ks 0.200000 0.200000 0.200000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 3
+map_Kd textures/terrain_right_baked.jpeg
+
+newmtl tree
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd textures/tree_baked2.jpeg
+
+newmtl water
+Ns 135.119568
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd textures/water_baked.jpeg
+map_d textures/.
+
+newmtl watermill
+Ns 250.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.500000 0.500000 0.500000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 2
+map_Kd textures/watermill_baked.jpeg
+
+newmtl wheat
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+illum 1
+map_Kd textures/wheat_merged.jpeg
+map_d textures/wheat_merged_opak.jpeg

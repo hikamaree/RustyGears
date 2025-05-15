@@ -16,5 +16,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod command;
+mod world;
+mod scene;
 
 pub use command::*;
+pub use world::*;
+pub use scene::*;

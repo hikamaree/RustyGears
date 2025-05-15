@@ -30,7 +30,6 @@ use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
-    // let obj_path = Path::new("res").join(file_name);
     let base_dir = path.parent().unwrap().to_path_buf();
 
     let (models, obj_materials) = tobj::load_obj(
@@ -105,27 +104,42 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
 
     let meshes = models.into_iter().map(|m| {
         let has_texcoords = !m.mesh.texcoords.is_empty();
+        let has_normals = !m.mesh.normals.is_empty();
 
-        let mut vertices = (0..m.mesh.positions.len() / 3)
+        let num_vertices = m.mesh.positions.len() / 3;
+
+        let mut vertices = (0..num_vertices)
             .map(|i| {
-                let tex_coords = if has_texcoords {
+                let tex_coords = if has_texcoords && i * 2 + 1 < m.mesh.texcoords.len() {
                     [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
                 } else {
                     [0.0, 0.0]
                 };
 
-                ModelVertex {
-                    position: [
-                        m.mesh.positions[i * 3],
-                        m.mesh.positions[i * 3 + 1],
-                        m.mesh.positions[i * 3 + 2],
-                    ],
-                    tex_coords,
-                    normal: [
+                let normal = if has_normals && i * 3 + 2 < m.mesh.normals.len() {
+                    [
                         m.mesh.normals[i * 3],
                         m.mesh.normals[i * 3 + 1],
                         m.mesh.normals[i * 3 + 2],
-                    ],
+                    ]
+                } else {
+                    [0.0, 0.0, 0.0]
+                };
+
+                let position = if i * 3 + 2 < m.mesh.positions.len() {
+                    [
+                        m.mesh.positions[i * 3],
+                        m.mesh.positions[i * 3 + 1],
+                        m.mesh.positions[i * 3 + 2],
+                    ]
+                } else {
+                    panic!("Model vertex position index out of bounds at index {}", i);
+                };
+
+                ModelVertex {
+                    position,
+                    tex_coords,
+                    normal,
                     tangent: [0.0; 3],
                     bitangent: [0.0; 3],
                 }

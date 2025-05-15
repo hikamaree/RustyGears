@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Entity;
 use crate::RenderTag;
 use crate::Transform;
 use crate::Command;
@@ -31,12 +32,12 @@ use cgmath::Point3;
 /// # Fields
 /// - `id`: The identifier of the camera to be set as the active one.
 pub struct SetDefaultCamera {
-    pub id: u64,
+    pub camera: Entity,
 }
 
 impl Command for SetDefaultCamera {
     fn apply(self: Box<Self>, game: &mut Game) {
-        game.scene.set_active_camera(self.id);
+        game.scene().set_active_camera(self.camera);
     }
 }
 
@@ -62,7 +63,7 @@ impl Command for AddCamera {
         let mut camera = Camera::new();
         camera.set_position(self.position);
         camera.set_rotation(cgmath::Rad(self.yaw), cgmath::Rad(self.pitch), cgmath::Rad(self.roll));
-        game.scene.add_camera(camera);
+        game.scene().add_camera(camera);
     }
 }
 
@@ -97,14 +98,14 @@ impl Command for SpawnModel {
 /// - `id`: The identifier of the instance whose transformation will be updated.
 /// - `transform`: The new transformation to be applied to the instance.
 pub struct SetInstanceTransform {
-    pub id: usize,
+    pub entity: Entity,
     pub transform: Transform,
 }
 
 impl Command for SetInstanceTransform {
     fn apply(self: Box<Self>, game: &mut Game) {
-        if let Some(instance) = game.scene.instances.get_mut(&self.id) {
-            instance.transform = self.transform;
+        if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
+            *instance = self.transform;
         }
     }
 }

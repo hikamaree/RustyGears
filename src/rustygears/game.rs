@@ -25,10 +25,12 @@ use crate::RenderObject;
 use crate::Gear;
 use crate::GearEvent;
 use crate::Graphics;
-use crate::Scene;
 use crate::Time;
 use crate::GameView;
+use crate::WorldScene;
 
+use std::sync::Arc;
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::thread::JoinHandle;
@@ -40,10 +42,9 @@ use winit::event_loop::EventLoop;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
-
 pub struct MajmunskiEvent {
     pub gear_event: GearEvent,
-    pub game: GameView,
+    pub game: GameView<'static>,
 }
 
 pub struct Game {
@@ -52,10 +53,10 @@ pub struct Game {
     pub(crate) gear_handles: HashMap<String, JoinHandle<()>>,
     pub(crate) command_receiver: Receiver<Box<dyn Command>>,
     pub(crate) command_sender: Sender<Box<dyn Command>>,
-    pub graphics: Option<Graphics>,
+    pub graphics: Arc<UnsafeCell<Option<Graphics>>>,
     pub gui: Option<EguiRenderer>,
     pub time: Time,
-    pub scene: Scene,
+    pub(crate) scene: Arc<UnsafeCell<WorldScene>>,
 }
 
 impl Game {
@@ -73,10 +74,10 @@ impl Game {
             gear_handles: HashMap::new(),
             command_sender,
             command_receiver,
-            graphics: None,
+            graphics: Arc::new(UnsafeCell::new(None)),
             gui: None,
             time: Time::new(),
-            scene: Scene::default(),
+            scene: Arc::new(UnsafeCell::new(WorldScene::default())),
         }
     }
 
@@ -169,9 +170,9 @@ impl Game {
             sender.send(MajmunskiEvent {
                 gear_event: event.clone(),
                 game: GameView {
-                    graphics: self.graphics.as_ref().unwrap().clone(),
+                    graphics: unsafe { &mut *self.graphics.get() }.as_mut().unwrap(),
                     time: self.time.clone(),
-                    scene: self.scene.create_snapshot(),
+                    scene: unsafe { &mut *self.scene.get() },
                 },
             }).unwrap();
         });
@@ -181,10 +182,31 @@ impl Game {
         }
     }
 
+    pub fn scene(&self) -> &mut WorldScene {
+        unsafe { &mut *self.scene.get() }
+    }
+
+    pub fn graphics(&self) -> &mut Graphics {
+        unsafe { &mut *self.graphics.get() }.as_mut().unwrap()
+    }
+
+    pub(crate) fn update(&mut self) {
+        let scene = unsafe { &mut *self.scene.get() };
+        let camera = scene.active_camera_mut()
+            .expect("ERROR: no camera found");
+        let graphics = self.graphics();
+
+        camera.update_view_proj(&graphics.projection);
+
+        graphics.update(camera);
+
+        self.time.update();
+    }
+
 
 
     pub fn spawn_model(&mut self, file_path: &str, transform: Transform, render_tags: Vec<RenderTag>) -> usize {
-        if !self.scene.render_objects.contains_key(file_path) {
+        if !self.scene().render_objects.contains_key(file_path) {
             self.load_model(file_path);
         }
 
@@ -196,15 +218,16 @@ impl Game {
 
         let id = instance.id();
 
-        self.scene.add_instance(instance);
+        self.scene().add_instance(instance);
 
         id
     }
 
     pub fn load_model(&mut self, name: &str) {
-        let graphics = self.graphics.as_ref().expect("ERROR: Graphics is not initialized");
+        // let graphics = self.graphics.as_ref().expect("ERROR: Graphics is not initialized");
+        let scene = unsafe { &mut *self.scene.get() };
 
-        let texture_layout = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture)
+        let texture_layout = self.graphics().bind_group_layouts.get(&BindGroupLayoutKey::Texture)
             .expect("Texture bind group layout not found");
 
         let rt = tokio::runtime::Runtime::new().unwrap();
@@ -232,13 +255,13 @@ impl Game {
             rt.block_on(async {
                 super::resources::load_model(
                     &path,
-                    &graphics.device,
-                    &graphics.queue,
+                    &self.graphics().device,
+                    &self.graphics().queue,
                     texture_layout,
                 ).await
             })
         }).collect();
 
-        self.scene.add_render_object(name.to_string(), RenderObject { lods });
+        scene.add_render_object(name.to_string(), RenderObject { lods });
     }
 }

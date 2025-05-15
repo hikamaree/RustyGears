@@ -16,9 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod instance;
-mod scene;
 mod scenecommands;
 
 pub use instance::*;
-pub use scene::*;
 pub use scenecommands::*;

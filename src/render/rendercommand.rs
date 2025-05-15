@@ -70,9 +70,12 @@ pub struct RenderCommand {
     pub batches: Vec<RenderBatch>,
 }
 
+
 impl Command for RenderCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let graphics = game.graphics.as_mut().unwrap();
+        let scene = unsafe { &*game.scene.get() };
+        let graphics = unsafe { &mut *game.graphics.get() }.as_mut().unwrap(); 
+        let gui = game.gui.as_mut().expect("ERROR: egui is not initialized"); // OK sada, jer scene više ne koristi `game`
         graphics.t_count = 0;
 
         let output = match graphics.surface.get_current_texture() {
@@ -134,7 +137,7 @@ impl Command for RenderCommand {
 
                     render_pass.set_vertex_buffer(1, buffer.current().slice(..));
 
-                    if let Some(render_object) = game.scene.get_render_object(&model_data.object_name) {
+                    if let Some(render_object) = scene.get_render_object(&model_data.object_name) {
                         graphics.t_count += render_pass.draw_model_instanced(
                             &render_object.lods[model_data.lod_index],
                             camera_bg,
@@ -152,22 +155,20 @@ impl Command for RenderCommand {
         };
 
         let gameview = GameView {
-            graphics: graphics.clone(),
-            scene: game.scene.create_snapshot(),
+            graphics,
+            scene,
             time: game.time.clone(),
         };
 
-        game.gui.as_mut()
-            .expect("ERROR: egui is not initialized")
-            .draw(
-                &graphics.device,
-                &graphics.queue,
-                &mut encoder,
-                &graphics.window,
-                &view, screen_descriptor,
-                &game.scene.render_gui,
-                &gameview,
-            );
+        gui.draw(
+            &graphics.device,
+            &graphics.queue,
+            &mut encoder,
+            &graphics.window,
+            &view, screen_descriptor,
+            &scene.render_gui,
+            &gameview,
+        );
 
         graphics.queue.submit(Some(encoder.finish()));
         output.present();

@@ -16,21 +16,15 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use rusty_gears::math::Rad;
-use rusty_gears::math::InnerSpace;
 use rusty_gears::math::One;
 use rusty_gears::math::Point3;
-use rusty_gears::math::Rotation3;
 use rusty_gears::math::Quaternion;
-use rusty_gears::math::Zero;
-use rusty_gears::math::Deg;
 use rusty_gears::math::vec3;
-use rusty_gears::math::Vector3;
 use rusty_gears::*;
 
 #[derive(Debug, Default)]
 struct MyGame {
     pub sender: Option<Sender<Box<dyn Command>>>,
-    kamioni: Vec<usize>,
     pub h: f32,
     pub j: f32,
     pub k: f32,
@@ -38,14 +32,14 @@ struct MyGame {
 }
 
 impl MyGame {
-    fn switch_camera(&self, game: &GameView) {
-        let index = game.scene.active_camera_id().expect("no camera found");
-        let id = (index) % game.scene.camera_count() + 1;
-        let cmd = SetDefaultCamera { id };
-        println!("Switching camera: {} -> {}", index, id);
-        if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-            eprintln!("Failed to send SetDefaultCamera command: {}", e);
-        }
+    fn switch_camera(&self, _game: &GameView) {
+        // let index = game.scene.active_camera_id().expect("no camera found");
+        // let id = (index) % game.scene.camera_count() + 1;
+        // let cmd = SetDefaultCamera { id };
+        // println!("Switching camera: {} -> {}", index, id);
+        // if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+        //     eprintln!("Failed to send SetDefaultCamera command: {}", e);
+        // }
     }
 }
 
@@ -53,46 +47,38 @@ impl Gear for MyGame {
     fn setup(&mut self, game: &mut Game, sender: Sender<Box<dyn Command>>) {
         self.sender = Some(sender);
 
-        const SPACE_BETWEEN: f32 = 30.0;
-        const NUM_INSTANCES_PER_ROW: usize = 100;
+        const SPACE_BETWEEN: f32 = 15.0;
+        const NUM_INSTANCES_PER_ROW: usize = 0;
 
         for z in 0..NUM_INSTANCES_PER_ROW {
             for x in 0..NUM_INSTANCES_PER_ROW {
                 let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
                 let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                let position = Vector3 { x, y: 0.0, z };
+                let position = vec3(x, 0.0, z);
 
-                let rotation = if position.is_zero() {
-                    Quaternion::from_axis_angle(
-                        Vector3::unit_z(),
-                        Deg(0.0),
-                    )
-                } else {
-                    Quaternion::from_axis_angle(position.normalize(), Deg(45.0))
-                };
+                let rotation = Quaternion::one();
 
                 let transform = Transform { 
                     position,
                     rotation,
-                    scale: vec3(1.0, 1.0, 1.0)
+                    scale: vec3(1000.0, 1000.0, 1000.0)
                 };
 
-                self.kamioni.push(game.spawn_model("truck/semi", transform, vec![RenderTag::PBR]));
+                game.spawn_model("miku/miku", transform, vec![RenderTag::PBR]);
             }
         }
     }
 
     fn mouse_motion(&mut self, dx: f64, dy: f64, game: GameView) {
         let camera = game.scene.active_camera().unwrap();
-        let id = camera.get_id();
         let dt = game.time.delta_time();
 
         let yaw = camera.yaw + Rad(dx as f32 * camera.sensitivity * dt); 
-        let pich = camera.pitch - Rad(dy as f32 * camera.sensitivity * dt); 
+        let pitch = camera.pitch - Rad(dy as f32 * camera.sensitivity * dt); 
 
-        if yaw != camera.yaw || pich != camera.pitch {
-            let cmd = SetCameraRotation { id, yaw, pich, roll: Rad(0.0) };
+        if yaw != camera.yaw || pitch != camera.pitch {
+            let cmd = SetCameraRotation { entity: game.scene.active_camera.unwrap(), yaw, pitch, roll: Rad(0.0) };
             if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
                 eprintln!("Failed to send SetCameraRotation command: {}", e);
             }
@@ -101,7 +87,6 @@ impl Gear for MyGame {
 
     fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
         let camera = game.scene.active_camera().unwrap();
-        let id = camera.get_id();
         let dt = game.time.delta_time();
 
         let mut position = camera.position;
@@ -210,7 +195,7 @@ impl Gear for MyGame {
         }
 
         if position != camera.position {
-            let cmd = SetCameraPosition { id, position };
+            let cmd = SetCameraPosition { entity: game.scene.active_camera.unwrap(), position };
             if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
                 eprintln!("Failed to send SetCameraPosition command: {}", e);
             }
@@ -228,9 +213,80 @@ pub fn main() {
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::default());
         game.add_gear("mygame".into(), MyGame::default());
-        game.scene.add_camera(camera1);
-        game.scene.add_camera(camera2);
+        game.scene().add_camera(camera1);
+        game.scene().add_camera(camera2);
     }).setup(|game| {
-        game.scene.add_gui(EngineStats::new());
+        game.scene().add_gui(EngineStats::new());
+
+        let transform = Transform { 
+            position: vec3(0.0, 0.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0)
+        };
+
+        game.spawn_model("scene1/scene1", transform, vec![RenderTag::PBR]);
+
+        let transform = Transform { 
+            position: vec3(40.0, 0.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(0.5, 0.5, 0.5)
+        };
+
+        game.spawn_model("scene2/scene2", transform, vec![RenderTag::PBR]);
+
+        let transform = Transform { 
+            position: vec3(0.0, 0.0, 40.0),
+            rotation: Quaternion::one(),
+            scale: vec3(7.0, 7.0, 7.0)
+        };
+
+        game.spawn_model("scene3/scene3", transform, vec![RenderTag::PBR]);
+
+        let transform = Transform { 
+            position: vec3(40.0, 0.0, 40.0),
+            rotation: Quaternion::one(),
+            scale: vec3(0.3, 0.3, 0.3)
+        };
+
+        game.spawn_model("scene4/scene4", transform, vec![RenderTag::PBR]);
+
+        let transform = Transform { 
+            position: vec3(20.0, 0.0, 20.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0)
+        };
+
+        game.spawn_model("scene5/scene5", transform, vec![RenderTag::PBR]);
     }).run();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scene_access_is_safe() {
+        let mut game = Game::new()
+            .setup(|game| {
+            game.add_gear("mygame".into(), MyGame::default());
+
+            let camera = Camera::new();
+            game.scene().add_camera(camera);
+        }).setup(|game| {
+            game.scene().add_gui(EngineStats::new());
+
+            let transform = Transform { 
+                position: vec3(0.0, 0.0, 0.0),
+                rotation: Quaternion::one(),
+                scale: vec3(1.0, 1.0, 1.0)
+            };
+
+            game.spawn_model("scene1/scene1", transform, vec![RenderTag::PBR]);
+        });
+
+        for _ in 0..10 {
+            game.dispatch_event(GearEvent::MouseMotion(0.0, 0.0));
+            game.dispatch_event(GearEvent::Update());
+        }
+    }
 }
