@@ -73,7 +73,6 @@ fn vs_main(
         instance.normal_matrix_2,
     );
 
-    // Construct the tangent matrix
     let world_normal = normalize(normal_matrix * model.normal);
     let world_tangent = normalize(normal_matrix * model.tangent);
     let world_bitangent = normalize(normal_matrix * model.bitangent);
@@ -104,29 +103,32 @@ var s_diffuse: sampler;
 var t_normal: texture_2d<f32>;
 @group(0) @binding(3)
 var s_normal: sampler;
+@group(0) @binding(4)
+var alpha_tex: texture_2d<f32>;
+@group(0) @binding(5)
+var alpha_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
-    let object_normal: vec4<f32> = textureSample(t_normal, s_normal, in.tex_coords);
-    
-    // We don't need (or want) much ambient light, so 0.1 is fine
-    let ambient_strength = 0.1;
-    let ambient_color = light.color * ambient_strength;
+	let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+	let object_normal: vec4<f32> = textureSample(t_normal, s_normal, in.tex_coords);
 
-    // Create the lighting vectors
-    let tangent_normal = object_normal.xyz * 2.0 - 1.0;
-    let light_dir = normalize(in.tangent_light_position - in.tangent_position);
-    let view_dir = normalize(in.tangent_view_position - in.tangent_position);
-    let half_dir = normalize(view_dir + light_dir);
+	let ambient_strength = 0.1;
+	let ambient_color = (light.color + 0.1) * ambient_strength;
 
-    let diffuse_strength = max(dot(tangent_normal, light_dir), 0.0);
-    let diffuse_color = light.color * diffuse_strength;
+	let tangent_normal = object_normal.xyz * 2.0 - 1.0;
+	let light_dir = normalize(in.tangent_light_position - in.tangent_position);
+	let view_dir = normalize(in.tangent_view_position - in.tangent_position);
+	let half_dir = normalize(view_dir + light_dir);
 
-    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
-    let specular_color = specular_strength * light.color;
+	let diffuse_strength = max(dot(tangent_normal, light_dir), 0.0);
+	let diffuse_color = light.color * diffuse_strength;
 
-    let result = (ambient_color + diffuse_color + specular_color) * object_color.xyz;
+	let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
+	let specular_color = specular_strength * light.color;
 
-    return vec4<f32>(result, object_color.a);
+	let result = (ambient_color + diffuse_color + specular_color) * object_color.xyz;
+
+	let alpha = textureSample(alpha_tex, alpha_sampler, in.tex_coords).r;
+	return vec4<f32>(result, object_color.a * alpha);
 }

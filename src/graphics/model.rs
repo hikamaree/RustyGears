@@ -100,6 +100,7 @@ pub struct Material {
     pub name: String,
     pub diffuse_texture: Arc<Texture>,
     pub normal_texture: Arc<Texture>,
+    pub dissolve_texture: Option<Texture>,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -109,28 +110,43 @@ impl Material {
         name: &str,
         diffuse_texture: Texture,
         normal_texture: Texture,
+        dissolve_texture: Option<Texture>,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
+
+        let mut entries = vec![
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&normal_texture.view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
+            },
+        ];
+
+        if let Some(ref alpha_tex) = dissolve_texture {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(&alpha_tex.view),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::Sampler(&alpha_tex.sampler),
+            });
+        }
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&normal_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
-                },
-            ],
+            entries: &entries,
             label: Some(name),
         });
 
@@ -138,6 +154,7 @@ impl Material {
             name: String::from(name),
             diffuse_texture: Arc::new(diffuse_texture),
             normal_texture: Arc::new(normal_texture),
+            dissolve_texture,
             bind_group,
         }
     }

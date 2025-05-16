@@ -109,7 +109,6 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 illum 1
 map_Kd textures/_Tree_D.png
-map_d textures/_Tree_A.png
 
 newmtl mt_Plaster
 Ns 20.000006
@@ -129,7 +128,6 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 illum 1
 map_Kd textures/Rocks_D.png
-map_d textures/Rocks_A.png
 
 newmtl mt_StoneBridge
 Ns 20.000006

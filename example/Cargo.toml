@@ -7,6 +7,6 @@ edition = "2024"
 rusty_gears = { path = "../" }
 
 [profile.release]
-debug = true
-lto = true
-codegen-units = 1
+# debug = true
+# lto = true
+# codegen-units = 1

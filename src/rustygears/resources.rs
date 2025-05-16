@@ -63,6 +63,7 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                 "default",
                 diffuse_texture,
                 normal_texture,
+                None,
                 layout,
         ));
     } else {
@@ -88,15 +89,38 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                     load_texture(&base_dir, path, true, device, queue).await
                 }
                 _ => {
-                    Texture::from_color(device, queue, [0.0, 0.0, 0.0, 0.0], Some("color"), false)
+                    Texture::from_color(device, queue, [0.0, 0.0, 0.0, 1.0], Some("color"), false)
                 }
             };
+
+            // let dissolve_texture = match &m.dissolve_texture {
+            //     Some(path) if !path.is_empty() => {
+            //         Some(load_texture(&base_dir, path, true, device, queue).await)
+            //     }
+            //     _ => {
+            //         Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("alpha"), false))
+            //     }
+            // };
+
+            let dissolve_texture = if m.dissolve.unwrap_or(1.0) < 1.0 {
+                Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, m.dissolve.unwrap()], Some("alpha"), false))
+            } else if let Some(path) = &m.dissolve_texture {
+                if !path.is_empty() {
+                    Some(load_texture(&base_dir, path, false, device, queue).await)
+                } else {
+                    Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("alpha"), false))
+                }
+            } else {
+                Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("alpha"), false))
+            };
+
 
             materials.push(Material::new(
                     device,
                     &m.name,
                     diffuse_texture,
                     normal_texture,
+                    dissolve_texture,
                     layout,
             ));
         }

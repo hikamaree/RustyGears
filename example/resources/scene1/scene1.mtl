@@ -89,7 +89,6 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.500000
 illum 1
 map_Kd textures/water_baked.jpeg
-map_d textures/.
 
 newmtl watermill
 Ns 250.000000

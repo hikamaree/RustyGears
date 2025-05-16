@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use rusty_gears::math::Rotation3;
+use rusty_gears::math::Vector3;
 use rusty_gears::math::Rad;
 use rusty_gears::math::One;
 use rusty_gears::math::Point3;
@@ -243,20 +245,12 @@ pub fn main() {
         game.spawn_model("scene3/scene3", transform, vec![RenderTag::PBR]);
 
         let transform = Transform { 
-            position: vec3(40.0, 0.0, 40.0),
-            rotation: Quaternion::one(),
+            position: vec3(25.0, 0.0, 20.0),
+            rotation: Quaternion::from_axis_angle(Vector3::unit_y(), Rad(std::f32::consts::PI)),
             scale: vec3(0.3, 0.3, 0.3)
         };
 
         game.spawn_model("scene4/scene4", transform, vec![RenderTag::PBR]);
-
-        let transform = Transform { 
-            position: vec3(20.0, 0.0, 20.0),
-            rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0)
-        };
-
-        game.spawn_model("scene5/scene5", transform, vec![RenderTag::PBR]);
     }).run();
 }
 
