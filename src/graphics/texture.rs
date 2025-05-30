@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+use std::sync::OnceLock;
 use wgpu::Queue;
 use wgpu::Device;
 use image::GenericImageView;
@@ -26,7 +28,18 @@ pub struct Texture {
     pub sampler: wgpu::Sampler,
 }
 
+static DUMMY_TEXTURE: OnceLock<Arc<Texture>> = OnceLock::new();
+
+pub(crate) fn dummy_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<Texture> {
+    DUMMY_TEXTURE.get_or_init(|| {
+        Arc::new(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("dummy"), false))
+    }).clone()
+}
+
+
 impl Texture {
+    pub const ACCUM_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
+    pub const REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn create_depth_texture(
@@ -200,5 +213,9 @@ impl Texture {
             view,
             sampler,
         }
+    }
+
+    pub fn get_dummy_texture() -> Arc<Texture> {
+        DUMMY_TEXTURE.get().unwrap().clone()
     }
 }

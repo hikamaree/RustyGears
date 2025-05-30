@@ -18,6 +18,7 @@ Ke 1.000000 1.000000 1.000000
 Ni 1.500000
 illum 3
 map_Kd Cloth_ColorV2.png
+map_d Cloth_ColorV2.png
 map_Bump Cloth_Normalf.png
 
 newmtl Cloth_Trance

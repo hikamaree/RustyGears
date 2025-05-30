@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::RenderTag;
 use crate::InstanceRaw;
 use std::sync::Arc;
 use crate::Texture;
@@ -102,6 +103,7 @@ pub struct Material {
     pub normal_texture: Arc<Texture>,
     pub dissolve_texture: Option<Texture>,
     pub bind_group: wgpu::BindGroup,
+    pub dissolve: f32,
 }
 
 impl Material {
@@ -111,6 +113,7 @@ impl Material {
         diffuse_texture: Texture,
         normal_texture: Texture,
         dissolve_texture: Option<Texture>,
+        dissolve: f32,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
 
@@ -133,6 +136,8 @@ impl Material {
             },
         ];
 
+        let dummy = Texture::get_dummy_texture();
+
         if let Some(ref alpha_tex) = dissolve_texture {
             entries.push(wgpu::BindGroupEntry {
                 binding: 4,
@@ -141,6 +146,16 @@ impl Material {
             entries.push(wgpu::BindGroupEntry {
                 binding: 5,
                 resource: wgpu::BindingResource::Sampler(&alpha_tex.sampler),
+            });
+        } else {
+
+            entries.push(wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(&dummy.view),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::Sampler(&dummy.sampler),
             });
         }
 
@@ -155,8 +170,18 @@ impl Material {
             diffuse_texture: Arc::new(diffuse_texture),
             normal_texture: Arc::new(normal_texture),
             dissolve_texture,
+            dissolve,
             bind_group,
         }
+    }
+
+    pub fn has_transparency_texture(&self) -> bool {
+        self.dissolve_texture.is_some()
+    }
+
+    pub fn use_weighted_blended(&self) -> bool {
+        // TODO
+        false
     }
 }
 
@@ -174,6 +199,7 @@ pub struct Mesh {
     pub num_elements: u32,
     pub material: usize,
     pub bounding_sphere: BoundingSphere,
+    pub render_tag: RenderTag,
 }
 
 #[derive(Clone)]

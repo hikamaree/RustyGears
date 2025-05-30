@@ -27,21 +27,28 @@ use rusty_gears::*;
 #[derive(Debug, Default)]
 struct MyGame {
     pub sender: Option<Sender<Box<dyn Command>>>,
+    pub truck: Option<Entity>,
     pub h: f32,
     pub j: f32,
     pub k: f32,
     pub l: f32,
+    pub camera1: Option<Entity>,
 }
 
 impl MyGame {
-    fn switch_camera(&self, _game: &GameView) {
-        // let index = game.scene.active_camera_id().expect("no camera found");
-        // let id = (index) % game.scene.camera_count() + 1;
-        // let cmd = SetDefaultCamera { id };
-        // println!("Switching camera: {} -> {}", index, id);
-        // if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
-        //     eprintln!("Failed to send SetDefaultCamera command: {}", e);
-        // }
+    fn switch_camera(&self, game: &GameView) {
+        let next_cam: Option<Entity>;
+        if game.scene.active_camera == self.camera1 {
+            next_cam = self.truck;
+        } else {
+            next_cam = self.camera1;
+        }
+
+        let cmd = SetDefaultCamera {camera: next_cam.unwrap() };
+
+        if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+            eprintln!("Failed to send SetDefaultCamera command: {}", e);
+        }
     }
 }
 
@@ -57,23 +64,39 @@ impl Gear for MyGame {
                 let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
                 let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                let position = vec3(x, 0.0, z);
+                let position = vec3(x, -10.0, z);
 
                 let rotation = Quaternion::one();
 
                 let transform = Transform { 
                     position,
                     rotation,
-                    scale: vec3(1000.0, 1000.0, 1000.0)
+                    scale: vec3(300.0, 300.0, 300.0)
                 };
 
-                game.spawn_model("miku/miku", transform, vec![RenderTag::PBR]);
+                game.spawn_model("miku/miku", transform);
             }
         }
+
+        let transform = Transform {
+            position: vec3(8.0, -10.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0) 
+        };
+        self.truck = Some(game.spawn_model("block/block", transform));
+
+
+        let camera1 = Camera::new();
+        self.camera1 = Some(game.scene().add_camera(camera1));
+
+        let mut camera2 = Camera::new();
+        camera2.set_rotation(Rad(3.14 / 2.0), Rad(0.0), Rad(0.0));
+        camera2.set_position((8.0, 5.0, -20.0).into());
+        game.scene().world.insert(self.truck.unwrap(), camera2);
     }
 
     fn mouse_motion(&mut self, dx: f64, dy: f64, game: GameView) {
-        let camera = game.scene.active_camera().unwrap();
+        let camera = game.scene.get_camera(self.camera1.unwrap()).unwrap();
         let dt = game.time.delta_time();
 
         let yaw = camera.yaw + Rad(dx as f32 * camera.sensitivity * dt); 
@@ -88,25 +111,83 @@ impl Gear for MyGame {
     }
 
     fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
-        let camera = game.scene.active_camera().unwrap();
+        let camera = game.scene.get_camera(self.camera1.unwrap()).unwrap();
         let dt = game.time.delta_time();
 
         let mut position = camera.position;
 
         match key {
-            KeyCode::KeyW | KeyCode::ArrowUp => {
+            KeyCode::ArrowUp => {
+                let delta = 50.0 * dt;
+
+                let mut transform = game.scene.world.get::<Transform>(self.truck.unwrap()).unwrap().clone();
+
+                transform.position.z += delta;
+
+                let cmd = SetInstanceTransform { 
+                    entity: self.truck.unwrap(),
+                    transform,
+                };
+
+                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                    eprintln!("Failed to send SpawnModel command: {}", e);
+                }
+
+
+                let mut position = game.scene.world.get::<Camera>(self.truck.unwrap()).unwrap().clone().position;
+                position.z += delta;
+
+                let cmd = SetCameraPosition {
+                    entity: self.truck.unwrap(),
+                    position
+                };
+
+                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                    eprintln!("Failed to send SpawnModel command: {}", e);
+                }
+            }
+
+            KeyCode::ArrowDown => {
+                let delta = 50.0 * dt;
+                let mut transform = game.scene.world.get::<Transform>(self.truck.unwrap()).unwrap().clone();
+                transform.position.z -= delta;
+
+                let cmd = SetInstanceTransform { 
+                    entity: self.truck.unwrap(),
+                    transform,
+                };
+
+                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                    eprintln!("Failed to send SpawnModel command: {}", e);
+                }
+
+
+                let mut position = game.scene.world.get::<Camera>(self.truck.unwrap()).unwrap().clone().position;
+                position.z -= delta;
+
+                let cmd = SetCameraPosition {
+                    entity: self.truck.unwrap(),
+                    position
+                };
+
+                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                    eprintln!("Failed to send SpawnModel command: {}", e);
+                }
+            }
+
+            KeyCode::KeyW => {
                 position += camera.forward * camera.speed * dt;
             }
 
-            KeyCode::KeyS | KeyCode::ArrowDown => {
+            KeyCode::KeyS => {
                 position -= camera.forward * camera.speed * dt;
             }
 
-            KeyCode::KeyA | KeyCode::ArrowLeft => {
+            KeyCode::KeyA => {
                 position -= camera.right * camera.speed * dt;
             }
 
-            KeyCode::KeyD | KeyCode::ArrowRight => {
+            KeyCode::KeyD => {
                 position += camera.right * camera.speed * dt;
             }
 
@@ -124,7 +205,6 @@ impl Gear for MyGame {
                 let cmd = SpawnModel { 
                     file_path: "block/block.obj".to_string(),
                     transform,
-                    render_tags: vec![RenderTag::PBR] 
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
@@ -143,7 +223,6 @@ impl Gear for MyGame {
                 let cmd = SpawnModel { 
                     file_path: "ball/ball.obj".to_string(),
                     transform,
-                    render_tags: vec![RenderTag::PBR] 
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
@@ -163,7 +242,6 @@ impl Gear for MyGame {
                 let cmd = SpawnModel { 
                     file_path: "ball/ball.obj".to_string(),
                     transform,
-                    render_tags: vec![RenderTag::PBR] 
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
@@ -183,7 +261,6 @@ impl Gear for MyGame {
                 let cmd = SpawnModel { 
                     file_path: "block/block.obj".to_string(),
                     transform,
-                    render_tags: vec![RenderTag::PBR] 
                 };
 
                 if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
@@ -226,7 +303,7 @@ pub fn main() {
             scale: vec3(1.0, 1.0, 1.0)
         };
 
-        game.spawn_model("scene1/scene1", transform, vec![RenderTag::PBR]);
+        game.spawn_model("scene1/scene1", transform);
 
         let transform = Transform { 
             position: vec3(40.0, 0.0, 0.0),
@@ -234,7 +311,7 @@ pub fn main() {
             scale: vec3(0.5, 0.5, 0.5)
         };
 
-        game.spawn_model("scene2/scene2", transform, vec![RenderTag::PBR]);
+        game.spawn_model("scene2/scene2", transform);
 
         let transform = Transform { 
             position: vec3(0.0, 0.0, 40.0),
@@ -242,7 +319,7 @@ pub fn main() {
             scale: vec3(7.0, 7.0, 7.0)
         };
 
-        game.spawn_model("scene3/scene3", transform, vec![RenderTag::PBR]);
+        game.spawn_model("scene3/scene3", transform);
 
         let transform = Transform { 
             position: vec3(25.0, 0.0, 20.0),
@@ -250,7 +327,7 @@ pub fn main() {
             scale: vec3(0.3, 0.3, 0.3)
         };
 
-        game.spawn_model("scene4/scene4", transform, vec![RenderTag::PBR]);
+        game.spawn_model("scene4/scene4", transform);
     }).run();
 }
 
@@ -262,21 +339,19 @@ mod tests {
     fn test_scene_access_is_safe() {
         let mut game = Game::new()
             .setup(|game| {
-            game.add_gear("mygame".into(), MyGame::default());
+                game.add_gear("mygame".into(), MyGame::default());
 
-            let camera = Camera::new();
-            game.scene().add_camera(camera);
-        }).setup(|game| {
-            game.scene().add_gui(EngineStats::new());
+            }).setup(|game| {
+                game.scene().add_gui(EngineStats::new());
 
-            let transform = Transform { 
-                position: vec3(0.0, 0.0, 0.0),
-                rotation: Quaternion::one(),
-                scale: vec3(1.0, 1.0, 1.0)
-            };
+                let transform = Transform { 
+                    position: vec3(0.0, 0.0, 0.0),
+                    rotation: Quaternion::one(),
+                    scale: vec3(1.0, 1.0, 1.0)
+                };
 
-            game.spawn_model("scene1/scene1", transform, vec![RenderTag::PBR]);
-        });
+                game.spawn_model("scene1/scene1", transform);
+            });
 
         for _ in 0..10 {
             game.dispatch_event(GearEvent::MouseMotion(0.0, 0.0));

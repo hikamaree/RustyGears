@@ -15,11 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::ModelInstance;
 use crate::Command;
 use crate::EguiRenderer;
-use crate::RenderTag;
+use crate::Entity;
 use crate::Transform;
-use crate::Instance;
 use crate::BindGroupLayoutKey;
 use crate::RenderObject;
 use crate::Gear;
@@ -47,6 +47,22 @@ pub struct MajmunskiEvent {
     pub game: GameView<'static>,
 }
 
+/// Represents the core application state, managing rendering, scene data, time progression,
+/// and communication with worker threads ("gears").
+///
+/// The `Game` struct acts as the central access point for subsystems such as the ECS-based world scene,
+/// graphics backend, and rendering pipelines. It also manages runtime model loading and entity spawning.
+///
+/// # Fields
+/// - `setupfns`: Queue of initialization functions executed during game setup.
+/// - `gear_channels`: Channels used to communicate with asynchronous worker systems ("gears").
+/// - `gear_handles`: Join handles to running gear threads for lifecycle control.
+/// - `command_receiver`: Channel for receiving commands from the game engine to be executed.
+/// - `command_sender`: Channel for sending commands to the game engine.
+/// - `graphics`: Interior-mutable reference to the GPU rendering context and pipeline state.
+/// - `gui`: Optional immediate-mode GUI renderer (e.g., egui).
+/// - `time`: Tracks timing, delta time, and frame progression.
+/// - `scene`: Interior-mutable reference to the curr
 pub struct Game {
     pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
     pub(crate) gear_channels: HashMap<String, Sender<MajmunskiEvent>>,
@@ -182,14 +198,35 @@ impl Game {
         }
     }
 
+    /// Returns a mutable reference to the active game scene (`WorldScene`).
+    ///
+    /// This function uses interior mutability via `UnsafeCell`, so it is marked unsafe internally.
+    ///
+    /// # Safety
+    /// The caller must ensure no aliasing mutable references exist simultaneously.
     pub fn scene(&self) -> &mut WorldScene {
         unsafe { &mut *self.scene.get() }
     }
 
+    /// Returns a mutable reference to the active graphics backend (`Graphics`).
+    ///
+    /// This uses `UnsafeCell` to access the interior mutable state safely in single-threaded context.
+    ///
+    /// # Panics
+    /// Panics if the graphics backend has not been initialized (`None`).
     pub fn graphics(&self) -> &mut Graphics {
         unsafe { &mut *self.graphics.get() }.as_mut().unwrap()
     }
 
+    /// Updates camera matrices, GPU state, and timing for the current frame.
+    ///
+    /// This method:
+    /// - Retrieves the active camera and updates its view/projection matrices.
+    /// - Uploads camera information to the GPU.
+    /// - Updates the global time system.
+    ///
+    /// # Panics
+    /// Panics if there is no active camera in the scene.
     pub(crate) fn update(&mut self) {
         let scene = unsafe { &mut *self.scene.get() };
         let camera = scene.active_camera_mut()
@@ -203,28 +240,46 @@ impl Game {
         self.time.update();
     }
 
-
-
-    pub fn spawn_model(&mut self, file_path: &str, transform: Transform, render_tags: Vec<RenderTag>) -> usize {
+    /// Spawns a new model instance entity into the ECS world.
+    ///
+    /// If the model at `file_path` has not been loaded yet, it will be loaded first.
+    /// The function then creates a new entity with the provided `Transform`
+    /// and associates it with a [`ModelInstance`] component.
+    ///
+    /// # Parameters
+    /// - `file_path`: Relative path to the model file to load (e.g., "tree/tree.obj").
+    /// - `transform`: The world transform to apply to the newly spawned entity.
+    ///
+    /// # Returns
+    /// - The [`Entity`] representing the newly spawned model instance.
+    pub fn spawn_model(&mut self, file_path: &str, transform: Transform) -> Entity {
         if !self.scene().render_objects.contains_key(file_path) {
             self.load_model(file_path);
         }
 
-        let instance = Instance::new(
-            file_path.to_string(),
-            transform,
-            render_tags,
-        );
+        let entity = self.scene().world.spawn();
 
-        let id = instance.id();
+        self.scene().world.insert(entity, transform);
+        self.scene().world.insert(entity, ModelInstance {
+            name: file_path.to_string(),
+        });
 
-        self.scene().add_instance(instance);
-
-        id
+        entity
     }
 
+    /// Loads a model and registers it in the scene's render object list.
+    ///
+    /// This function searches for `.obj` files with LOD variants based on filename prefix
+    /// and loads them into GPU memory. Each loaded LOD is added to the `RenderObject` structure
+    /// for the provided `name`.
+    ///
+    /// # Parameters
+    /// - `name`: The name/key used to register the loaded model.
+    ///
+    /// # Panics
+    /// - If the model directory or file names are invalid.
+    /// - If required resources (e.g., texture bind group layout) are missing.
     pub fn load_model(&mut self, name: &str) {
-        // let graphics = self.graphics.as_ref().expect("ERROR: Graphics is not initialized");
         let scene = unsafe { &mut *self.scene.get() };
 
         let texture_layout = self.graphics().bind_group_layouts.get(&BindGroupLayoutKey::Texture)

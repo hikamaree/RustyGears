@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::RenderTag;
 use crate::BoundingSphere;
 use cgmath::InnerSpace;
 use wgpu::Device;
@@ -29,6 +30,37 @@ use std::sync::Arc;
 
 use wgpu::util::DeviceExt;
 
+/// Loads a 3D model from an OBJ file and prepares it for GPU rendering.
+///
+/// This function parses the OBJ file at the given `path`, loads all associated materials and textures,
+/// calculates tangents and bitangents needed for normal mapping, and creates vertex and index buffers
+/// for each mesh in the model. It also assigns a `RenderTag` to each mesh based on its transparency.
+///
+/// ### Parameters
+/// - `path`: Path to the `.obj` file to load. Associated `.mtl` and texture files are resolved relative to this path.
+/// - `device`: Reference to the `wgpu::Device` used for buffer and texture creation.
+/// - `queue`: Reference to the `wgpu::Queue` used to upload texture and buffer data.
+/// - `layout`: A reference to a `BindGroupLayout` used for constructing the material bind groups.
+///
+/// ### Returns
+/// - A fully prepared [`Model`] containing GPU-ready meshes and materials.
+///
+/// ### Panics
+/// - If the OBJ file cannot be loaded.
+/// - If any required texture or default texture file (`default.jpg`) is missing.
+/// - If any mesh has malformed vertex data (e.g., out-of-bounds indices).
+///
+/// ### Notes
+/// - All vertex tangents and bitangents are automatically computed per-triangle for normal mapping.
+/// - If no materials are found in the OBJ file, a default material with a `default.jpg` texture will be created.
+/// - If a material has partial transparency (`dissolve < 1.0`) or an alpha texture, it is marked as either
+///   `SortedTransparent` or `WeightedTransparent` depending on internal heuristics (`use_weighted_blended()`).
+///
+/// ### Example
+/// ```rust
+/// use std::path::Path;
+/// let model = load_model(Path::new("assets/model.obj"), &device, &queue, &material_layout).await;
+/// ```
 pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
     let base_dir = path.parent().unwrap().to_path_buf();
 
@@ -64,6 +96,7 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                 diffuse_texture,
                 normal_texture,
                 None,
+                1.0,
                 layout,
         ));
     } else {
@@ -93,27 +126,19 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                 }
             };
 
-            // let dissolve_texture = match &m.dissolve_texture {
-            //     Some(path) if !path.is_empty() => {
-            //         Some(load_texture(&base_dir, path, true, device, queue).await)
-            //     }
-            //     _ => {
-            //         Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("alpha"), false))
-            //     }
-            // };
-
             let dissolve_texture = if m.dissolve.unwrap_or(1.0) < 1.0 {
                 Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, m.dissolve.unwrap()], Some("alpha"), false))
             } else if let Some(path) = &m.dissolve_texture {
                 if !path.is_empty() {
                     Some(load_texture(&base_dir, path, false, device, queue).await)
                 } else {
-                    Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("alpha"), false))
+                    None
                 }
             } else {
-                Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("alpha"), false))
+                None
             };
 
+            let dissolve = m.dissolve.unwrap_or(1.0);
 
             materials.push(Material::new(
                     device,
@@ -121,6 +146,7 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                     diffuse_texture,
                     normal_texture,
                     dissolve_texture,
+                    dissolve,
                     layout,
             ));
         }
@@ -247,13 +273,28 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
         let bounding_sphere = BoundingSphere { center, radius };
 
 
+        let material_index = m.mesh.material_id.unwrap_or(0);
+        let material = &materials[material_index];
+
+        let render_tag = if material.dissolve < 1.0 || material.has_transparency_texture() {
+            if material.use_weighted_blended() {
+                RenderTag::WeightedTransparent
+            } else {
+                RenderTag::SortedTransparent
+            }
+        } else {
+            RenderTag::Opaque
+        };
+
+        // println!("{}: {:?} {}", m.name, render_tag, material.dissolve);
         Mesh {
-            name: path.to_string_lossy().to_string(),
+            name: m.name,
             vertex_buffer: Arc::new(vertex_buffer),
             index_buffer: Arc::new(index_buffer),
             num_elements: m.mesh.indices.len() as u32,
-            material: m.mesh.material_id.unwrap_or(0),
+            material: material_index,
             bounding_sphere,
+            render_tag,
         }
     })
     .collect::<Vec<_>>();

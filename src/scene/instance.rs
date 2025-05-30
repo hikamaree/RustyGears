@@ -18,6 +18,12 @@
 use crate::Model;
 use crate::InstanceRaw;
 
+#[derive(Debug, Clone)]
+pub struct ModelInstance {
+    pub name: String,
+}
+
+
 /// Represents a renderable object in the scene, which may have multiple
 /// levels of detail (LODs) depending on camera distance or rendering strategy.
 ///
@@ -89,10 +95,12 @@ impl Transform {
 /// - `Custom(String)`: Allows for a custom render tag identified by a string value.
 #[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum RenderTag {
-    PBR,
+    Opaque,
     Unlit,
     Wireframe,
     ShadowMap,
+    SortedTransparent,
+    WeightedTransparent,
     Custom(String),
 }
 

@@ -119,7 +119,9 @@ impl Command for RenderCommand {
                 render_pass.set_pipeline(graphics.pipelines.get(&batch.tag).unwrap());
 
                 for model_data in &batch.prepared_models {
-                    let key = format!("{}:lod{}", model_data.object_name, model_data.lod_index);
+                    // let key = format!("{}:lod{}", model_data.object_name, model_data.lod_index);
+
+                    let key = format!("{}:lod{}:mesh{}", model_data.object_name, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
                     let buffer = graphics.buffers.entry(key)
                         .and_modify(|b| {
                             b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
@@ -130,7 +132,7 @@ impl Command for RenderCommand {
                                 &graphics.device,
                                 model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
                                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                                BufferStrategy::Single,
+                                BufferStrategy::Triple,
                                 &model_data.object_name,
                             )
                         });

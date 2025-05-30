@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Entity;
+use crate::ModelInstance;
 use crate::RenderBatch;
 use crate::RenderTag;
 use crate::Command;
@@ -29,7 +29,6 @@ use crate::InstanceRaw;
 use crate::Transform;
 
 use std::sync::Arc;
-use std::ops::Range;
 use std::collections::HashMap;
 
 use crossbeam::channel::Sender;
@@ -37,33 +36,6 @@ use crossbeam::channel::Sender;
 use cgmath::EuclideanSpace;
 use cgmath::InnerSpace;
 use cgmath::Matrix4;
-use cgmath::Vector3;
-
-use rayon::iter::IntoParallelRefIterator;
-use rayon::iter::ParallelIterator;
-
-
-#[inline]
-fn group_contiguous_ranges(indices: &[u32]) -> Vec<Range<u32>> {
-    if indices.is_empty() {
-        return Vec::new();
-    }
-
-    let mut ranges = Vec::with_capacity(4);
-    let mut start = indices[0];
-    let mut prev = start;
-
-    for &i in &indices[1..] {
-        if i != prev + 1 {
-            ranges.push(start..prev + 1);
-            start = i;
-        }
-        prev = i;
-    }
-
-    ranges.push(start..prev + 1);
-    ranges
-}
 
 /// A gear responsible for preparing and sending render commands to the renderer.
 ///
@@ -87,376 +59,143 @@ pub struct Render {
 }
 
 impl Render {
-    /// Prepares all visible models and instances from the scene and sends a [`RenderCommand`].
+    /// Prepares and submits a [`RenderCommand`] containing all visible model instances in the scene.
     ///
-    /// This method:
-    /// - Uses the active camera to perform frustum culling.
-    /// - Collects visible instances of models tagged for rendering.
-    /// - Optimizes draw calls by grouping instances into contiguous ranges.
-    /// - Sends the resulting [`RenderCommand`] via the internal command channel.
+    /// This method performs the following steps:
+    /// - Extracts the active camera and uses it for visibility determination (if present).
+    /// - Iterates over all [`ModelInstance`] components in the world and selects the appropriate LOD
+    ///   based on the instance's distance from the camera.
+    /// - Applies frustum culling using each mesh's bounding sphere.
+    /// - Separates opaque and transparent meshes based on their [`RenderTag`].
+    /// - Groups visible opaque instances by `(model_name, lod_index, mesh_index)` for efficient instanced rendering.
+    /// - Sorts transparent instances back-to-front based on their depth along the camera's viewing direction,
+    ///   ensuring correct rendering order for alpha blending.
+    /// - Constructs [`RenderBatch`] structures containing instance and mesh range data.
+    /// - Sends a [`RenderCommand`] through the internal channel for execution in the rendering thread.
     ///
-    /// # Panics
-    /// Panics if:
-    /// - No active camera is found in the scene.
-    /// - The internal command sender is not initialized (`sender` is `None`).
+    /// If no active camera is present, the function will submit an empty `RenderCommand`
+    /// and trigger a redraw, but no objects will be rendered.
     ///
     /// # Parameters
-    /// - `game`: A read-only view of the current game state, including the scene and camera.
-
-
-    // pub fn render(&mut self, game: &mut GameView) {
-    //     let camera = game.scene.active_camera().expect("no camera found");
-    //
-    //     let mut group_map: HashMap<(RenderTag, String), Vec<(Entity, InstanceRaw)>> = HashMap::new();
-    //     for (entity, tags, name, transform) in game.scene.world.query3::<Vec<RenderTag>, String, Transform>() {
-    //         for tag in tags {
-    //             group_map
-    //                 .entry((tag.clone(), name.to_string()))
-    //                 .or_default()
-    //                 .push((entity, transform.raw()));
-    //             }
-    //     }
-    //
-    //     let lod_and_mesh_results: Vec<(
-    //         Vec<((RenderTag, String, usize), Arc<[InstanceRaw]>)>,
-    //         Vec<((RenderTag, String, usize), Vec<(usize, Vec<u32>)>)>,
-    //     )> = group_map
-    //         .par_iter()
-    //         .filter_map(|((tag, object_name), entities)| {
-    //             let render_object = game.scene.render_objects.get(object_name)?;
-    //             if entities.is_empty() {
-    //                 return None;
-    //             }
-    //
-    //             let lod_count = render_object.lods.len();
-    //             let instances: Vec<InstanceRaw> = entities.iter().map(|(_, inst)| *inst).collect();
-    //
-    //             let lod_groups: HashMap<usize, Vec<InstanceRaw>> = instances
-    //                 .into_iter()
-    //                 .map(|raw| {
-    //                     let pos = Vector3::new(raw.model[3][0], raw.model[3][1], raw.model[3][2]);
-    //                     let dist = (camera.position.to_vec() - pos).magnitude();
-    //                     let lod_index = match dist {
-    //                         d if d < 100.0 => 0,
-    //                         d if d < 300.0 => 1.min(lod_count - 1),
-    //                         d if d < 500.0 => 2.min(lod_count - 1),
-    //                         _ => lod_count - 1,
-    //                     };
-    //                     (lod_index, raw)
-    //                 })
-    //             .fold(HashMap::new(), |mut acc, (lod_index, raw)| {
-    //                 acc.entry(lod_index).or_default().push(raw);
-    //                 acc
-    //             });
-    //
-    //             let mut lod_entries = Vec::new();
-    //             let mut mesh_entries = Vec::new();
-    //
-    //             for (lod_index, group) in lod_groups {
-    //                 if render_object.lods[lod_index].meshes.is_empty() {
-    //                     continue;
-    //                 }
-    //
-    //                 let key = (tag.clone(), object_name.clone(), lod_index);
-    //                 let group_arc: Arc<[InstanceRaw]> = group.clone().into();
-    //                 lod_entries.push((key.clone(), Arc::clone(&group_arc)));
-    //
-    //                 let lod_model = &render_object.lods[lod_index];
-    //                 let mesh_data: Vec<(usize, Vec<u32>)> = lod_model
-    //                     .meshes
-    //                     .iter()
-    //                     .enumerate()
-    //                     .map(|(mesh_index, mesh)| {
-    //                         let center_local = mesh.bounding_sphere.center.extend(1.0);
-    //                         let radius_base = mesh.bounding_sphere.radius;
-    //
-    //                         let visible_indices: Vec<u32> = group_arc
-    //                             .iter()
-    //                             .enumerate()
-    //                             .filter_map(|(i, inst_raw)| {
-    //                                 let model_mat = Matrix4::from(inst_raw.model);
-    //                                 let center_world = model_mat * center_local;
-    //
-    //                                 let max_scale = model_mat.x.truncate().magnitude()
-    //                                     .max(model_mat.y.truncate().magnitude())
-    //                                     .max(model_mat.z.truncate().magnitude());
-    //
-    //                                 let radius = radius_base * max_scale;
-    //
-    //                                 if camera.can_see4(center_world, radius) {
-    //                                     Some(i as u32)
-    //                                 } else {
-    //                                     None
-    //                                 }
-    //                             })
-    //                         .collect();
-    //
-    //                         (mesh_index, visible_indices)
-    //                     })
-    //                 .filter(|(_, indices)| !indices.is_empty())
-    //                     .collect();
-    //
-    //                 if !mesh_data.is_empty() {
-    //                     mesh_entries.push((key, mesh_data));
-    //                 }
-    //             }
-    //
-    //             Some((lod_entries, mesh_entries))
-    //         })
-    //     .collect();
-    //
-    //     let mut lod_map = HashMap::new();
-    //     let mut mesh_map = HashMap::new();
-    //     for (lod_entries, mesh_entries) in lod_and_mesh_results {
-    //         lod_map.extend(lod_entries);
-    //         mesh_map.extend(mesh_entries);
-    //     }
-    //
-    //     let mut draw_calls = Vec::new();
-    //
-    //     for ((tag, object_name, lod_index), instances) in lod_map {
-    //         let mesh_results = match mesh_map.get(&(tag.clone(), object_name.clone(), lod_index)) {
-    //             Some(m) => m,
-    //             None => continue,
-    //         };
-    //
-    //         let mut used_indices: Vec<usize> = mesh_results
-    //             .iter()
-    //             .flat_map(|(_, indices)| indices.iter().map(|&i| i as usize))
-    //             .collect();
-    //         used_indices.sort_unstable();
-    //         used_indices.dedup();
-    //
-    //         let index_map: HashMap<usize, u32> = used_indices
-    //             .iter()
-    //             .enumerate()
-    //             .map(|(new_idx, &old_idx)| (old_idx, new_idx as u32))
-    //             .collect();
-    //
-    //         let instance_vec: Vec<InstanceRaw> = used_indices.iter().map(|&i| instances[i]).collect();
-    //         let instance_data_bytes = bytemuck::cast_slice(&instance_vec);
-    //
-    //         let key = format!("{object_name}_lod{lod_index}");
-    //
-    //         let buffer = game.graphics.buffers.entry(key.clone())
-    //             .and_modify(|b| {
-    //                 b.ensure_capacity(&game.graphics.device, instance_data_bytes.len());
-    //                 b.next();
-    //                 b.write(&game.graphics.queue, instance_data_bytes);
-    //             })
-    //         .or_insert_with(|| {
-    //             Buffer::new(
-    //                 &game.graphics.device,
-    //                 instance_data_bytes.len().next_power_of_two(),
-    //                 wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-    //                 BufferStrategy::Single,
-    //                 &key,
-    //             )
-    //         });
-    //
-    //         let mesh_ranges = mesh_results.iter().map(|(mesh_index, old_indices)| {
-    //             let new_indices = old_indices
-    //                 .iter()
-    //                 .filter_map(|old| index_map.get(&(*old as usize)).copied())
-    //                 .collect::<Vec<u32>>();
-    //
-    //             MeshRenderRange {
-    //                 mesh_index: *mesh_index,
-    //                 visible_instance_ranges: group_contiguous_ranges(&new_indices),
-    //                 }
-    //         }).collect();
-    //
-    //         draw_calls.push(RenderDrawCall {
-    //             tag,
-    //             object_name,
-    //             lod_index,
-    //             mesh_ranges,
-    //             vertex_buffer: buffer.current().clone(),
-    //             instance_count: instance_vec.len() as u32,
-    //         });
-    //     }
-    //
-    //     if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(RenderCommand { draw_calls })) {
-    //         eprintln!("Failed to send RenderCommand: {}", e);
-    //     } else {
-    //         game.graphics.window.request_redraw();
-    //     }
-    // }
-
-
-
+    /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
+    ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
-        let camera = game.scene.active_camera().expect("no camera found");
+        let Some(camera) = game.scene.active_camera() else {
+            if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(RenderCommand { batches: vec![] })) {
+                eprintln!("RenderCommand send failed (no camera): {e}");
+            } else {
+                game.graphics.window.request_redraw();
+            }
+            return;
+        };
 
-        let mut group_map: HashMap<(RenderTag, String), Vec<(Entity, InstanceRaw)>> = HashMap::new();
-        for (entity, tags, name, transform) in game.scene.world.query3::<Vec<RenderTag>, String, Transform>() {
-            for tag in tags {
-                group_map
-                    .entry((tag.clone(), name.to_string()))
-                    .or_default()
-                    .push((entity, transform.raw()));
-                }
-        }
+        let mut opaque_batches = vec![];
+        let mut transparent_instances = vec![];
 
-        let lod_and_mesh_results: Vec<(
-            Vec<((RenderTag, String, usize), Arc<[InstanceRaw]>)>,
-            Vec<((RenderTag, String, usize), Vec<(usize, Vec<u32>)>)>,
-        )> = group_map
-            .par_iter()
-            .filter_map(|((tag, object_name), entities)| {
-                let render_object = game.scene.render_objects.get(object_name)?;
-                if entities.is_empty() {
-                    return None;
-                }
-
-                let lod_count = render_object.lods.len();
-
-                let instances: Vec<InstanceRaw> = entities.iter().map(|(_, inst)| *inst).collect();
-
-                let lod_groups: HashMap<usize, Vec<InstanceRaw>> = instances
-                    .into_iter()
-                    .map(|raw| {
-                        let pos = Vector3::new(raw.model[3][0], raw.model[3][1], raw.model[3][2]);
-                        let dist = (camera.position.to_vec() - pos).magnitude();
-                        let lod_index = match dist {
-                            d if d < 100.0 => 0,
-                            d if d < 300.0 => 1.min(lod_count - 1),
-                            d if d < 500.0 => 2.min(lod_count - 1),
-                            _ => lod_count - 1,
-                        };
-                        (lod_index, raw)
-                    })
-                .fold(HashMap::new(), |mut acc, (lod_index, raw)| {
-                    acc.entry(lod_index).or_default().push(raw);
-                    acc
-                });
-
-                let mut lod_entries = Vec::new();
-                let mut mesh_entries = Vec::new();
-
-                for (lod_index, group) in lod_groups {
-                    if render_object.lods[lod_index].meshes.is_empty() {
-                        continue;
-                    }
-
-                    let key = (tag.clone(), object_name.clone(), lod_index);
-                    let group_arc: Arc<[InstanceRaw]> = group.clone().into();
-                    lod_entries.push((key.clone(), Arc::clone(&group_arc)));
-
-                    let lod_model = &render_object.lods[lod_index];
-                    let mesh_data: Vec<(usize, Vec<u32>)> = lod_model
-                        .meshes
-                        .iter()
-                        .enumerate()
-                        .map(|(mesh_index, mesh)| {
-                            let center_local = mesh.bounding_sphere.center.extend(1.0);
-                            let radius_base = mesh.bounding_sphere.radius;
-
-                            let visible_indices: Vec<u32> = group_arc
-                                .iter()
-                                .enumerate()
-                                .filter_map(|(i, inst_raw)| {
-                                    let model_mat = Matrix4::from(inst_raw.model);
-                                    let center_world = model_mat * center_local;
-
-                                    let max_scale = model_mat.x.truncate().magnitude()
-                                        .max(model_mat.y.truncate().magnitude())
-                                        .max(model_mat.z.truncate().magnitude());
-
-                                    let radius = radius_base * max_scale;
-
-                                    if camera.can_see4(center_world, radius) {
-                                        Some(i as u32)
-                                    } else {
-                                        None
-                                    }
-                                })
-                            .collect();
-
-                            (mesh_index, visible_indices)
-                        })
-                    .filter(|(_, indices)| !indices.is_empty())
-                        .collect();
-
-                    if !mesh_data.is_empty() {
-                        mesh_entries.push((key, mesh_data));
-                    }
-                }
-
-                Some((lod_entries, mesh_entries))
-            })
-        .collect();
-
-        let mut lod_map = HashMap::new();
-        let mut mesh_map = HashMap::new();
-        for (lod_entries, mesh_entries) in lod_and_mesh_results {
-            lod_map.extend(lod_entries);
-            mesh_map.extend(mesh_entries);
-        }
-
-        let mut batches_map: HashMap<RenderTag, Vec<ModelRenderData>> = HashMap::new();
-
-        for ((tag, object_name, lod_index), instances) in lod_map {
-            let mesh_results: &Vec<(usize, Vec<u32>)> = match mesh_map.get(&(tag.clone(), object_name.clone(), lod_index)) {
-                Some(m) => m,
-                None => continue,
+        for (_ent, model_inst, transform) in game.scene.world.query2::<ModelInstance, Transform>() {
+            let Some(render_obj) = game.scene.render_objects.get(&model_inst.name) else {
+                continue;
             };
 
-            let mut used_indices: Vec<usize> = mesh_results
-                .iter()
-                .flat_map(|(_, indices)| indices.iter().map(|&i| i as usize))
-                .collect();
-            used_indices.sort_unstable();
-            used_indices.dedup();
-
-            let index_map: HashMap<usize, u32> = used_indices
-                .iter()
-                .enumerate()
-                .map(|(new_idx, &old_idx)| (old_idx, new_idx as u32))
-                .collect();
-
-            let instance_vec: Vec<InstanceRaw> = used_indices.iter().map(|&i| instances[i]).collect();
-            let instance_data: Arc<[InstanceRaw]> = instance_vec.into();
-
-            let lod_model = match game.scene.render_objects.get(&object_name) {
-                Some(obj) => &obj.lods[lod_index],
-                None => continue,
+            let dist = (camera.position.to_vec() - transform.position).magnitude();
+            let lod_index = match dist {
+                d if d < 100.0 => 0,
+                d if d < 300.0 => 1.min(render_obj.lods.len() - 1),
+                d if d < 500.0 => 2.min(render_obj.lods.len() - 1),
+                _ => render_obj.lods.len() - 1,
             };
 
-            let mut mesh_ranges = Vec::with_capacity(mesh_results.len());
-            for (mesh_index, old_indices) in mesh_results {
-                if *mesh_index >= lod_model.meshes.len() {
+            let lod_model = &render_obj.lods[lod_index];
+            let raw = transform.raw();
+
+            for (mesh_index, mesh) in lod_model.meshes.iter().enumerate() {
+                let tag = &mesh.render_tag;
+
+                let center_local = mesh.bounding_sphere.center.extend(1.0);
+                let model_mat = Matrix4::from(raw.model);
+                let center_world = model_mat * center_local;
+
+                let scale = model_mat.x.truncate().magnitude()
+                    .max(model_mat.y.truncate().magnitude())
+                    .max(model_mat.z.truncate().magnitude());
+
+                let radius = mesh.bounding_sphere.radius * scale;
+
+                if !camera.can_see4(center_world, radius) {
                     continue;
                 }
 
-                let mut new_indices = Vec::with_capacity(old_indices.len());
-                for old in old_indices {
-                    if let Some(&new_idx) = index_map.get(&(*old as usize)) {
-                        new_indices.push(new_idx);
+                match tag {
+                    RenderTag::Opaque => {
+                        opaque_batches.push((
+                                model_inst.name.clone(),
+                                lod_index,
+                                mesh_index,
+                                raw,
+                        ));
                     }
+                    RenderTag::SortedTransparent => {
+                        let delta = center_world.truncate() - camera.position.to_vec();
+                        let depth = camera.forward.dot(delta);
+
+                        transparent_instances.push((
+                                depth,
+                                model_inst.name.clone(),
+                                lod_index,
+                                mesh_index,
+                                raw,
+                        ));
+                    }
+                    _ => {}
                 }
-
-                mesh_ranges.push(MeshRenderRange {
-                    mesh_index: *mesh_index,
-                    visible_instance_ranges: group_contiguous_ranges(&new_indices),
-                });
             }
+        }
 
-            batches_map.entry(tag.clone()).or_default().push(ModelRenderData {
-                instance_data,
-                mesh_ranges,
-                object_name,
-                lod_index,
+        let mut opaque_group_map: HashMap<(String, usize, usize), Vec<InstanceRaw>> = HashMap::new();
+        for (name, lod, mesh_idx, raw) in opaque_batches {
+            opaque_group_map.entry((name, lod, mesh_idx)).or_default().push(raw);
+        }
+
+        let mut opaque_render_data = vec![];
+        for ((name, lod, mesh_idx), instances) in opaque_group_map {
+            opaque_render_data.push(RenderBatch {
+                tag: RenderTag::Opaque,
+                prepared_models: vec![ModelRenderData {
+                    object_name: name,
+                    lod_index: lod,
+                    instance_data: Arc::from(instances.clone()),
+                    mesh_ranges: vec![MeshRenderRange {
+                        mesh_index: mesh_idx,
+                        visible_instance_ranges: vec![0..instances.len() as u32],
+                    }],
+                }],
             });
         }
 
-        let batches: Vec<RenderBatch> = batches_map
+        transparent_instances.sort_by(|a, b| b.0.total_cmp(&a.0));
+
+        let transparent_render_data = transparent_instances.into_iter().map(|(_, name, lod, mesh_idx, raw)| {
+            RenderBatch {
+                tag: RenderTag::SortedTransparent,
+                prepared_models: vec![ModelRenderData {
+                    object_name: name,
+                    lod_index: lod,
+                    instance_data: Arc::from([raw]),
+                    mesh_ranges: vec![MeshRenderRange {
+                        mesh_index: mesh_idx,
+                        visible_instance_ranges: vec![0..1],
+                    }],
+                }],
+            }
+        });
+
+        let batches: Vec<RenderBatch> = opaque_render_data
             .into_iter()
-            .map(|(tag, prepared_models)| RenderBatch { tag, prepared_models })
+            .chain(transparent_render_data)
             .collect();
 
         if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(RenderCommand { batches })) {
-            eprintln!("Failed to send RenderCommand: {}", e);
+            eprintln!("RenderCommand send failed: {e}");
         } else {
             game.graphics.window.request_redraw();
         }

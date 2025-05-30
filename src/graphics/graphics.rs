@@ -20,7 +20,7 @@ use crate::DEFAULT_CAMERA_BUFFER_SIZE;
 use crate::LightUniform;
 use crate::BufferStrategy;
 use crate::Buffer;
-use crate::graphics::pipeline::create_render_pipeline;
+use crate::graphics::pipeline::*;
 use crate::Command;
 use crate::Projection;
 use crate::Vertex;
@@ -32,6 +32,8 @@ use std::sync::Arc;
 use wgpu::Adapter;
 use wgpu::Instance;
 use winit::window::Window;
+
+use super::dummy_texture;
 
 #[allow(dead_code)]
 #[repr(C)]
@@ -179,6 +181,8 @@ impl Graphics {
 
         let bind_group_layouts = HashMap::new();
         let pipelines = HashMap::new();
+
+        dummy_texture(&device, &queue);
 
         let mut graphics = Graphics {
             window,
@@ -332,23 +336,41 @@ impl Graphics {
                     push_constant_ranges: &[],
                 });
 
-            let pbr_pipeline = {
-                let shader = wgpu::ShaderModuleDescriptor {
-                    label: Some("Default Shader"),
-                    source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-                };
-
-                create_render_pipeline(
-                    &self.device,
-                    &render_pipeline_layout,
-                    self.config.format,
-                    Some(Texture::DEPTH_FORMAT),
-                    &[ ModelVertex::desc(), InstanceRaw::desc() ],
-                    shader,
-                )
+            let shader_descriptor = wgpu::ShaderModuleDescriptor {
+                label: Some("Default Shader"),
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
             };
 
-            self.pipelines.insert(RenderTag::PBR, pbr_pipeline);
+            let opaque_pipeline = create_opaque_pipeline(
+                &self.device,
+                &render_pipeline_layout,
+                self.config.format,
+                Texture::DEPTH_FORMAT,
+                &[ModelVertex::desc(), InstanceRaw::desc()],
+                shader_descriptor.clone(),
+            );
+            self.pipelines.insert(RenderTag::Opaque, opaque_pipeline);
+
+            let sorted_pipeline = create_sorted_transparent_pipeline(
+                &self.device,
+                &render_pipeline_layout,
+                self.config.format,
+                Texture::DEPTH_FORMAT,
+                &[ModelVertex::desc(), InstanceRaw::desc()],
+                shader_descriptor.clone(),
+            );
+            self.pipelines.insert(RenderTag::SortedTransparent, sorted_pipeline);
+
+            let weighted_pipeline = create_weighted_transparent_pipeline(
+                &self.device,
+                &render_pipeline_layout,
+                Texture::ACCUM_FORMAT,
+                Texture::REVEALAGE_FORMAT,
+                Texture::DEPTH_FORMAT,
+                &[ModelVertex::desc(), InstanceRaw::desc()],
+                shader_descriptor,
+            );
+            self.pipelines.insert(RenderTag::WeightedTransparent, weighted_pipeline);
 
             self.create_buffer(
                 "camera",

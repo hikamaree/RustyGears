@@ -16,7 +16,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::Entity;
-use crate::RenderTag;
 use crate::Transform;
 use crate::Command;
 use crate::Game;
@@ -80,12 +79,11 @@ impl Command for AddCamera {
 pub struct SpawnModel {
     pub file_path: String,
     pub transform: Transform,
-    pub render_tags: Vec<RenderTag>
 }
 
 impl Command for SpawnModel {
     fn apply(self: Box<Self>, game: &mut Game) {
-        game.spawn_model(&self.file_path, self.transform, self.render_tags);
+        game.spawn_model(&self.file_path, self.transform);
     }
 }
 
