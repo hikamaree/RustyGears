@@ -34,25 +34,30 @@ use crate::EguiRenderer;
 
 impl ApplicationHandler for Game {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
-        if window_id != self.graphics().window.id() {
+        let Ok(graphics) = self.graphics() else {
+            return;
+        };
+
+        if window_id != graphics.window.id() {
             return;
         }
 
         match event {
-            winit::event::WindowEvent::CloseRequested => {
+            WindowEvent::CloseRequested => {
+                Game::dispatch_event(self, GearEvent::Exit());
                 event_loop.exit()
             }
 
-            winit::event::WindowEvent::Resized(physical_size) => {
-                self.graphics().resize(physical_size);
+            WindowEvent::Resized(physical_size) => {
+                graphics.resize(physical_size);
             }
 
-            winit::event::WindowEvent::RedrawRequested => {
+            WindowEvent::RedrawRequested => {
                 self.update();
                 Game::dispatch_event(self, GearEvent::Update());
             }
 
-            winit::event::WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
+            WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
                 Game::dispatch_event(self, GearEvent::KeyboardInput(key, state));
             }
 
@@ -82,13 +87,19 @@ impl ApplicationHandler for Game {
             .create_window(window_attributes)
             .expect("failed to create window");
 
-        window.set_cursor_grab(winit::window::CursorGrabMode::Confined)
-            .expect("failed to grab cursor");
+        if let Err(e) = window.set_cursor_grab(winit::window::CursorGrabMode::Confined) {
+            eprintln!("{}", e);
+        }
+
         window.set_cursor_visible(false);
 
-        let graphics = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(Graphics::new(window.into()));
+        let Ok(rt) = tokio::runtime::Runtime::new() else {
+            return;
+        };
+
+        let Ok(graphics) = rt.block_on(Graphics::new(window.into())) else {
+            return;
+        };
 
         let egui = EguiRenderer::new(&graphics.device, graphics.config.format, None, 1, &graphics.window);
 

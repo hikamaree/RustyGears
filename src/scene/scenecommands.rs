@@ -83,7 +83,9 @@ pub struct SpawnModel {
 
 impl Command for SpawnModel {
     fn apply(self: Box<Self>, game: &mut Game) {
-        game.spawn_model(&self.file_path, self.transform);
+        if let Err(e) = game.spawn_model(&self.file_path, self.transform) {
+            println!("{}", e);
+        }
     }
 }
 

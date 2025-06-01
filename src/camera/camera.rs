@@ -114,12 +114,12 @@ impl Camera {
         let m = cgmath::Matrix4::from(self.view_proj);
 
         let planes = [
-            m.row(3) + m.row(0), // Left
-            m.row(3) - m.row(0), // Right
-            m.row(3) + m.row(1), // Bottom
-            m.row(3) - m.row(1), // Top
-            m.row(3) + m.row(2), // Near
-            m.row(3) - m.row(2), // Far
+            m.row(3) + m.row(0),
+            m.row(3) - m.row(0),
+            m.row(3) + m.row(1),
+            m.row(3) - m.row(1),
+            m.row(3) + m.row(2),
+            m.row(3) - m.row(2),
         ];
 
         self.frustum = planes.map(|v| {

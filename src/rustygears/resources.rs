@@ -61,40 +61,50 @@ use wgpu::util::DeviceExt;
 /// use std::path::Path;
 /// let model = load_model(Path::new("assets/model.obj"), &device, &queue, &material_layout).await;
 /// ```
-pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Model {
-    let base_dir = path.parent().unwrap().to_path_buf();
+pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wgpu::BindGroupLayout) -> Result<Model, String> {
+    let base_dir = match path.parent() {
+        Some(parent) => parent.to_path_buf(),
+        None => return Err(format!("Invalid model path: {:?}", path)),
+    };
 
-    let (models, obj_materials) = tobj::load_obj(
-        &path,
+    let obj_result = tobj::load_obj(
+        path,
         &tobj::LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
         },
-    ).expect(&format!("Failed to load OBJ model at {:?}", path));
+    );
 
-    let obj_materials = obj_materials.unwrap_or_default();
+    let (models, maybe_materials) = match obj_result {
+        Ok(result) => result,
+        Err(e) => return Err(format!("Failed to load OBJ model at {:?}: {}", path, e)),
+    };
+
+    let obj_materials = match maybe_materials {
+        Ok(materials) => materials,
+        Err(e) => {
+            eprintln!("{}", e);
+            Vec::new()
+        }
+    };
 
     let mut materials = Vec::new();
 
-    async fn load_texture(base_dir: &Path, path: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Texture {
+    async fn load_texture(base_dir: &Path, path: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Option<Texture> {
         let tex_path = base_dir.join(path);
         let tex_path_str = tex_path.to_string_lossy();
-        let data = std::fs::read(&tex_path)
-            .expect(&format!("Failed to load texture: {:?}", tex_path));
-        Texture::from_bytes(device, queue, &data, &tex_path_str, is_normal_map)
+        let data = std::fs::read(&tex_path).ok()?;
+        Texture::from_bytes(device, queue, &data, &tex_path_str, is_normal_map).ok()
     }
 
-
     if obj_materials.is_empty() {
-        let diffuse_texture = load_texture(&base_dir, "default.jpg", false, device, queue).await;
-        let normal_texture = Texture::from_color(device, queue, [0.0, 0.0, 0.0, 0.0], Some("color"), false);
-
         materials.push(Material::new(
                 device,
+                queue,
                 "default",
-                diffuse_texture,
-                normal_texture,
+                None,
+                None,
                 None,
                 1.0,
                 layout,
@@ -108,10 +118,10 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                 _ => {
                     match &m.diffuse {
                         Some(color) => {
-                            Texture::from_color(device, queue, [color[0], color[1], color[2], 1.0], Some("color"), false)
+                            Some(Texture::from_color(device, queue, [color[0], color[1], color[2], 1.0], Some("color"), false))
                         }
                         _ => {
-                            load_texture(&base_dir, "default.jpg", false, device, queue).await
+                            None
                         }
                     }
                 }
@@ -122,15 +132,21 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                     load_texture(&base_dir, path, true, device, queue).await
                 }
                 _ => {
-                    Texture::from_color(device, queue, [0.0, 0.0, 0.0, 1.0], Some("color"), false)
+                    None
                 }
             };
 
-            let dissolve_texture = if m.dissolve.unwrap_or(1.0) < 1.0 {
-                Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, m.dissolve.unwrap()], Some("alpha"), false))
+            let dissolve = if let Some(value) = m.dissolve {
+                value
+            } else {
+                1.0
+            };
+
+            let dissolve_texture = if dissolve < 1.0 {
+                Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, dissolve], Some("alpha"), false))
             } else if let Some(path) = &m.dissolve_texture {
                 if !path.is_empty() {
-                    Some(load_texture(&base_dir, path, false, device, queue).await)
+                    load_texture(&base_dir, path, false, device, queue).await
                 } else {
                     None
                 }
@@ -138,10 +154,9 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
                 None
             };
 
-            let dissolve = m.dissolve.unwrap_or(1.0);
-
             materials.push(Material::new(
                     device,
+                    queue,
                     &m.name,
                     diffuse_texture,
                     normal_texture,
@@ -272,8 +287,11 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
         }
         let bounding_sphere = BoundingSphere { center, radius };
 
+        let material_index = match m.mesh.material_id {
+            Some(id) => id,
+            None => 0,
+        };
 
-        let material_index = m.mesh.material_id.unwrap_or(0);
         let material = &materials[material_index];
 
         let render_tag = if material.dissolve < 1.0 || material.has_transparency_texture() {
@@ -286,7 +304,6 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
             RenderTag::Opaque
         };
 
-        // println!("{}: {:?} {}", m.name, render_tag, material.dissolve);
         Mesh {
             name: m.name,
             vertex_buffer: Arc::new(vertex_buffer),
@@ -299,8 +316,8 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
     })
     .collect::<Vec<_>>();
 
-    Model {
+    Ok(Model {
         meshes,
         materials,
-    }
+    })
 }

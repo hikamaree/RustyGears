@@ -74,8 +74,12 @@ pub struct RenderCommand {
 impl Command for RenderCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
         let scene = unsafe { &*game.scene.get() };
-        let graphics = unsafe { &mut *game.graphics.get() }.as_mut().unwrap(); 
-        let gui = game.gui.as_mut().expect("ERROR: egui is not initialized"); // OK sada, jer scene više ne koristi `game`
+
+        let graphics = unsafe { &mut *game.graphics.get() };
+        let Some(graphics) = graphics.as_mut() else {
+            return;
+        };
+
         graphics.t_count = 0;
 
         let output = match graphics.surface.get_current_texture() {
@@ -92,10 +96,10 @@ impl Command for RenderCommand {
             label: Some("Render Encoder"),
         });
 
-        let camera_bg = graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera).unwrap();
-        let light_bg = graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light).unwrap();
-
-        {
+        if let (Some(camera_bg), Some(light_bg)) = (
+            graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera),
+            graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light)
+        ) {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Main Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -116,36 +120,36 @@ impl Command for RenderCommand {
             });
 
             for batch in &self.batches {
-                render_pass.set_pipeline(graphics.pipelines.get(&batch.tag).unwrap());
+                if let Some(pipeline) = graphics.pipelines.get(&batch.tag) {
+                    render_pass.set_pipeline(pipeline);
 
-                for model_data in &batch.prepared_models {
-                    // let key = format!("{}:lod{}", model_data.object_name, model_data.lod_index);
+                    for model_data in &batch.prepared_models {
+                        let key = format!("{}:lod{}:mesh{}", model_data.object_name, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
+                        let buffer = graphics.buffers.entry(key)
+                            .and_modify(|b| {
+                                b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
+                                b.next();
+                                b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
+                            }).or_insert_with(|| {
+                                Buffer::new(
+                                    &graphics.device,
+                                    model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
+                                    wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                                    BufferStrategy::Triple,
+                                    &model_data.object_name,
+                                )
+                            });
 
-                    let key = format!("{}:lod{}:mesh{}", model_data.object_name, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
-                    let buffer = graphics.buffers.entry(key)
-                        .and_modify(|b| {
-                            b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
-                            b.next();
-                            b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
-                        }).or_insert_with(|| {
-                            Buffer::new(
-                                &graphics.device,
-                                model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
-                                wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                                BufferStrategy::Triple,
-                                &model_data.object_name,
-                            )
-                        });
+                        render_pass.set_vertex_buffer(1, buffer.current().slice(..));
 
-                    render_pass.set_vertex_buffer(1, buffer.current().slice(..));
-
-                    if let Some(render_object) = scene.get_render_object(&model_data.object_name) {
-                        graphics.t_count += render_pass.draw_model_instanced(
-                            &render_object.lods[model_data.lod_index],
-                            camera_bg,
-                            light_bg,
-                            &model_data.mesh_ranges,
-                        );
+                        if let Some(render_object) = scene.get_render_object(&model_data.object_name) {
+                            graphics.t_count += render_pass.draw_model_instanced(
+                                &render_object.lods[model_data.lod_index],
+                                camera_bg,
+                                light_bg,
+                                &model_data.mesh_ranges,
+                            );
+                        }
                     }
                 }
             }
@@ -162,15 +166,17 @@ impl Command for RenderCommand {
             time: game.time.clone(),
         };
 
-        gui.draw(
-            &graphics.device,
-            &graphics.queue,
-            &mut encoder,
-            &graphics.window,
-            &view, screen_descriptor,
-            &scene.render_gui,
-            &gameview,
-        );
+        if let Some(gui) = game.gui.as_mut() {
+            gui.draw(
+                &graphics.device,
+                &graphics.queue,
+                &mut encoder,
+                &graphics.window,
+                &view, screen_descriptor,
+                &scene.render_gui,
+                &gameview,
+            );
+        }
 
         graphics.queue.submit(Some(encoder.finish()));
         output.present();

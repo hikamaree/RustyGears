@@ -81,10 +81,10 @@ impl Render {
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
         let Some(camera) = game.scene.active_camera() else {
-            if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(RenderCommand { batches: vec![] })) {
-                eprintln!("RenderCommand send failed (no camera): {e}");
-            } else {
-                game.graphics.window.request_redraw();
+            if let Some(sender) = self.sender.as_ref() {
+                if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
+                    game.graphics.window.request_redraw();
+                }
             }
             return;
         };
@@ -194,10 +194,10 @@ impl Render {
             .chain(transparent_render_data)
             .collect();
 
-        if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(RenderCommand { batches })) {
-            eprintln!("RenderCommand send failed: {e}");
-        } else {
-            game.graphics.window.request_redraw();
+        if let Some(sender) = self.sender.as_ref() {
+            if let Ok(_) = sender.send(Box::new(RenderCommand { batches })) {
+                game.graphics.window.request_redraw();
+            }
         }
     }
 }

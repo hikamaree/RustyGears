@@ -137,7 +137,9 @@ impl World {
             self.storage.insert::<T>(vec![None; self.capacity]);
         }
 
-        let vec = self.storage.get_slice_mut::<T>().unwrap();
+        let Some(vec) = self.storage.get_slice_mut::<T>() else {
+            return;
+        };
 
         if entity.0 as usize >= vec.len() {
             vec.resize_with(entity.0 as usize + 1, || None);

@@ -19,7 +19,6 @@ use rusty_gears::math::Rotation3;
 use rusty_gears::math::Vector3;
 use rusty_gears::math::Rad;
 use rusty_gears::math::One;
-use rusty_gears::math::Point3;
 use rusty_gears::math::Quaternion;
 use rusty_gears::math::vec3;
 use rusty_gears::*;
@@ -44,9 +43,17 @@ impl MyGame {
             next_cam = self.camera1;
         }
 
-        let cmd = SetDefaultCamera {camera: next_cam.unwrap() };
+        let Some(camera) = next_cam else {
+            return;
+        };
 
-        if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+        let cmd = SetDefaultCamera { camera };
+        
+        let Some(sender) = self.sender.as_ref() else {
+            return;
+        };
+
+        if let Err(e) = sender.send(Box::new(cmd)) {
             eprintln!("Failed to send SetDefaultCamera command: {}", e);
         }
     }
@@ -57,7 +64,7 @@ impl Gear for MyGame {
         self.sender = Some(sender);
 
         const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 0;
+        const NUM_INSTANCES_PER_ROW: usize = 64;
 
         for z in 0..NUM_INSTANCES_PER_ROW {
             for x in 0..NUM_INSTANCES_PER_ROW {
@@ -74,7 +81,9 @@ impl Gear for MyGame {
                     scale: vec3(300.0, 300.0, 300.0)
                 };
 
-                game.spawn_model("miku/miku", transform);
+                if let Err(e) = game.spawn_model("miku/miku", transform) {
+                    eprintln!("{}", e);
+                }
             }
         }
 
@@ -83,7 +92,11 @@ impl Gear for MyGame {
             rotation: Quaternion::one(),
             scale: vec3(1.0, 1.0, 1.0) 
         };
-        self.truck = Some(game.spawn_model("block/block", transform));
+
+        self.truck = match game.spawn_model("truck/semi", transform) {
+            Ok(truck) => Some(truck),
+            Err(_) => None,
+        };
 
 
         let camera1 = Camera::new();
@@ -92,26 +105,60 @@ impl Gear for MyGame {
         let mut camera2 = Camera::new();
         camera2.set_rotation(Rad(3.14 / 2.0), Rad(0.0), Rad(0.0));
         camera2.set_position((8.0, 5.0, -20.0).into());
-        game.scene().world.insert(self.truck.unwrap(), camera2);
+
+        if let Some(truck) = self.truck {
+            game.scene().world.insert(truck, camera2);
+        }
     }
 
     fn mouse_motion(&mut self, dx: f64, dy: f64, game: GameView) {
-        let camera = game.scene.get_camera(self.camera1.unwrap()).unwrap();
+        let Some(camera1) = self.camera1 else {
+            return;
+        };
+
+        let Some(camera) = game.scene.get_camera(camera1) else {
+            return;
+        };
+
         let dt = game.time.delta_time();
 
         let yaw = camera.yaw + Rad(dx as f32 * camera.sensitivity * dt); 
         let pitch = camera.pitch - Rad(dy as f32 * camera.sensitivity * dt); 
 
         if yaw != camera.yaw || pitch != camera.pitch {
-            let cmd = SetCameraRotation { entity: game.scene.active_camera.unwrap(), yaw, pitch, roll: Rad(0.0) };
-            if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+            let cmd = SetCameraRotation { entity: camera1, yaw, pitch, roll: Rad(0.0) };
+
+            let Some(sender) = self.sender.as_ref() else {
+                return;
+            };
+
+            if let Err(e) = sender.send(Box::new(cmd)) {
                 eprintln!("Failed to send SetCameraRotation command: {}", e);
             }
         }
     }
 
     fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
-        let camera = game.scene.get_camera(self.camera1.unwrap()).unwrap();
+        let Some(camera1) = self.camera1 else {
+            return;
+        };
+
+        let Some(camera) = game.scene.get_camera(camera1) else {
+            return;
+        };
+
+        let Some(truck) = self.truck else {
+            return;
+        };
+
+        let Some(truck_camera) = game.scene.get_camera(truck) else {
+            return;
+        };
+
+        let Some(sender) = self.sender.as_ref() else {
+            return;
+        };
+
         let dt = game.time.delta_time();
 
         let mut position = camera.position;
@@ -120,57 +167,65 @@ impl Gear for MyGame {
             KeyCode::ArrowUp => {
                 let delta = 50.0 * dt;
 
-                let mut transform = game.scene.world.get::<Transform>(self.truck.unwrap()).unwrap().clone();
+                let Some(transform) = game.scene.world.get::<Transform>(truck) else {
+                    return;
+                };
+
+                let mut transform = transform.clone();
 
                 transform.position.z += delta;
 
                 let cmd = SetInstanceTransform { 
-                    entity: self.truck.unwrap(),
+                    entity: truck,
                     transform,
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
-
-                let mut position = game.scene.world.get::<Camera>(self.truck.unwrap()).unwrap().clone().position;
+                let mut position = truck_camera.clone().position;
                 position.z += delta;
 
                 let cmd = SetCameraPosition {
-                    entity: self.truck.unwrap(),
+                    entity: truck,
                     position
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
             }
 
             KeyCode::ArrowDown => {
                 let delta = 50.0 * dt;
-                let mut transform = game.scene.world.get::<Transform>(self.truck.unwrap()).unwrap().clone();
+                let Some(transform) = game.scene.world.get::<Transform>(truck) else {
+                    return;
+                };
+
+                let mut transform = transform.clone();
+
                 transform.position.z -= delta;
 
                 let cmd = SetInstanceTransform { 
-                    entity: self.truck.unwrap(),
+                    entity: truck,
                     transform,
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
 
-                let mut position = game.scene.world.get::<Camera>(self.truck.unwrap()).unwrap().clone().position;
+                let mut position = truck_camera.clone().position;
                 position.z -= delta;
 
                 let cmd = SetCameraPosition {
-                    entity: self.truck.unwrap(),
+                    entity: truck,
                     position
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
             }
@@ -207,7 +262,7 @@ impl Gear for MyGame {
                     transform,
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
                 self.h += 1.0;
@@ -225,7 +280,7 @@ impl Gear for MyGame {
                     transform,
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
@@ -244,7 +299,7 @@ impl Gear for MyGame {
                     transform,
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
@@ -263,7 +318,7 @@ impl Gear for MyGame {
                     transform,
                 };
 
-                if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+                if let Err(e) = sender.send(Box::new(cmd)) {
                     eprintln!("Failed to send SpawnModel command: {}", e);
                 }
 
@@ -274,8 +329,8 @@ impl Gear for MyGame {
         }
 
         if position != camera.position {
-            let cmd = SetCameraPosition { entity: game.scene.active_camera.unwrap(), position };
-            if let Err(e) = self.sender.as_ref().unwrap().send(Box::new(cmd)) {
+            let cmd = SetCameraPosition { entity: camera1, position };
+            if let Err(e) = sender.send(Box::new(cmd)) {
                 eprintln!("Failed to send SetCameraPosition command: {}", e);
             }
         }
@@ -283,51 +338,51 @@ impl Gear for MyGame {
 }
 
 pub fn main() {
-    let mut camera1 = Camera::new();
-    camera1.set_position(Point3::new(0.0, 10.0, 0.0));
-
-    let mut camera2 = Camera::new();
-    camera2.set_position(Point3::new(0.0, 0.0, 0.0));
-
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::default());
         game.add_gear("mygame".into(), MyGame::default());
-        game.scene().add_camera(camera1);
-        game.scene().add_camera(camera2);
     }).setup(|game| {
         game.scene().add_gui(EngineStats::new());
 
-        let transform = Transform { 
-            position: vec3(0.0, 0.0, 0.0),
-            rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0)
-        };
-
-        game.spawn_model("scene1/scene1", transform);
-
-        let transform = Transform { 
-            position: vec3(40.0, 0.0, 0.0),
-            rotation: Quaternion::one(),
-            scale: vec3(0.5, 0.5, 0.5)
-        };
-
-        game.spawn_model("scene2/scene2", transform);
-
-        let transform = Transform { 
-            position: vec3(0.0, 0.0, 40.0),
-            rotation: Quaternion::one(),
-            scale: vec3(7.0, 7.0, 7.0)
-        };
-
-        game.spawn_model("scene3/scene3", transform);
-
-        let transform = Transform { 
-            position: vec3(25.0, 0.0, 20.0),
-            rotation: Quaternion::from_axis_angle(Vector3::unit_y(), Rad(std::f32::consts::PI)),
-            scale: vec3(0.3, 0.3, 0.3)
-        };
-
-        game.spawn_model("scene4/scene4", transform);
+        // let transform = Transform { 
+        //     position: vec3(0.0, 0.0, 0.0),
+        //     rotation: Quaternion::one(),
+        //     scale: vec3(1.0, 1.0, 1.0)
+        // };
+        //
+        // if let Err(e) = game.spawn_model("scene1/scene1", transform) {
+        //     eprintln!("{}", e);
+        // }
+        //
+        // let transform = Transform { 
+        //     position: vec3(40.0, 0.0, 0.0),
+        //     rotation: Quaternion::one(),
+        //     scale: vec3(0.5, 0.5, 0.5)
+        // };
+        //
+        // if let Err(e) = game.spawn_model("scene2/scene2", transform) {
+        //     eprintln!("{}", e);
+        // }
+        //
+        // let transform = Transform { 
+        //     position: vec3(0.0, 0.0, 40.0),
+        //     rotation: Quaternion::one(),
+        //     scale: vec3(7.0, 7.0, 7.0)
+        // };
+        //
+        // if let Err(e) = game.spawn_model("scene3/scene3", transform) {
+        //     eprintln!("{}", e);
+        // }
+        //
+        // let transform = Transform { 
+        //     position: vec3(25.0, 0.0, 20.0),
+        //     rotation: Quaternion::from_axis_angle(Vector3::unit_y(), Rad(std::f32::consts::PI)),
+        //     scale: vec3(0.3, 0.3, 0.3)
+        // };
+        //
+        // if let Err(e) = game.spawn_model("scene4/scene4", transform) {
+        //     eprintln!("{}", e);
+        // }
     }).run();
 }
 
@@ -350,7 +405,9 @@ mod tests {
                     scale: vec3(1.0, 1.0, 1.0)
                 };
 
-                game.spawn_model("scene1/scene1", transform);
+                if let Err(e) = game.spawn_model("scene1/scene1", transform) {
+                    eprintln!("{}", e);
+                }
             });
 
         for _ in 0..10 {

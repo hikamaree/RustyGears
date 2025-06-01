@@ -26,7 +26,7 @@ fn detect_active_gpu() -> Option<String> {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                let name = entry.file_name().into_string().unwrap();
+                let name = entry.file_name().into_string().ok()?;
                 
                 if name.starts_with("card") {
                     let gpu_busy_path = format!("{}/device/gpu_busy_percent", path.display());
@@ -44,8 +44,10 @@ fn detect_active_gpu() -> Option<String> {
 fn get_gpu_usage(gpu: Option<String>) -> u32 {
     if let Some(active_gpu) = gpu {
         let usage_path = format!("/sys/class/drm/{}/device/gpu_busy_percent", active_gpu);
-        if let Ok(usage) = fs::read_to_string(usage_path) {
-            return usage.trim().parse().unwrap_or(0);
+        if let Ok(usage_str) = fs::read_to_string(usage_path) {
+            if let Ok(percent) = usage_str.trim().parse::<u32>() {
+                return percent;
+            }
         }
     }
     0
@@ -79,7 +81,9 @@ fn get_gpu_temperature(gpu: Option<String>) -> u32 {
 
                 if temp_path.exists() {
                     if let Ok(temp) = fs::read_to_string(temp_path) {
-                        return temp.trim().parse::<u32>().map(|t| t / 1000).unwrap_or(0);
+                        if let Ok(temp) = temp.trim().parse::<u32>().map(|t| t / 1000) {
+                            return temp;
+                        }
                     }
                 }
             }
@@ -90,25 +94,24 @@ fn get_gpu_temperature(gpu: Option<String>) -> u32 {
 
 #[cfg(target_os = "linux")]
 fn get_gpu_vram(gpu: Option<String>) -> String {
-    if let Some(active_gpu) = gpu {
-        let vram_used_path = format!("/sys/class/drm/{}/device/mem_info_vram_used", active_gpu);
-        let vram_total_path = format!("/sys/class/drm/{}/device/mem_info_vram_total", active_gpu);
+    let Some(active_gpu) = gpu else {
+        return "N/A".to_string();
+    };
 
-        let used = fs::read_to_string(vram_used_path)
-            .ok()
-            .and_then(|s| s.trim().parse::<u64>().ok())
-            .map(|v| v / 1024 / 1024)
-            .unwrap_or(0);
+    let used = fs::read_to_string(format!("/sys/class/drm/{}/device/mem_info_vram_used", &active_gpu))
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|v| v / 1024 / 1024);
 
-        let total = fs::read_to_string(vram_total_path)
-            .ok()
-            .and_then(|s| s.trim().parse::<u64>().ok())
-            .map(|v| v / 1024 / 1024)
-            .unwrap_or(0);
+    let total = fs::read_to_string(format!("/sys/class/drm/{}/device/mem_info_vram_total", &active_gpu))
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .map(|v| v / 1024 / 1024);
 
-        return format!("{} / {} MB", used, total);
+    match (used, total) {
+        (Some(u), Some(t)) => format!("{} / {} MB", u, t),
+        _ => "N/A".to_string(),
     }
-    "N/A".to_string()
 }
 
 pub(super) struct GpuInfo {

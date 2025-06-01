@@ -42,7 +42,7 @@ use winit::event_loop::EventLoop;
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
 
-pub struct MajmunskiEvent {
+pub struct GearMessage {
     pub gear_event: GearEvent,
     pub game: GameView<'static>,
 }
@@ -65,7 +65,7 @@ pub struct MajmunskiEvent {
 /// - `scene`: Interior-mutable reference to the curr
 pub struct Game {
     pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
-    pub(crate) gear_channels: HashMap<String, Sender<MajmunskiEvent>>,
+    pub(crate) gear_channels: HashMap<String, Sender<GearMessage>>,
     pub(crate) gear_handles: HashMap<String, JoinHandle<()>>,
     pub(crate) command_receiver: Receiver<Box<dyn Command>>,
     pub(crate) command_sender: Sender<Box<dyn Command>>,
@@ -112,7 +112,7 @@ impl Game {
     /// Adds a new gear to the game and starts its processing thread.
     ///
     /// The gear is initialized via its `setup` method, and then run in a separate thread
-    /// where it listens for `MajmunskiEvent` messages. These events are dispatched from the main
+    /// where it listens for `GearMessage` messages. These events are dispatched from the main
     /// game loop and routed to the appropriate gear methods (`update`, `mouse_motion`, etc.).
     ///
     /// The gear is registered under the provided `id`, and any previously existing gear with the same
@@ -137,11 +137,25 @@ impl Game {
         let handle = std::thread::spawn(move || {
             while let Ok(msg) = gear_receiver.recv() {
                 match msg.gear_event {
-                    GearEvent::Update() => gear.update(msg.game),
-                    GearEvent::MouseMotion(dx, dy) => gear.mouse_motion(dx, dy, msg.game),
-                    GearEvent::KeyboardInput(key, state) => gear.keyboard_input(key, state, msg.game),
-                    GearEvent::WindowEvent(ref window_event) => gear.window_event(&window_event, msg.game),
-                    _ => {}
+                    GearEvent::Update() => {
+                        gear.update(msg.game);
+                    },
+                    GearEvent::MouseMotion(dx, dy) => {
+                        gear.mouse_motion(dx, dy, msg.game);
+                    },
+                    GearEvent::KeyboardInput(key, state) => {
+                        gear.keyboard_input(key, state, msg.game);
+                    },
+                    GearEvent::WindowEvent(ref window_event) => {
+                        gear.window_event(&window_event, msg.game);
+                    }
+                    GearEvent::Exit() => {
+                        gear.exit(msg.game);
+                        break;
+                    }
+                    GearEvent::WindowResize(physical_size) => {
+                        let _ = physical_size;
+                    }
                 }
             }
         });
@@ -165,33 +179,69 @@ impl Game {
         self
     }
 
-    /// Dispatches a `GearEvent` to all registered gears in the game.
+    /// Dispatches a [`GearEvent`] to all active gears registered in the game.
     ///
-    /// For each gear, a `MajmunskiEvent` is constructed containing the event and a snapshot
-    /// of the current game state (`GameView`), including `Scene`, `Time`, and `Graphics`.
+    /// For each gear, a [`GearMessage`] is constructed, bundling the provided event and
+    /// a snapshot of the current game state via a [`GameView`] reference. This snapshot includes
+    /// access to `Graphics`, `Time`, and `Scene`, allowing each gear to process the event
+    /// with full game context.
     ///
-    /// The event is sent to each gear via its dedicated communication channel.
-    /// Each gear runs in its own thread and receives the event asynchronously.
+    /// The event is sent through a dedicated channel (`Sender<GearMessage>`) for each gear.
+    /// Each gear runs in its own thread and receives events asynchronously. If a gear's receiving
+    /// thread has exited or panicked (i.e., the channel is disconnected), the gear is considered
+    /// dead and is removed from both `gear_channels` and `gear_handles`.
     ///
-    /// After dispatching, all pending commands returned by gears (sent via `Command`) are applied
-    /// to the main game state immediately.
+    /// After all events are dispatched, any pending [`Command`]s returned by gears (sent via
+    /// a shared command channel) are drained and applied immediately to the game state.
     ///
     /// # Arguments
-    /// * `event` - The `GearEvent` to send to all gears.
     ///
-    /// # Panics
-    /// Will panic if sending on any gear channel fails (indicates a crashed gear thread).
+    /// * `event` - The [`GearEvent`] to broadcast to all active gears.
+    ///
+    /// # Behavior
+    ///
+    /// - Dead gears (i.e., those whose channel has been disconnected) are silently removed.
+    /// - No panic occurs if sending to a gear fails.
+    /// - Commands sent from gears during this cycle are executed immediately after dispatching.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// game.dispatch_event(GearEvent::Update());
+    /// ```
     pub fn dispatch_event(&mut self, event: GearEvent) {
-        self.gear_channels.iter().for_each(|(_, sender)| {
-            sender.send(MajmunskiEvent {
-                gear_event: event.clone(),
+        let graphics = match unsafe { & *self.graphics.get() } {
+            Some(graphics) => graphics,
+            None => return
+        };
+
+        let scene = unsafe { &*self.scene.get() };
+
+        let time = self.time.clone();
+
+        let mut dead_gears = Vec::new();
+
+        for (id, sender) in &self.gear_channels {
+            let gear_event = event.clone();
+
+            let result = sender.send(GearMessage {
+                gear_event,
                 game: GameView {
-                    graphics: unsafe { &mut *self.graphics.get() }.as_mut().unwrap(),
-                    time: self.time.clone(),
-                    scene: unsafe { &mut *self.scene.get() },
+                    graphics,
+                    time,
+                    scene,
                 },
-            }).unwrap();
-        });
+            });
+
+            if let Err(_err) = result {
+                dead_gears.push(id.clone());
+            }
+        }
+
+        for id in dead_gears {
+            self.gear_channels.remove(&id);
+            self.gear_handles.remove(&id);
+        }
 
         while let Ok(cmd) = self.command_receiver.try_recv() {
             cmd.apply(self);
@@ -214,8 +264,12 @@ impl Game {
     ///
     /// # Panics
     /// Panics if the graphics backend has not been initialized (`None`).
-    pub fn graphics(&self) -> &mut Graphics {
-        unsafe { &mut *self.graphics.get() }.as_mut().unwrap()
+    pub fn graphics(&self) -> Result<&mut Graphics, &'static str> {
+        let graphics = unsafe { &mut *self.graphics.get() };
+        match graphics {
+            Some(graphics) => Ok(graphics),
+            None => Err("graphics is not initialized")
+        }
     }
 
     /// Updates camera matrices, GPU state, and timing for the current frame.
@@ -224,37 +278,49 @@ impl Game {
     /// - Retrieves the active camera and updates its view/projection matrices.
     /// - Uploads camera information to the GPU.
     /// - Updates the global time system.
-    ///
-    /// # Panics
-    /// Panics if there is no active camera in the scene.
     pub(crate) fn update(&mut self) {
+        self.time.update();
+
         let scene = unsafe { &mut *self.scene.get() };
-        let camera = scene.active_camera_mut()
-            .expect("ERROR: no camera found");
-        let graphics = self.graphics();
+
+        let Ok(graphics) = self.graphics() else {
+            return;
+        };
+
+        let Some(camera) = scene.active_camera_mut() else {
+            return;
+        };
 
         camera.update_view_proj(&graphics.projection);
-
         graphics.update(camera);
-
-        self.time.update();
     }
 
-    /// Spawns a new model instance entity into the ECS world.
+    /// Spawns a new model instance into the ECS world.
     ///
-    /// If the model at `file_path` has not been loaded yet, it will be loaded first.
-    /// The function then creates a new entity with the provided `Transform`
-    /// and associates it with a [`ModelInstance`] component.
+    /// If the model at `file_path` has not been previously loaded, this function attempts
+    /// to load it first. Upon success, a new [`Entity`] is created with the given [`Transform`]
+    /// and a [`ModelInstance`] component referencing the model.
     ///
     /// # Parameters
-    /// - `file_path`: Relative path to the model file to load (e.g., "tree/tree.obj").
-    /// - `transform`: The world transform to apply to the newly spawned entity.
+    /// - `file_path`: Relative path to the model file (e.g., `"tree/tree.obj"`).
+    ///               This path is also used as the model's registration key.
+    /// - `transform`: World-space transform to assign to the new entity.
     ///
     /// # Returns
-    /// - The [`Entity`] representing the newly spawned model instance.
-    pub fn spawn_model(&mut self, file_path: &str, transform: Transform) -> Entity {
+    /// - `Ok(Entity)` if the model is successfully loaded (or already loaded) and the entity is spawned.
+    /// - `Err(String)` if loading the model fails.
+    ///
+    /// # Errors
+    /// This function returns an error if:
+    /// - The model file path is invalid.
+    /// - No LODs are found for the model.
+    /// - Loading the model or GPU upload fails.
+    /// - Required GPU resources (like texture layouts) are missing.
+    pub fn spawn_model(&mut self, file_path: &str, transform: Transform) -> Result<Entity, String> {
         if !self.scene().render_objects.contains_key(file_path) {
-            self.load_model(file_path);
+            if let Err(err) = self.load_model(file_path) {
+                return Err(format!("Failed to load model '{}': {}", file_path, err));
+            }
         }
 
         let entity = self.scene().world.spawn();
@@ -264,35 +330,63 @@ impl Game {
             name: file_path.to_string(),
         });
 
-        entity
+        Ok(entity)
     }
 
-    /// Loads a model and registers it in the scene's render object list.
+    /// Loads a model and registers it in the scene's render object registry.
     ///
-    /// This function searches for `.obj` files with LOD variants based on filename prefix
-    /// and loads them into GPU memory. Each loaded LOD is added to the `RenderObject` structure
-    /// for the provided `name`.
+    /// This function searches for `.obj` files with LOD variants that share the same
+    /// filename prefix. All found LODs are loaded into GPU memory, and stored in a
+    /// [`RenderObject`] under the provided name key.
     ///
     /// # Parameters
-    /// - `name`: The name/key used to register the loaded model.
+    /// - `name`: Model key and relative path under the `resources/` directory
+    ///           (e.g., `"tree/tree.obj"`).
     ///
-    /// # Panics
-    /// - If the model directory or file names are invalid.
-    /// - If required resources (e.g., texture bind group layout) are missing.
-    pub fn load_model(&mut self, name: &str) {
+    /// # Returns
+    /// - `Ok(())` if the model and all its LODs are successfully loaded and registered.
+    /// - `Err(String)` if an error occurs during path resolution, file reading, or GPU upload.
+    ///
+    /// # Errors
+    /// This function returns an error if:
+    /// - The model file path is invalid or contains non-UTF8 characters.
+    /// - The containing directory can't be read.
+    /// - No matching `.obj` LOD files are found.
+    /// - Loading any of the model LODs fails.
+    /// - Required GPU resources (e.g., bind group layouts) are missing.
+    pub fn load_model(&mut self, name: &str) -> Result<(), String> {
         let scene = unsafe { &mut *self.scene.get() };
 
-        let texture_layout = self.graphics().bind_group_layouts.get(&BindGroupLayoutKey::Texture)
-            .expect("Texture bind group layout not found");
+        let Ok(graphics) = self.graphics() else {
+            return Err("Graohics is not initialized".into());
+        };
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let Some(texture_layout) = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture) else {
+            return Err("Missing texture bind group layout".into());
+        };
+
+        let Ok(rt) = tokio::runtime::Runtime::new() else {
+            return Err("Failed to create Tokio runtime".into());
+        };
 
         let base_path = Path::new("resources").join(name);
-        let parent_dir = base_path.parent().expect("Invalid model path");
-        let stem = base_path.file_stem().expect("Invalid file name").to_str().unwrap();
+        let Some(parent_dir) = base_path.parent() else {
+            return Err(format!("Invalid model path: {}", base_path.display()));
+        };
 
-        let mut obj_paths: Vec<PathBuf> = std::fs::read_dir(parent_dir)
-            .expect("Failed to read model directory")
+        let Some(stem_osstr) = base_path.file_stem() else {
+            return Err(format!("Invalid model file name: {}", base_path.display()));
+        };
+
+        let Some(stem) = stem_osstr.to_str() else {
+            return Err("Model file name is not valid UTF-8".into());
+        };
+
+        let Ok(read_dir) = std::fs::read_dir(parent_dir) else {
+            return Err(format!("Failed to read model directory: {}", parent_dir.display()));
+        };
+
+        let mut obj_paths: Vec<PathBuf> = read_dir
             .filter_map(|entry| {
                 let path = entry.ok()?.path();
                 let filename = path.file_name()?.to_str()?;
@@ -306,17 +400,29 @@ impl Game {
 
         obj_paths.sort();
 
-        let lods: Vec<_> = obj_paths.into_iter().map(|path| {
-            rt.block_on(async {
-                super::resources::load_model(
-                    &path,
-                    &self.graphics().device,
-                    &self.graphics().queue,
-                    texture_layout,
-                ).await
+        if obj_paths.is_empty() {
+            return Err(format!("No .obj files found for model '{}'", name));
+        }
+
+        let lods: Vec<_> = obj_paths
+            .into_iter()
+            .map(|path| {
+                rt.block_on(async {
+                    super::resources::load_model(
+                        &path,
+                        &graphics.device,
+                        &graphics.queue,
+                        texture_layout,
+                    ).await
+                })
             })
-        }).collect();
+        .collect::<Result<Vec<_>, _>>()?;
+
+        if lods.is_empty() {
+            return Err(format!("Failed to load any LOD for model '{}'", name));
+        }
 
         scene.add_render_object(name.to_string(), RenderObject { lods });
+        Ok(())
     }
 }

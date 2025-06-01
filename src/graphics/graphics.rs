@@ -116,7 +116,7 @@ pub struct Graphics {
     pub depth_texture: Texture,
     pub projection: Projection,
 
-    pub bind_group_layouts: HashMap<BindGroupLayoutKey, Arc<wgpu::BindGroupLayout>>,
+    pub bind_group_layouts: HashMap<BindGroupLayoutKey, wgpu::BindGroupLayout>,
     pub pipelines: HashMap<RenderTag, wgpu::RenderPipeline>,
 
     pub buffers: HashMap<String, Buffer>,
@@ -127,7 +127,7 @@ pub struct Graphics {
 }
 
 impl Graphics {
-    pub(crate) async fn new(window: Arc<Window>) -> Graphics {
+    pub(crate) async fn new(window: Arc<Window>) -> Result<Graphics, String> {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -135,7 +135,8 @@ impl Graphics {
             ..Default::default()
         });
 
-        let surface = instance.create_surface(window.clone()).unwrap();
+        let surface = instance.create_surface(window.clone())
+            .map_err(|e| format!("Failed to create surface: {e}"))?;
 
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -144,7 +145,8 @@ impl Graphics {
                 force_fallback_adapter: false,
             })
         .await
-            .unwrap();
+            .ok_or_else(|| "Failed to find a suitable GPU adapter.".to_string())?;
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -156,7 +158,7 @@ impl Graphics {
                 None,
             )
             .await
-            .unwrap();
+            .map_err(|e| format!("Failed to create device: {e}"))?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps
@@ -164,7 +166,9 @@ impl Graphics {
             .iter()
             .copied()
             .find(|f| f.is_srgb())
-            .unwrap_or(surface_caps.formats[0]);
+            .or_else(|| surface_caps.formats.get(0).copied())
+            .ok_or_else(|| "No surface formats available.".to_string())?;
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
@@ -204,7 +208,7 @@ impl Graphics {
 
         graphics.initialize_default_resources();
 
-        graphics
+        Ok(graphics)
     }
 
     pub fn get_pipeline(&self, tag: &RenderTag) -> Option<&wgpu::RenderPipeline> {
@@ -216,7 +220,7 @@ impl Graphics {
             label,
             entries,
         });
-        self.bind_group_layouts.insert(key, Arc::new(layout));
+        self.bind_group_layouts.insert(key, layout);
     }
 
 
@@ -225,18 +229,15 @@ impl Graphics {
         self.buffers.insert(name.to_string(), buffer);
     }
 
-    pub fn create_bind_group(&mut self, layout_key: BindGroupLayoutKey, entries: &[wgpu::BindGroupEntry], label: Option<&str>) -> Result<(), String> {
-        let layout = self.bind_group_layouts.get(&layout_key)
-            .ok_or_else(|| format!("Bind group layout {:?} not found", layout_key))?;
-
-        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label,
-            layout,
-            entries,
-        });
-
-        self.bind_groups.insert(layout_key, bind_group);
-        Ok(())
+    pub fn create_bind_group(&mut self, layout_key: BindGroupLayoutKey, entries: &[wgpu::BindGroupEntry], label: Option<&str>) {
+        if let Some(layout) = self.bind_group_layouts.get(&layout_key) {
+            let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label,
+                layout,
+                entries,
+            });
+            self.bind_groups.insert(layout_key, bind_group);
+        }
     }
 
     fn initialize_default_resources(&mut self) {
@@ -290,48 +291,51 @@ impl Graphics {
                 visibility: wgpu::ShaderStages::FRAGMENT,
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
-            },
-            ],
-            Some("texture_bind_group_layout"),
-            );
+            }],
+            Some("texture_bind_group_layout"));
 
-            self.create_bind_grouproup_layout(
-                BindGroupLayoutKey::Camera,
-                &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                Some("camera_bind_group_layout"),
-            );
+        self.create_bind_grouproup_layout(
+            BindGroupLayoutKey::Camera,
+            &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            Some("camera_bind_group_layout"),
+        );
 
-            self.create_bind_grouproup_layout(
-                BindGroupLayoutKey::Light,
-                &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                Some("light_bind_group_layout"),
-            );
+        self.create_bind_grouproup_layout(
+            BindGroupLayoutKey::Light,
+            &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            Some("light_bind_group_layout"),
+        );
 
+        if let (Some(texture_layout), Some(camera_layout), Some(light_layout)) = (
+            self.bind_group_layouts.get(&BindGroupLayoutKey::Texture),
+            self.bind_group_layouts.get(&BindGroupLayoutKey::Camera),
+            self.bind_group_layouts.get(&BindGroupLayoutKey::Light),
+        ) {
             let render_pipeline_layout = self.device.create_pipeline_layout(
                 &wgpu::PipelineLayoutDescriptor {
                     label: Some("Default Render Pipeline Layout"),
                     bind_group_layouts: &[
-                        self.bind_group_layouts.get(&BindGroupLayoutKey::Texture).expect("Texture bind group layout not found"),
-                        self.bind_group_layouts.get(&BindGroupLayoutKey::Camera).expect("Camera bind group layout not found"),
-                        self.bind_group_layouts.get(&BindGroupLayoutKey::Light).expect("Ligth bind group layout not found"),
+                        texture_layout,
+                        camera_layout,
+                        light_layout,
                     ],
                     push_constant_ranges: &[],
                 });
@@ -371,59 +375,71 @@ impl Graphics {
                 shader_descriptor,
             );
             self.pipelines.insert(RenderTag::WeightedTransparent, weighted_pipeline);
+        }
 
-            self.create_buffer(
-                "camera",
-                DEFAULT_CAMERA_BUFFER_SIZE,
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                BufferStrategy::Single,
-            );
+        self.create_buffer(
+            "camera",
+            DEFAULT_CAMERA_BUFFER_SIZE,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            BufferStrategy::Single,
+        );
 
-            self.create_buffer(
-                "light",
-                std::mem::size_of::<LightUniform>(),
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                BufferStrategy::Single,
-            );
+        self.create_buffer(
+            "light",
+            std::mem::size_of::<LightUniform>(),
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            BufferStrategy::Single,
+        );
 
-            let light_uniform = LightUniform {
-                position: [0.0, 100.0, -20.0],
-                _padding: 0,
-                color: [1.0, 1.0, 1.0],
-                _padding2: 0,
-            };
+        let light_uniform = LightUniform {
+            position: [0.0, 100.0, -20.0],
+            _padding: 0,
+            color: [1.0, 1.0, 1.0],
+            _padding2: 0,
+        };
 
-            self.buffers.get_mut("light").unwrap().write(&self.queue, bytemuck::cast_slice(&[light_uniform]));
 
-            let mut buffers = std::mem::take(&mut self.buffers);
+        if let Some(light_buffer) = self.buffers.get_mut("light") {
+            light_buffer.write(&self.queue, bytemuck::cast_slice(&[light_uniform]));
+        }
 
-            self.create_bind_group(
-                BindGroupLayoutKey::Camera,
-                &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.get_mut("camera").unwrap().current().as_entire_binding(),
-                }],
-                Some("camera_bind_group"),
-            ).unwrap();
+        let buffers = std::mem::take(&mut self.buffers);
 
+        if let Some(light_buffer) = buffers.get("light") {
             self.create_bind_group(
                 BindGroupLayoutKey::Light,
                 &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: buffers.get_mut("light").unwrap().current().as_entire_binding(),
+                    resource: light_buffer.current().as_entire_binding(),
                 }],
                 Some("light_bind_group"),
-            ).expect("Failed to create light bind group");
+            );
+        }
 
-            self.buffers = buffers;
+
+        if let Some(camera_buffer) = buffers.get("camera") {
+            self.create_bind_group(
+                BindGroupLayoutKey::Camera,
+                &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: camera_buffer.current().as_entire_binding(),
+                }],
+                Some("camera_bind_group"),
+            );
+        }
+
+
+        self.buffers = buffers;
     }
 
     pub(crate) fn update(&mut self, camera: &Camera) {
-        self.queue.write_buffer(
-            &self.buffers.get("camera").expect("no camera buffer found").current(),
-            0,
-            &camera.get_uniform(),
-        );
+        if let Some(camer_buffer) = self.buffers.get("camera") {
+            self.queue.write_buffer(
+                &camer_buffer.current(),
+                0,
+                &camera.get_uniform(),
+            );
+        }
     }
 
 
@@ -445,6 +461,8 @@ pub struct SetTrianglesCount {
 
 impl Command for SetTrianglesCount {
     fn apply(self: Box<Self>, game: &mut crate::Game) {
-        game.graphics().t_count = self.count;
+        if let Ok(graphics) = game.graphics() {
+            graphics.t_count = self.count;
+        }
     }
 }

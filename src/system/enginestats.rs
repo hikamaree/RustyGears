@@ -43,7 +43,10 @@ impl EngineStats {
 
 impl Gui for EngineStats {
     fn render_gui(&self, game: &GameView, ctx: &egui::Context) {
-        let mut gpu = self.gpu.lock().unwrap();
+        let Ok(mut gpu) = self.gpu.lock() else {
+            return;
+        };
+
         gpu.update(game.time.total_time());
 
         Area::new("game_stats".into())

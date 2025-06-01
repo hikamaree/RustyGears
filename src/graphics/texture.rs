@@ -36,7 +36,6 @@ pub(crate) fn dummy_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<T
     }).clone()
 }
 
-
 impl Texture {
     pub const ACCUM_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
     pub const REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
@@ -84,10 +83,10 @@ impl Texture {
         }
     }
 
-    pub fn from_bytes(device: &Device, queue: &Queue, bytes: &[u8], label: &str, is_normal_map: bool) -> Self {
+    pub fn from_bytes(device: &Device, queue: &Queue, bytes: &[u8], label: &str, is_normal_map: bool) -> Result<Self, String> {
         let img = image::load_from_memory(bytes)
-            .expect(&format!("ERROR: Image not found"));
-        Self::from_image(device, queue, &img, Some(label), is_normal_map)
+            .map_err(|err| format!("Failed to decode image: {}", err))?;
+        Ok(Self::from_image(device, queue, &img, Some(label), is_normal_map))
     }
 
     pub fn from_image(device: &Device, queue: &Queue, img: &image::DynamicImage, label: Option<&str>, is_normal_map: bool) -> Self {
@@ -213,9 +212,5 @@ impl Texture {
             view,
             sampler,
         }
-    }
-
-    pub fn get_dummy_texture() -> Arc<Texture> {
-        DUMMY_TEXTURE.get().unwrap().clone()
     }
 }

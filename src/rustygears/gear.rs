@@ -116,6 +116,20 @@ pub trait Gear: Any + Send + Sync {
         let _ = window_event;
         let _ = game;
     }
+
+    /// Called when the gear is being shut down or removed from the game.
+    ///
+    /// This method provides an opportunity to perform any necessary cleanup,
+    /// such as deallocating resources, saving state, or sending final commands.
+    ///
+    /// It is guaranteed to be called exactly once before the gear's thread exits,
+    /// if the `Exit` event is dispatched via `GearEvent::Exit`.
+    ///
+    /// # Parameters
+    /// - `game`: A read-only snapshot of the current game state at shutdown time.
+    fn exit(&mut self, game: GameView ) {
+        let _ = game;
+    }
 }
 
 /// Represents different types of events that can occur in the system.
@@ -133,16 +147,6 @@ pub enum GearEvent {
     /// }
     /// ```
     Update(),
-
-    /// Dispatched when a new frame render is requested.
-    ///
-    /// ### Example Usage
-    /// ```rust
-    /// if let GearEvent::RenderRequested() = event {
-    ///     println!("Rendering...");
-    /// }
-    /// ```
-    RenderRequested(),
 
     /// Dispatched when the window is resized.
     ///
@@ -176,5 +180,31 @@ pub enum GearEvent {
     /// ```
     MouseMotion(f64, f64),
 
+    /// Dispatched for raw `winit` window events that do not fall under other categories.
+    ///
+    /// This allows low-level event handling, such as focus changes, mouse wheel input,
+    /// DPI changes, etc.
+    ///
+    /// ### Example Usage
+    /// ```rust
+    /// use winit::event::WindowEvent;
+    ///
+    /// if let GearEvent::WindowEvent(WindowEvent::Focused(focused)) = event {
+    ///     println!("Window focus: {}", focused);
+    /// }
+    /// ```
     WindowEvent(winit::event::WindowEvent),
+
+    /// Signals that the gear thread should shut down gracefully.
+    ///
+    /// This is typically dispatched during engine shutdown or when dynamically removing a gear.
+    /// Upon receiving this event, the gear should perform cleanup and exit its thread loop.
+    ///
+    /// ### Example Usage
+    /// ```rust
+    /// if let GearEvent::Exit() = event {
+    ///     println!("Shutting down gear...");
+    /// }
+    /// ```
+    Exit(),
 }

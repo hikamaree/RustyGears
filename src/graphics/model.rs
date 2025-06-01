@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::dummy_texture;
 use crate::RenderTag;
 use crate::InstanceRaw;
 use std::sync::Arc;
@@ -99,8 +100,8 @@ impl Vertex for ModelVertex {
 #[derive(Clone)]
 pub struct Material {
     pub name: String,
-    pub diffuse_texture: Arc<Texture>,
-    pub normal_texture: Arc<Texture>,
+    pub diffuse_texture: Option<Texture>,
+    pub normal_texture: Option<Texture>,
     pub dissolve_texture: Option<Texture>,
     pub bind_group: wgpu::BindGroup,
     pub dissolve: f32,
@@ -109,46 +110,68 @@ pub struct Material {
 impl Material {
     pub fn new(
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
         name: &str,
-        diffuse_texture: Texture,
-        normal_texture: Texture,
+        diffuse_texture: Option<Texture>,
+        normal_texture: Option<Texture>,
         dissolve_texture: Option<Texture>,
         dissolve: f32,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
+        let dummy = dummy_texture(device, queue);
 
-        let mut entries = vec![
-            wgpu::BindGroupEntry {
+        let mut entries = Vec::new();
+
+        if let Some(ref diffuse_texture) = diffuse_texture {
+            entries.push(wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-            },
-            wgpu::BindGroupEntry {
+            });
+            entries.push(wgpu::BindGroupEntry {
                 binding: 1,
                 resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-            },
-            wgpu::BindGroupEntry {
+            });
+        } else {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&dummy.view),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(&dummy.sampler),
+            });
+        }
+
+        if let Some(ref normal_texture) = diffuse_texture {
+            entries.push(wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::TextureView(&normal_texture.view),
-            },
-            wgpu::BindGroupEntry {
+            });
+            entries.push(wgpu::BindGroupEntry {
                 binding: 3,
                 resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
-            },
-        ];
+            });
+        } else {
+            entries.push(wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::TextureView(&dummy.view),
+            });
+            entries.push(wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::Sampler(&dummy.sampler),
+            });
+        }
 
-        let dummy = Texture::get_dummy_texture();
-
-        if let Some(ref alpha_tex) = dissolve_texture {
+        if let Some(ref dissolve_texture) = dissolve_texture {
             entries.push(wgpu::BindGroupEntry {
                 binding: 4,
-                resource: wgpu::BindingResource::TextureView(&alpha_tex.view),
+                resource: wgpu::BindingResource::TextureView(&dissolve_texture.view),
             });
             entries.push(wgpu::BindGroupEntry {
                 binding: 5,
-                resource: wgpu::BindingResource::Sampler(&alpha_tex.sampler),
+                resource: wgpu::BindingResource::Sampler(&dissolve_texture.sampler),
             });
         } else {
-
             entries.push(wgpu::BindGroupEntry {
                 binding: 4,
                 resource: wgpu::BindingResource::TextureView(&dummy.view),
@@ -167,8 +190,8 @@ impl Material {
 
         Self {
             name: String::from(name),
-            diffuse_texture: Arc::new(diffuse_texture),
-            normal_texture: Arc::new(normal_texture),
+            diffuse_texture,
+            normal_texture,
             dissolve_texture,
             dissolve,
             bind_group,

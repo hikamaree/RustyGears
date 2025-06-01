@@ -65,7 +65,7 @@ pub struct SetCameraRotation {
     pub yaw: Rad<f32>,
 
     /// Pitch angle in radians (rotation around X-axis).
-    pub pitch: Rad<f32>, // ← ako je typo u nazivu polja, mogu da ti ponudim i ispravku
+    pub pitch: Rad<f32>,
 
     /// Roll angle in radians (rotation around Z-axis).
     pub roll: Rad<f32>,
