@@ -15,12 +15,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-mod command;
-mod world;
-mod scene;
-mod entity;
+use crate::Entity;
+use crate::Component;
+use crate::World;
 
-pub use command::*;
-pub use world::*;
-pub use scene::*;
-pub use entity::*;
+pub struct EntityBuilder<'a> {
+    pub world: &'a mut World,
+    pub entity: Entity,
+}
+
+impl<'a> EntityBuilder<'a> {
+    pub fn with<T: Component>(self, component: T) -> Self {
+        self.world.insert(self.entity, component);
+        self
+    }
+
+    pub fn build(self) -> Entity {
+        self.entity
+    }
+}

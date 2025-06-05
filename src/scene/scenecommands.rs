@@ -19,9 +19,6 @@ use crate::Entity;
 use crate::Transform;
 use crate::Command;
 use crate::Game;
-use crate::Camera;
-
-use cgmath::Point3;
 
 /// Command to set the active (default) camera in the scene.
 ///
@@ -30,6 +27,7 @@ use cgmath::Point3;
 ///
 /// # Fields
 /// - `id`: The identifier of the camera to be set as the active one.
+#[derive(Debug)]
 pub struct SetDefaultCamera {
     pub camera: Entity,
 }
@@ -37,32 +35,6 @@ pub struct SetDefaultCamera {
 impl Command for SetDefaultCamera {
     fn apply(self: Box<Self>, game: &mut Game) {
         game.scene().set_active_camera(self.camera);
-    }
-}
-
-/// Command to add a new camera to the scene.
-///
-/// The camera is initialized with the given position and rotation
-/// expressed through yaw, pitch, and roll values (in radians).
-///
-/// # Fields
-/// - `position`: The position of the camera in 3D space.
-/// - `yaw`: The horizontal rotation of the camera (around the Y-axis).
-/// - `pitch`: The vertical rotation of the camera (around the X-axis).
-/// - `roll`: The tilt rotation of the camera (around the Z-axis).
-pub struct AddCamera {
-    pub position: Point3<f32>,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub roll: f32,
-}
-
-impl Command for AddCamera {
-    fn apply(self: Box<Self>, game: &mut Game) {
-        let mut camera = Camera::new();
-        camera.set_position(self.position);
-        camera.set_rotation(cgmath::Rad(self.yaw), cgmath::Rad(self.pitch), cgmath::Rad(self.roll));
-        game.scene().add_camera(camera);
     }
 }
 
@@ -76,6 +48,7 @@ impl Command for AddCamera {
 /// - `file_path`: The path to the model file (e.g., `.obj`, `.gltf`).
 /// - `transform`: The transformation applied to the model when spawning.
 /// - `render_tags`: A list of render tags defining how the object will be rendered.
+#[derive(Debug)]
 pub struct SpawnModel {
     pub file_path: String,
     pub transform: Transform,
@@ -97,6 +70,7 @@ impl Command for SpawnModel {
 /// # Fields
 /// - `id`: The identifier of the instance whose transformation will be updated.
 /// - `transform`: The new transformation to be applied to the instance.
+#[derive(Debug)]
 pub struct SetInstanceTransform {
     pub entity: Entity,
     pub transform: Transform,
@@ -106,6 +80,40 @@ impl Command for SetInstanceTransform {
     fn apply(self: Box<Self>, game: &mut Game) {
         if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
             *instance = self.transform;
+        }
+    }
+}
+
+/// Command to move an instance by a relative offset.
+///
+/// This command updates the translation of the instance by adding `delta` to it.
+#[derive(Debug)]
+pub struct MoveInstance {
+    pub entity: Entity,
+    pub delta: cgmath::Vector3<f32>,
+}
+
+impl Command for MoveInstance {
+    fn apply(self: Box<Self>, game: &mut Game) {
+        if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
+            instance.position += self.delta;
+        }
+    }
+}
+
+/// Command to rotate an instance by a relative quaternion rotation.
+///
+/// This command multiplies the current rotation by the `delta` rotation.
+#[derive(Debug)]
+pub struct RotateInstance {
+    pub entity: Entity,
+    pub delta: cgmath::Quaternion<f32>,
+}
+
+impl Command for RotateInstance {
+    fn apply(self: Box<Self>, game: &mut Game) {
+        if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
+            instance.rotation = self.delta * instance.rotation;
         }
     }
 }

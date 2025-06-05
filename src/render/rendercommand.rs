@@ -37,6 +37,7 @@ use crate::RenderTag;
 /// # Fields
 /// - `prepared_models`: Models and their per-instance data that passed frustum culling.
 /// - `tag`: The render pipeline tag used to select the appropriate GPU pipeline.
+#[derive(Debug)]
 pub struct RenderBatch {
     /// A list of models and associated instance data that are ready to be drawn.
     /// Each entry contains the mesh, instance transforms, and per-mesh visibility info.
@@ -62,6 +63,7 @@ pub struct RenderBatch {
 /// # Fields
 /// - `batches`: A list of render batches grouped by pipeline and camera. Each batch
 ///   contains preprocessed model/instance data ready to be drawn.
+#[derive(Debug)]
 pub struct RenderCommand {
     /// A list of render batches, each representing a group of models that share the same
     /// render pipeline and camera.

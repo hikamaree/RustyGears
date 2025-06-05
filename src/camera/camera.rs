@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use cgmath::EuclideanSpace;
+use crate::Transform;
 use cgmath::Vector4;
 use cgmath::Matrix;
 use std::sync::atomic::Ordering;
@@ -26,12 +28,8 @@ use cgmath::vec3;
 use cgmath::Vector3;
 use cgmath::Point3;
 use cgmath::Matrix4;
-use cgmath::Angle;
-use cgmath::Rad;
 use cgmath::SquareMatrix;
 use cgmath::InnerSpace;
-
-const SAFE_FRAC_PI_2: f32 = std::f32::consts::FRAC_PI_2 - 0.0001;
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -40,10 +38,6 @@ static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone)]
 pub struct Camera {
     pub id: u64,
-    pub position: Point3<f32>,
-    pub yaw: Rad<f32>,
-    pub pitch: Rad<f32>,
-    pub roll: Rad<f32>,
     view_position: [f32; 4],
     view_proj: [[f32; 4]; 4],
     pub speed: f32,
@@ -65,24 +59,16 @@ impl Camera {
     /// # Returns
     /// Returns an instance of the camera.
     pub fn new() -> Self {
-        let mut camera = Camera {
+        Camera {
             id: ID_COUNTER.fetch_add(1, Ordering::Relaxed),
-            position: Point3::new(0.0, 0.0, 0.0),
-            yaw: Rad(0.0),
-            pitch: Rad(0.0),
-            roll: Rad(0.0),
             view_position: [0.0; 4],
-            view_proj: cgmath::Matrix4::identity().into(),
+            view_proj: Matrix4::identity().into(),
             speed: 40.0,
             sensitivity: 0.4,
             forward: vec3(0.0, 0.0, -1.0),
             right: Vector3::zero(),
             frustum: [vec4(0.0, 0.0, 0.0, 0.0); 6],
-        };
-
-        camera.update_camera_vectors();
-        
-        camera
+        }
     }
 
     /// Returns the camera's ID.
@@ -94,15 +80,9 @@ impl Camera {
     ///
     /// # Returns
     /// A view matrix that determines how objects will be rendered in relation to the camera.
-    pub fn calc_matrix(&self) -> Matrix4<f32> {
-        let (sin_pitch, cos_pitch) = self.pitch.0.sin_cos();
-        let (sin_yaw, cos_yaw) = self.yaw.0.sin_cos();
-
-        Matrix4::look_to_rh(
-            self.position,
-            Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
-            Vector3::unit_y(),
-        )
+    pub fn calc_matrix(&self, transform: &Transform) -> Matrix4<f32> {
+        let forward = transform.forward();
+        Matrix4::look_to_rh(Point3::from_vec(transform.position), forward, Vector3::unit_y())
     }
 
     /// Updates the camera's view frustum planes from the current view-projection matrix.
@@ -165,9 +145,15 @@ impl Camera {
     ///
     /// # Arguments
     /// * `projection` - The projection used to update the projection matrix.
-    pub fn update_view_proj(&mut self, projection: &Projection) {
-        self.view_position = self.position.to_homogeneous().into();
-        self.view_proj = (projection.calc_matrix() * self.calc_matrix()).into();
+    pub fn update_view_proj(&mut self, transform: &Transform, projection: &Projection) {
+        self.view_position = Vector4::new(
+            transform.position.x,
+            transform.position.y,
+            transform.position.z,
+            1.0,
+        ).into();
+        let view = self.calc_matrix(transform);
+        self.view_proj = (projection.calc_matrix() * view).into();
         self.update_frustum();
     }
 
@@ -186,44 +172,5 @@ impl Camera {
             self.view_proj[2][0], self.view_proj[2][1], self.view_proj[2][2], self.view_proj[2][3],
             self.view_proj[3][0], self.view_proj[3][1], self.view_proj[3][2], self.view_proj[3][3],
         ]).into()
-    }
-
-    /// Sets the camera's position in 3D space.
-    /// 
-    /// # Arguments
-    /// * `position` - A 3D point (Point3<f32>) representing the new camera position
-    pub fn set_position(&mut self, position: Point3<f32>) {
-        self.position = position;
-    }
-
-    /// Sets the camera's rotation using yaw, pitch, and roll angles.
-    /// Automatically updates the camera's orientation vectors after setting the new rotation.
-    /// 
-    /// # Arguments
-    /// * `yaw` - Rotation around the vertical axis (in radians)
-    /// * `pitch` - Rotation around the lateral axis (in radians)
-    /// * `roll` - Rotation around the longitudinal axis (in radians)
-    pub fn set_rotation(&mut self, yaw: Rad<f32>, pitch: Rad<f32>, roll: Rad<f32>) {
-        self.yaw = yaw;
-        self.pitch = pitch;
-        self.roll = roll;
-        self.update_camera_vectors();
-    }
-
-    /// Updates the camera's orientation based on the current yaw and pitch values.
-    fn update_camera_vectors(&mut self) {
-        if self.pitch < -Rad(SAFE_FRAC_PI_2) {
-            self.pitch = -Rad(SAFE_FRAC_PI_2);
-        } else if self.pitch > Rad(SAFE_FRAC_PI_2) {
-            self.pitch = Rad(SAFE_FRAC_PI_2);
-        }
-
-        self.forward = Vector3 {
-            x: self.yaw.cos() * self.pitch.cos(),
-            y: self.pitch.sin(),
-            z: self.yaw.sin() * self.pitch.cos(),
-        }.normalize();
-
-        self.right = self.forward.cross(Vector3::unit_y()).normalize();
     }
 }

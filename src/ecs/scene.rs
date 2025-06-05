@@ -17,9 +17,11 @@
 
 use std::collections::HashMap;
 
+use crate::CameraControl;
+use crate::EntityBuilder;
 use crate::World;
 use crate::Entity;
-use crate::Instance;
+use crate::Transform;
 use crate::Camera;
 use crate::RenderObject;
 use crate::Gui;
@@ -69,21 +71,19 @@ impl WorldScene {
         self.render_objects.get(name)
     }
 
-    /// Adds a new instance (with transform, name, and render tags) to the world.
+    /// Spawns a new entity in the scene's world.
     ///
-    /// # Parameters
-    /// - `instance`: The instance data to insert.
+    /// This method returns an `EntityBuilder` that allows for fluent-style construction
+    /// of the entity with its components before finalizing.
     ///
     /// # Returns
-    /// - The created `Entity` handle.
-    pub fn add_instance(&mut self, instance: Instance) -> Entity {
+    /// - `EntityBuilder` for chaining component insertions.
+    pub fn spawn(&mut self) -> EntityBuilder<'_> {
         let entity = self.world.spawn();
-
-        self.world.insert(entity, instance.transform);
-        self.world.insert(entity, instance.name);
-        self.world.insert(entity, instance.render_tags);
-
-        entity
+        EntityBuilder {
+            world: &mut self.world,
+            entity,
+        }
     }
 
     /// Sets the active camera for the scene if the provided entity has a `Camera` component.
@@ -152,6 +152,30 @@ impl WorldScene {
     /// - `Some(&mut Camera)` if found, or `None` otherwise.
     pub fn get_camera_mut(&mut self, entity: Entity) -> Option<&mut Camera> {
         self.world.get_mut::<Camera>(entity)
+    }
+
+    /// Computes the world-space transform for the given camera entity.
+    ///
+    /// If the camera has an associated `CameraControl` component, its `handler`
+    /// will be used to generate the transform dynamically.
+    /// Otherwise, the method falls back to returning the `Transform` component of the entity.
+    ///
+    /// If neither component is present, the identity transform is returned.
+    ///
+    /// # Parameters
+    /// - `entity`: The entity representing the camera.
+    ///
+    /// # Returns
+    /// - `Transform` representing the camera's world-space transform.
+    pub fn get_camera_transform(&self, entity: Entity) -> Transform {
+        if let Some(control) = self.world.get::<CameraControl>(entity) {
+            return control.handler.get_camera_transform(&self.world, entity);
+        }
+
+        match self.world.get::<Transform>(entity) {
+            Some(transform) => transform.clone(),
+            None => Transform::identity(),
+        }
     }
 
     /// Adds a GUI element to the scene.

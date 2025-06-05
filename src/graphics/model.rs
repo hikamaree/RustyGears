@@ -29,6 +29,7 @@ pub struct MeshRenderRange {
     pub visible_instance_ranges: Vec<Range<u32>>,
 }
 
+#[derive(Debug)]
 pub struct ModelRenderData {
     pub instance_data: Arc<[InstanceRaw]>,
     pub mesh_ranges: Vec<MeshRenderRange>,

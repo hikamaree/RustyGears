@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use rusty_gears::math::InnerSpace;
+use rusty_gears::math::Rotation;
 use rusty_gears::math::Rotation3;
 use rusty_gears::math::Vector3;
 use rusty_gears::math::Rad;
@@ -23,38 +25,61 @@ use rusty_gears::math::Quaternion;
 use rusty_gears::math::vec3;
 use rusty_gears::*;
 
-#[derive(Debug, Default)]
 struct MyGame {
     pub sender: Option<Sender<Box<dyn Command>>>,
-    pub truck: Option<Entity>,
+    pub truck: Entity,
     pub h: f32,
     pub j: f32,
     pub k: f32,
     pub l: f32,
-    pub camera1: Option<Entity>,
+    pub camera1: Entity,
+    pub camera2: Entity,
 }
 
 impl MyGame {
-    fn switch_camera(&self, game: &GameView) {
-        let next_cam: Option<Entity>;
-        if game.scene.active_camera == self.camera1 {
-            next_cam = self.truck;
-        } else {
-            next_cam = self.camera1;
-        }
-
-        let Some(camera) = next_cam else {
-            return;
+    fn new(game: &mut Game) -> Self {
+        let transform = Transform {
+            position: vec3(8.0, -10.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0) 
         };
 
-        let cmd = SetDefaultCamera { camera };
-        
-        let Some(sender) = self.sender.as_ref() else {
-            return;
+        let truck = match game.spawn_model("truck/semi", transform) {
+            Ok(truck) => truck,
+            Err(_) => todo!(),
         };
 
-        if let Err(e) = sender.send(Box::new(cmd)) {
-            eprintln!("Failed to send SetDefaultCamera command: {}", e);
+        let camera1 = game.scene()
+            .spawn()
+            .with(Camera::new())
+            .with(Transform::identity())
+            .with(CameraControl {
+                handler: Box::new(FreeFlyCamera::new()),
+            })
+            .build();
+
+        game.scene().set_active_camera(camera1);
+
+        let camera2 = game.scene()
+            .spawn()
+            .with(Camera::new())
+            .with(CameraControl {
+                handler: Box::new(CameraFollow{
+                    target: truck,
+                    position_offset: vec3(0.0, 20.0, -60.0),
+                    rotation_offset: Quaternion::one()
+                })
+            }).build();
+
+        Self {
+            sender: None,
+            truck, 
+            h: 0.0,
+            j: 0.0,
+            k: 0.0,
+            l: 0.0,
+            camera1,
+            camera2
         }
     }
 }
@@ -86,253 +111,210 @@ impl Gear for MyGame {
                 }
             }
         }
-
-        let transform = Transform {
-            position: vec3(8.0, -10.0, 0.0),
-            rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0) 
-        };
-
-        self.truck = match game.spawn_model("truck/semi", transform) {
-            Ok(truck) => Some(truck),
-            Err(_) => None,
-        };
-
-
-        let camera1 = Camera::new();
-        self.camera1 = Some(game.scene().add_camera(camera1));
-
-        let mut camera2 = Camera::new();
-        camera2.set_rotation(Rad(3.14 / 2.0), Rad(0.0), Rad(0.0));
-        camera2.set_position((8.0, 5.0, -20.0).into());
-
-        if let Some(truck) = self.truck {
-            game.scene().world.insert(truck, camera2);
-        }
     }
 
     fn mouse_motion(&mut self, dx: f64, dy: f64, game: GameView) {
-        let Some(camera1) = self.camera1 else {
+        let Some(sender) = self.sender.as_ref() else {
             return;
         };
 
-        let Some(camera) = game.scene.get_camera(camera1) else {
+        let Some(active_camera) = game.scene.active_camera else {
             return;
         };
 
-        let dt = game.time.delta_time();
+        let sensitivity = 0.005;
 
-        let yaw = camera.yaw + Rad(dx as f32 * camera.sensitivity * dt); 
-        let pitch = camera.pitch - Rad(dy as f32 * camera.sensitivity * dt); 
+        let cmd = if active_camera == self.camera1 {
+            let sensitivity = 0.002;
+            let delta_yaw = Rad(-dx as f32 * sensitivity);
+            let delta_pitch = Rad(-dy as f32 * sensitivity);
 
-        if yaw != camera.yaw || pitch != camera.pitch {
-            let cmd = SetCameraRotation { entity: camera1, yaw, pitch, roll: Rad(0.0) };
+            ModifyCameraHandle::for_type::<FreeFlyCamera>(
+                self.camera1,
+                move |camera, _| {
+                    camera.update_rotation(delta_yaw, delta_pitch);
+                },
+            )
+        } else if active_camera == self.camera2 {
+            let delta_yaw = Rad(-dx as f32 * sensitivity);
 
-            let Some(sender) = self.sender.as_ref() else {
-                return;
-            };
+            ModifyCameraHandle::for_type::<CameraFollow>(
+                self.camera2,
+                move |camera, game| {
+                    let Some(target_transform) = game.scene().world.get::<Transform>(camera.target) else {
+                        return;
+                    };
 
-            if let Err(e) = sender.send(Box::new(cmd)) {
-                eprintln!("Failed to send SetCameraRotation command: {}", e);
-            }
+                    let rot = Quaternion::from_angle_y(delta_yaw);
+                    camera.position_offset = rot.rotate_vector(camera.position_offset);
+
+                    let camera_position = target_transform.position + camera.position_offset;
+
+                    let mut flat_forward = target_transform.position - camera_position;
+                    flat_forward.y = 0.0;
+
+                    if flat_forward.magnitude2() < 0.0001 {
+                        return;
+                    }
+
+                    let flat_forward = flat_forward.normalize();
+                    let look_rotation = Quaternion::from_angle_y(
+                        -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2),
+                    );
+
+                    camera.rotation_offset = look_rotation;
+                }
+            )
+        } else {
+            return;
+        };
+
+        if let Err(e) = sender.send(Box::new(cmd)) {
+            eprintln!("Failed to send ModifyCameraHandle: {}", e);
         }
     }
 
     fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
-        let Some(camera1) = self.camera1 else {
-            return;
-        };
-
-        let Some(camera) = game.scene.get_camera(camera1) else {
-            return;
-        };
-
-        let Some(truck) = self.truck else {
-            return;
-        };
-
-        let Some(truck_camera) = game.scene.get_camera(truck) else {
-            return;
-        };
-
         let Some(sender) = self.sender.as_ref() else {
             return;
         };
 
         let dt = game.time.delta_time();
 
-        let mut position = camera.position;
+        let speed = 50.0;
 
-        match key {
-            KeyCode::ArrowUp => {
-                let delta = 50.0 * dt;
-
-                let Some(transform) = game.scene.world.get::<Transform>(truck) else {
+        let cmd: Box<dyn Command> = match key {
+            KeyCode::KeyC => {
+                if state == ElementState::Released {
+                    return;
+                }
+                let Some(active_camera) = game.scene.active_camera else {
                     return;
                 };
 
-                let mut transform = transform.clone();
-
-                transform.position.z += delta;
-
-                let cmd = SetInstanceTransform { 
-                    entity: truck,
-                    transform,
+                let camera = if active_camera == self.camera1 {
+                    self.camera2
+                } else {
+                    self.camera1
                 };
 
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
+                Box::new(SetDefaultCamera { camera })
+            }
 
-                let mut position = truck_camera.clone().position;
-                position.z += delta;
+            KeyCode::ArrowUp => {
+                let delta = 50.0 * dt;
 
-                let cmd = SetCameraPosition {
-                    entity: truck,
-                    position
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
+                Box::new(MoveInstance {
+                    entity: self.truck,
+                    delta: Vector3::new(0.0, 0.0, delta),
+                })
             }
 
             KeyCode::ArrowDown => {
                 let delta = 50.0 * dt;
-                let Some(transform) = game.scene.world.get::<Transform>(truck) else {
-                    return;
-                };
 
-                let mut transform = transform.clone();
-
-                transform.position.z -= delta;
-
-                let cmd = SetInstanceTransform { 
-                    entity: truck,
-                    transform,
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
-
-
-                let mut position = truck_camera.clone().position;
-                position.z -= delta;
-
-                let cmd = SetCameraPosition {
-                    entity: truck,
-                    position
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
+                Box::new(MoveInstance {
+                    entity: self.truck,
+                    delta: Vector3::new(0.0, 0.0, -delta),
+                })
             }
 
             KeyCode::KeyW => {
-                position += camera.forward * camera.speed * dt;
+                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
+                        self.camera1,
+                        move |camera, _| {
+                            camera.update_position(camera.forward() * speed * dt);
+                        },
+                ))
             }
-
             KeyCode::KeyS => {
-                position -= camera.forward * camera.speed * dt;
+                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
+                        self.camera1,
+                        move |camera, _| {
+                            camera.update_position(-camera.forward() * speed * dt);
+                        },
+                ))
             }
-
             KeyCode::KeyA => {
-                position -= camera.right * camera.speed * dt;
+                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
+                        self.camera1,
+                        move |camera, _| {
+                            camera.update_position(-camera.right() * speed * dt);
+                        },
+                ))
             }
-
             KeyCode::KeyD => {
-                position += camera.right * camera.speed * dt;
+                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
+                        self.camera1,
+                        move |camera, _| {
+                            camera.update_position(camera.right() * speed * dt);
+                        },
+                ))
             }
 
-            KeyCode::KeyC => if state == ElementState::Pressed {
-                self.switch_camera(&game);
-            }
-
-            KeyCode::KeyH =>  if state == ElementState::Pressed {
+            KeyCode::KeyH => {
+                self.h += 1.0;
                 let transform = Transform {
                     position: vec3(0.0, 30.0, -self.h),
                     rotation: Quaternion::one(),
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
 
-                let cmd = SpawnModel { 
+                Box::new(SpawnModel { 
                     file_path: "block/block.obj".to_string(),
                     transform,
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
-                self.h += 1.0;
+                })
             }
 
-            KeyCode::KeyJ => if state == ElementState::Pressed {
+            KeyCode::KeyJ => {
+                self.j += 1.0;
                 let transform = Transform {
                     position: vec3(-self.j, 30.0, 0.0),
                     rotation: Quaternion::one(),
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
 
-                let cmd = SpawnModel { 
+                Box::new(SpawnModel { 
                     file_path: "ball/ball.obj".to_string(),
                     transform,
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
-
-                self.j += 1.0;
+                })
             }
 
-            KeyCode::KeyK => if state == ElementState::Pressed {
+            KeyCode::KeyK => {
+                self.k += 1.0;
                 let transform = Transform {
                     position: vec3(self.k, 30.0, 0.0),
                     rotation: Quaternion::one(),
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
 
-                let cmd = SpawnModel { 
+                Box::new(SpawnModel { 
                     file_path: "ball/ball.obj".to_string(),
                     transform,
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
-
-                self.k += 1.0;
+                })
             }
 
-            KeyCode::KeyL => if state == ElementState::Pressed {
+            KeyCode::KeyL => {
+                self.l += 1.0;
                 let transform = Transform {
                     position: vec3(0.0, 30.0, self.l),
                     rotation: Quaternion::one(),
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
 
-                let cmd = SpawnModel { 
+                Box::new(SpawnModel { 
                     file_path: "block/block.obj".to_string(),
                     transform,
-                };
-
-                if let Err(e) = sender.send(Box::new(cmd)) {
-                    eprintln!("Failed to send SpawnModel command: {}", e);
-                }
-
-                self.l += 1.0;
+                })
             }
 
-            _ => {},
-        }
+            _ => {
+                return;
+            },
+        };
 
-        if position != camera.position {
-            let cmd = SetCameraPosition { entity: camera1, position };
-            if let Err(e) = sender.send(Box::new(cmd)) {
-                eprintln!("Failed to send SetCameraPosition command: {}", e);
-            }
+        if let Err(e) = sender.send(cmd) {
+            eprintln!("Failed to send MoveInstance command: {}", e);
         }
     }
 }
@@ -340,7 +322,8 @@ impl Gear for MyGame {
 pub fn main() {
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::default());
-        game.add_gear("mygame".into(), MyGame::default());
+        let mygame = MyGame::new(game);
+        game.add_gear("mygame".into(), mygame);
     }).setup(|game| {
         game.scene().add_gui(EngineStats::new());
 
@@ -394,7 +377,8 @@ mod tests {
     fn test_scene_access_is_safe() {
         let mut game = Game::new()
             .setup(|game| {
-                game.add_gear("mygame".into(), MyGame::default());
+                let mygame = MyGame::new(game);
+                game.add_gear("mygame".into(), mygame);
 
             }).setup(|game| {
                 game.scene().add_gui(EngineStats::new());

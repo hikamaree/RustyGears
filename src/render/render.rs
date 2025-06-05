@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Camera;
 use crate::ModelInstance;
 use crate::RenderBatch;
 use crate::RenderTag;
@@ -33,7 +34,6 @@ use std::collections::HashMap;
 
 use crossbeam::channel::Sender;
 
-use cgmath::EuclideanSpace;
 use cgmath::InnerSpace;
 use cgmath::Matrix4;
 
@@ -80,7 +80,7 @@ impl Render {
     /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
-        let Some(camera) = game.scene.active_camera() else {
+        let Some(camera_entity) = game.scene.active_camera else {
             if let Some(sender) = self.sender.as_ref() {
                 if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
                     game.graphics.window.request_redraw();
@@ -88,6 +88,17 @@ impl Render {
             }
             return;
         };
+
+        let Some(camera) = game.scene.world.get::<Camera>(camera_entity) else {
+            if let Some(sender) = self.sender.as_ref() {
+                if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
+                    game.graphics.window.request_redraw();
+                }
+            }
+            return;
+        };
+
+        let camera_transform = game.scene.get_camera_transform(camera_entity);
 
         let mut opaque_batches = vec![];
         let mut transparent_instances = vec![];
@@ -97,7 +108,7 @@ impl Render {
                 continue;
             };
 
-            let dist = (camera.position.to_vec() - transform.position).magnitude();
+            let dist = (camera_transform.position - transform.position).magnitude();
             let lod_index = match dist {
                 d if d < 100.0 => 0,
                 d if d < 300.0 => 1.min(render_obj.lods.len() - 1),
@@ -135,7 +146,7 @@ impl Render {
                         ));
                     }
                     RenderTag::SortedTransparent => {
-                        let delta = center_world.truncate() - camera.position.to_vec();
+                        let delta = center_world.truncate() - camera_transform.position;
                         let depth = camera.forward.dot(delta);
 
                         transparent_instances.push((

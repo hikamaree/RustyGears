@@ -70,7 +70,8 @@ impl ApplicationHandler for Game {
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
         match event {
             winit::event::DeviceEvent::MouseMotion { delta } => {
-                Game::dispatch_event(self, GearEvent::MouseMotion(delta.0, delta.1));
+                self.mouse_delta.dx += delta.0;
+                self.mouse_delta.dy += delta.1;
             }
 
             _ => {}

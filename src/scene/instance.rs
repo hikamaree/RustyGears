@@ -18,11 +18,18 @@
 use crate::Model;
 use crate::InstanceRaw;
 
+use std::ops::Neg;
+
+use cgmath::InnerSpace;
+use cgmath::Quaternion;
+use cgmath::Vector3;
+use cgmath::One;
+use cgmath::Zero;
+
 #[derive(Debug, Clone)]
 pub struct ModelInstance {
     pub name: String,
 }
-
 
 /// Represents a renderable object in the scene, which may have multiple
 /// levels of detail (LODs) depending on camera distance or rendering strategy.
@@ -79,6 +86,41 @@ impl Transform {
             normal: cgmath::Matrix3::from(self.rotation).into(),
         }
     }
+
+    /// Returns the forward direction vector derived from the current rotation.
+    ///
+    /// This is typically used to determine the direction the object is facing.
+    ///
+    /// # Returns
+    /// A normalized vector pointing in the forward (negative Z) direction.
+    pub fn forward(&self) -> Vector3<f32> {
+        self.rotation * Vector3::unit_z().neg().normalize()
+    }
+
+    /// Returns the right direction vector derived from the current rotation.
+    ///
+    /// This is typically used to determine the local right direction of the object.
+    ///
+    /// # Returns
+    /// A normalized vector pointing to the right (positive X) direction.
+    pub fn right(&self) -> Vector3<f32> {
+        self.forward().cross(Vector3::unit_y()).normalize()
+    }
+
+
+    /// Returns a default identity transform.
+    ///
+    /// The identity transform represents no translation, no rotation, and uniform scale (1.0, 1.0, 1.0).
+    ///
+    /// # Returns
+    /// A `Transform` positioned at the origin, with no rotation, and a scale of 1 on all axes.
+    pub fn identity() -> Self {
+        Self {
+            position: Vector3::zero(),
+            rotation: Quaternion::one(),
+            scale: Vector3::new(1.0, 1.0, 1.0),
+        }
+    }
 }
 
 /// An enum representing different rendering tags for objects in the scene.
@@ -88,81 +130,14 @@ impl Transform {
 /// Unlit, Wireframe mode, etc. Custom tags can also be created with a string value.
 ///
 /// # Variants
-/// - `PBR`: Indicates the object should be rendered with physically-based rendering materials.
-/// - `Unlit`: Indicates the object should be rendered without lighting (e.g., for UI elements).
-/// - `Wireframe`: Indicates the object should be rendered in wireframe mode (lines only).
-/// - `ShadowMap`: A tag for objects used in shadow mapping for lighting purposes.
-/// - `Custom(String)`: Allows for a custom render tag identified by a string value.
+/// - `Opaque`: The default render tag for fully opaque geometry. Rendered first without sorting.
+/// - `SortedTransparent`: Transparent objects that require depth-based sorting for correct rendering (e.g. glass).
+/// - `WeightedTransparent`: Transparent objects rendered using weighted blended order-independent transparency.
+/// - `Custom(String)`: A custom render tag identified by a string, useful for user-defined rendering passes or effects.
 #[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
 pub enum RenderTag {
     Opaque,
-    Unlit,
-    Wireframe,
-    ShadowMap,
     SortedTransparent,
     WeightedTransparent,
     Custom(String),
-}
-
-/// A struct representing an instance of a 3D object in the scene.
-///
-/// An instance is a specific object in the game world that can have a transformation (position, rotation, scale),
-/// render tags for how it should be rendered, and a unique ID. Multiple instances of the same model can exist in the scene,
-/// each with its own transformation and render tags.
-///
-/// # Fields
-/// - `id`: A unique identifier for the instance.
-/// - `transform`: The transformation (position, rotation, scale) of the instance in the scene.
-/// - `render_tags`: A list of render tags that specify how the instance should be rendered (e.g., PBR, Unlit, etc.).
-/// - `name`: The name of the instance, typically used for identification in the scene.
-#[derive(Debug, Clone)]
-pub struct Instance {
-    id: usize,
-    pub transform: Transform,
-    pub raw: InstanceRaw,
-    pub render_tags: Vec<RenderTag>,
-    pub name: String,
-}
-
-impl Instance {
-    /// Creates a new instance with the specified name, transformation, and render tags.
-    ///
-    /// This function generates a unique ID for the instance and adds it to the scene.
-    ///
-    /// # Parameters
-    /// - `name`: The name of the instance.
-    /// - `transform`: The transformation (position, rotation, scale) for the instance.
-    /// - `render_tags`: The render tags specifying how the instance should be rendered.
-    ///
-    /// # Returns
-    /// A new `Instance` with the specified parameters.
-    pub fn new(name: String, transform: Transform, render_tags: Vec<RenderTag>) -> Self {
-        Self {
-            id: Instance::gen_id(),
-            transform,
-            raw: transform.raw(),
-            render_tags,
-            name,
-        }
-    }
-
-    /// Returns the unique identifier for this instance.
-    ///
-    /// # Returns
-    /// The unique ID of the instance.
-    pub fn id(&self) -> usize {
-        self.id
-    }
-
-    /// Generates a unique ID for each instance.
-    ///
-    /// This method uses a static counter to ensure each instance gets a unique ID.
-    ///
-    /// # Returns
-    /// A unique identifier for the instance.
-    fn gen_id() -> usize {
-        use std::sync::atomic::{AtomicUsize, Ordering};
-        static COUNTER: AtomicUsize = AtomicUsize::new(1);
-        COUNTER.fetch_add(1, Ordering::Relaxed)
-    }
 }

@@ -455,6 +455,7 @@ impl Graphics {
     }
 }
 
+#[derive(Debug)]
 pub struct SetTrianglesCount {
     pub count: u32,
 }

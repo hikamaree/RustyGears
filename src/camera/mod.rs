@@ -16,9 +16,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod camera;
-mod cameracommands;
 mod projection;
+mod camerahandler;
 
 pub use camera::*;
 pub use projection::*;
-pub use cameracommands::*;
+pub use camerahandler::*;

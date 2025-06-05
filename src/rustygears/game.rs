@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Camera;
 use crate::ModelInstance;
 use crate::Command;
 use crate::EguiRenderer;
@@ -41,6 +42,11 @@ use winit::event_loop::EventLoop;
 
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
+
+pub(crate) struct MouseDelta {
+    pub dx: f64,
+    pub dy: f64,
+}
 
 pub struct GearMessage {
     pub gear_event: GearEvent,
@@ -73,6 +79,8 @@ pub struct Game {
     pub gui: Option<EguiRenderer>,
     pub time: Time,
     pub(crate) scene: Arc<UnsafeCell<WorldScene>>,
+    commands: VecDeque<Box<dyn Command>>,
+    pub(crate) mouse_delta: MouseDelta,
 }
 
 impl Game {
@@ -94,6 +102,8 @@ impl Game {
             gui: None,
             time: Time::new(),
             scene: Arc::new(UnsafeCell::new(WorldScene::default())),
+            commands: VecDeque::new(),
+            mouse_delta: MouseDelta { dx: 0.0, dy: 0.0 }
         }
     }
 
@@ -244,7 +254,7 @@ impl Game {
         }
 
         while let Ok(cmd) = self.command_receiver.try_recv() {
-            cmd.apply(self);
+            self.commands.push_back(cmd);
         }
     }
 
@@ -279,6 +289,10 @@ impl Game {
     /// - Uploads camera information to the GPU.
     /// - Updates the global time system.
     pub(crate) fn update(&mut self) {
+        self.dispatch_event(GearEvent::MouseMotion(self.mouse_delta.dx, self.mouse_delta.dy));
+        self.mouse_delta.dx = 0.0;
+        self.mouse_delta.dy = 0.0;
+
         self.time.update();
 
         let scene = unsafe { &mut *self.scene.get() };
@@ -287,12 +301,21 @@ impl Game {
             return;
         };
 
-        let Some(camera) = scene.active_camera_mut() else {
+        let Some(camera_entity) = scene.active_camera else {
             return;
         };
 
-        camera.update_view_proj(&graphics.projection);
-        graphics.update(camera);
+        let final_transform = scene.get_camera_transform(camera_entity);
+
+
+        if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
+            camera.update_view_proj(&final_transform, &graphics.projection);
+            graphics.update(camera);
+        }
+
+        while let Some(cmd) = self.commands.pop_front() {
+            cmd.apply(self);
+        }
     }
 
     /// Spawns a new model instance into the ECS world.
