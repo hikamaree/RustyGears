@@ -20,8 +20,8 @@ use crate::Component;
 use crate::World;
 
 pub struct EntityBuilder<'a> {
-    pub world: &'a mut World,
-    pub entity: Entity,
+    pub(crate) world: &'a mut World,
+    pub(crate) entity: Entity,
 }
 
 impl<'a> EntityBuilder<'a> {

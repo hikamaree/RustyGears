@@ -15,105 +15,94 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Entity;
-use crate::Transform;
 use crate::Command;
 use crate::Game;
 
-/// Command to set the active (default) camera in the scene.
-///
-/// When executed, the camera with the specified `id` will be set as the
-/// active camera for rendering and other view-related operations.
-///
-/// # Fields
-/// - `id`: The identifier of the camera to be set as the active one.
-#[derive(Debug)]
-pub struct SetDefaultCamera {
-    pub camera: Entity,
+use tokio::sync::oneshot;
+
+pub struct CommandWithResult<R> {
+    pub run: Box<dyn FnOnce(&mut Game) -> R + Send + Sync>,
+    pub respond_to: oneshot::Sender<R>,
 }
 
-impl Command for SetDefaultCamera {
+impl<R: Send + 'static> Command for CommandWithResult<R> {
     fn apply(self: Box<Self>, game: &mut Game) {
-        game.scene().set_active_camera(self.camera);
+        let result = (self.run)(game);
+        let _ = self.respond_to.send(result);
     }
 }
 
-/// Command to spawn a 3D model into the scene.
-///
-/// The model is loaded from the specified `file_path`, transformed by
-/// the provided `transform`, and associated with the given `render_tags`
-/// for rendering purposes.
-///
-/// # Fields
-/// - `file_path`: The path to the model file (e.g., `.obj`, `.gltf`).
-/// - `transform`: The transformation applied to the model when spawning.
-/// - `render_tags`: A list of render tags defining how the object will be rendered.
-#[derive(Debug)]
-pub struct SpawnModel {
-    pub file_path: String,
-    pub transform: Transform,
+#[macro_export]
+macro_rules! spawn_entity {
+    ( $sender:expr, $( $comp:expr ),* $(,)? ) => {{
+        $sender.send_command(move |game| {
+            let mut builder = game.scene().spawn();
+            $(
+                builder = builder.with($comp);
+            )*
+            builder.build()
+        })
+    }};
 }
 
-impl Command for SpawnModel {
-    fn apply(self: Box<Self>, game: &mut Game) {
-        if let Err(e) = game.spawn_model(&self.file_path, self.transform) {
-            println!("{}", e);
-        }
-    }
+#[macro_export]
+macro_rules! update_entity_position {
+    ( $sender:expr, $entity:expr, $delta:expr ) => {{
+        let entity = $entity;
+        let delta = $delta;
+        $sender.send_command(move |game| {
+            if let Some(t) = game.scene().world.get_mut::<Transform>(entity) {
+                t.position += delta;
+            }
+        })
+    }};
 }
 
-/// Command to set the transformation of an instance in the scene.
-///
-/// This command updates the transform of an existing instance by its `id`
-/// with the provided `transform`.
-///
-/// # Fields
-/// - `id`: The identifier of the instance whose transformation will be updated.
-/// - `transform`: The new transformation to be applied to the instance.
-#[derive(Debug)]
-pub struct SetInstanceTransform {
-    pub entity: Entity,
-    pub transform: Transform,
+#[macro_export]
+macro_rules! update_entity_rotation {
+    ( $sender:expr, $entity:expr, $delta:expr ) => {{
+        let entity = $entity;
+        let delta = $delta;
+        $sender.send_command(move |game| {
+            if let Some(t) = game.scene().world.get_mut::<Transform>(entity) {
+                t.rotation = delta * t.rotation;
+            }
+        })
+    }};
 }
 
-impl Command for SetInstanceTransform {
-    fn apply(self: Box<Self>, game: &mut Game) {
-        if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
-            *instance = self.transform;
-        }
-    }
+#[macro_export]
+macro_rules! add_component {
+    ( $sender:expr, $entity:expr, $component:expr ) => {{
+        let entity = $entity;
+        let component = $component;
+        $sender.send_command(move |game| {
+            game.scene().world.insert(entity, component);
+        })
+    }};
 }
 
-/// Command to move an instance by a relative offset.
-///
-/// This command updates the translation of the instance by adding `delta` to it.
-#[derive(Debug)]
-pub struct MoveInstance {
-    pub entity: Entity,
-    pub delta: cgmath::Vector3<f32>,
+#[macro_export]
+macro_rules! set_default_camera {
+    ( $sender:expr, $camera:expr ) => {{
+        let camera = $camera;
+        $sender.send_command(move |game| {
+            game.scene().set_active_camera(camera);
+        })
+    }};
 }
 
-impl Command for MoveInstance {
-    fn apply(self: Box<Self>, game: &mut Game) {
-        if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
-            instance.position += self.delta;
-        }
-    }
-}
-
-/// Command to rotate an instance by a relative quaternion rotation.
-///
-/// This command multiplies the current rotation by the `delta` rotation.
-#[derive(Debug)]
-pub struct RotateInstance {
-    pub entity: Entity,
-    pub delta: cgmath::Quaternion<f32>,
-}
-
-impl Command for RotateInstance {
-    fn apply(self: Box<Self>, game: &mut Game) {
-        if let Some(instance) = game.scene().world.get_mut::<Transform>(self.entity) {
-            instance.rotation = self.delta * instance.rotation;
-        }
-    }
+#[macro_export]
+macro_rules! set_instance_transform {
+    ( $sender:expr, $entity:expr, $transform:expr ) => {{
+        let entity = $entity;
+        let transform = $transform;
+        $sender.send_command(move |game| {
+            if let Some(t) = game.scene().world.get_mut::<Transform>(entity) {
+                *t = transform;
+            } else {
+                game.scene().world.insert(entity, transform);
+            }
+        })
+    }};
 }

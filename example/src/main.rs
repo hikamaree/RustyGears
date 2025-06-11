@@ -29,11 +29,9 @@ struct MyGame {
     pub sender: Option<Sender<Box<dyn Command>>>,
     pub truck: Entity,
     pub h: f32,
-    pub j: f32,
-    pub k: f32,
-    pub l: f32,
     pub camera1: Entity,
     pub camera2: Entity,
+    pub block: Model3d,
 }
 
 impl MyGame {
@@ -44,10 +42,16 @@ impl MyGame {
             scale: vec3(1.0, 1.0, 1.0) 
         };
 
-        let truck = match game.spawn_model("truck/semi", transform) {
+        let truck = match game.load_model("truck/semi") {
             Ok(truck) => truck,
             Err(_) => todo!(),
         };
+
+        let truck = game.scene()
+            .spawn()
+            .with(truck)
+            .with(transform)
+            .build();
 
         let camera1 = game.scene()
             .spawn()
@@ -71,15 +75,18 @@ impl MyGame {
                 })
             }).build();
 
+        let block = match game.load_model("truck/semi") {
+            Ok(truck) => truck,
+            Err(_) => todo!(),
+        };
+
         Self {
             sender: None,
             truck, 
             h: 0.0,
-            j: 0.0,
-            k: 0.0,
-            l: 0.0,
             camera1,
-            camera2
+            camera2,
+            block,
         }
     }
 }
@@ -106,9 +113,19 @@ impl Gear for MyGame {
                     scale: vec3(300.0, 300.0, 300.0)
                 };
 
-                if let Err(e) = game.spawn_model("miku/miku", transform) {
-                    eprintln!("{}", e);
-                }
+                let miku = match game.load_model("miku/miku") {
+                    Ok(miku) => {
+                        miku
+                    },
+                    Err(e) => {
+                        eprintln!("{}", e);
+                        continue;
+                    },
+                };
+                game.scene()
+                    .spawn()
+                    .with(miku)
+                    .with(transform);
             }
         }
     }
@@ -124,53 +141,47 @@ impl Gear for MyGame {
 
         let sensitivity = 0.005;
 
-        let cmd = if active_camera == self.camera1 {
+        if active_camera == self.camera1 {
             let sensitivity = 0.002;
             let delta_yaw = Rad(-dx as f32 * sensitivity);
             let delta_pitch = Rad(-dy as f32 * sensitivity);
 
-            ModifyCameraHandle::for_type::<FreeFlyCamera>(
-                self.camera1,
-                move |camera, _| {
-                    camera.update_rotation(delta_yaw, delta_pitch);
-                },
-            )
+            update_freefly_rotation!(sender, self.camera1, delta_yaw, delta_pitch);
         } else if active_camera == self.camera2 {
+
             let delta_yaw = Rad(-dx as f32 * sensitivity);
+            let rot = Quaternion::from_angle_y(delta_yaw);
 
-            ModifyCameraHandle::for_type::<CameraFollow>(
-                self.camera2,
-                move |camera, game| {
-                    let Some(target_transform) = game.scene().world.get::<Transform>(camera.target) else {
-                        return;
-                    };
+            let cam_handle = match game.scene.world.get::<CameraControl>(self.camera2) {
+                Some(controller) => match controller.handler.as_any().downcast_ref::<CameraFollow>() {
+                    Some(handle) => handle,
+                    None => return
+                },
+                None => return
+            };
 
-                    let rot = Quaternion::from_angle_y(delta_yaw);
-                    camera.position_offset = rot.rotate_vector(camera.position_offset);
+            let Some(target_transform) = game.scene.world.get::<Transform>(cam_handle.target) else {
+                return;
+            };
 
-                    let camera_position = target_transform.position + camera.position_offset;
+            let new_position_offset = rot.rotate_vector(cam_handle.position_offset);
 
-                    let mut flat_forward = target_transform.position - camera_position;
-                    flat_forward.y = 0.0;
+            let camera_position = target_transform.position + new_position_offset;
 
-                    if flat_forward.magnitude2() < 0.0001 {
-                        return;
-                    }
+            let mut flat_forward = target_transform.position - camera_position;
+            flat_forward.y = 0.0;
 
-                    let flat_forward = flat_forward.normalize();
-                    let look_rotation = Quaternion::from_angle_y(
-                        -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2),
-                    );
+            if flat_forward.magnitude2() < 0.0001 {
+                return;
+            }
 
-                    camera.rotation_offset = look_rotation;
-                }
-            )
-        } else {
-            return;
-        };
+            let flat_forward = flat_forward.normalize();
+            let new_rotation_offset = Quaternion::from_angle_y(
+                -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2),
+            );
 
-        if let Err(e) = sender.send(Box::new(cmd)) {
-            eprintln!("Failed to send ModifyCameraHandle: {}", e);
+            set_camerafollow_position_offset!(sender, self.camera2, new_position_offset);
+            set_camerafollow_rotation_offset!(sender, self.camera2, new_rotation_offset);
         }
     }
 
@@ -183,7 +194,18 @@ impl Gear for MyGame {
 
         let speed = 50.0;
 
-        let cmd: Box<dyn Command> = match key {
+        let cam_handle = match game.scene.world.get::<CameraControl>(self.camera1) {
+            Some(controller) => match controller.handler.as_any().downcast_ref::<FreeFlyCamera>() {
+                Some(handle) => handle,
+                None => return
+            },
+            None => return
+        };
+
+        let forward = cam_handle.forward();
+        let right = cam_handle.right();
+
+        match key {
             KeyCode::KeyC => {
                 if state == ElementState::Released {
                     return;
@@ -198,61 +220,30 @@ impl Gear for MyGame {
                     self.camera1
                 };
 
-                Box::new(SetDefaultCamera { camera })
+                set_default_camera!(sender, camera);
             }
 
             KeyCode::ArrowUp => {
-                let delta = 50.0 * dt;
-
-                Box::new(MoveInstance {
-                    entity: self.truck,
-                    delta: Vector3::new(0.0, 0.0, delta),
-                })
+                update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, speed * dt));
             }
-
             KeyCode::ArrowDown => {
-                let delta = 50.0 * dt;
-
-                Box::new(MoveInstance {
-                    entity: self.truck,
-                    delta: Vector3::new(0.0, 0.0, -delta),
-                })
+                update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, -speed * dt));
             }
 
             KeyCode::KeyW => {
-                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
-                        self.camera1,
-                        move |camera, _| {
-                            camera.update_position(camera.forward() * speed * dt);
-                        },
-                ))
+                update_freefly_position!(sender, self.camera1, forward * speed * dt);
             }
             KeyCode::KeyS => {
-                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
-                        self.camera1,
-                        move |camera, _| {
-                            camera.update_position(-camera.forward() * speed * dt);
-                        },
-                ))
+                update_freefly_position!(sender, self.camera1, -forward * speed * dt);
             }
             KeyCode::KeyA => {
-                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
-                        self.camera1,
-                        move |camera, _| {
-                            camera.update_position(-camera.right() * speed * dt);
-                        },
-                ))
+                update_freefly_position!(sender, self.camera1, -right * speed * dt);
             }
             KeyCode::KeyD => {
-                Box::new(ModifyCameraHandle::for_type::<FreeFlyCamera>(
-                        self.camera1,
-                        move |camera, _| {
-                            camera.update_position(camera.right() * speed * dt);
-                        },
-                ))
+                update_freefly_position!(sender, self.camera1, right * speed * dt);
             }
 
-            KeyCode::KeyH => {
+            KeyCode::KeyE => {
                 self.h += 1.0;
                 let transform = Transform {
                     position: vec3(0.0, 30.0, -self.h),
@@ -260,62 +251,14 @@ impl Gear for MyGame {
                     scale: vec3(1.0, 1.0, 1.0) 
                 };
 
-                Box::new(SpawnModel { 
-                    file_path: "block/block.obj".to_string(),
-                    transform,
-                })
-            }
-
-            KeyCode::KeyJ => {
-                self.j += 1.0;
-                let transform = Transform {
-                    position: vec3(-self.j, 30.0, 0.0),
-                    rotation: Quaternion::one(),
-                    scale: vec3(1.0, 1.0, 1.0) 
-                };
-
-                Box::new(SpawnModel { 
-                    file_path: "ball/ball.obj".to_string(),
-                    transform,
-                })
-            }
-
-            KeyCode::KeyK => {
-                self.k += 1.0;
-                let transform = Transform {
-                    position: vec3(self.k, 30.0, 0.0),
-                    rotation: Quaternion::one(),
-                    scale: vec3(1.0, 1.0, 1.0) 
-                };
-
-                Box::new(SpawnModel { 
-                    file_path: "ball/ball.obj".to_string(),
-                    transform,
-                })
-            }
-
-            KeyCode::KeyL => {
-                self.l += 1.0;
-                let transform = Transform {
-                    position: vec3(0.0, 30.0, self.l),
-                    rotation: Quaternion::one(),
-                    scale: vec3(1.0, 1.0, 1.0) 
-                };
-
-                Box::new(SpawnModel { 
-                    file_path: "block/block.obj".to_string(),
-                    transform,
-                })
+                let x = spawn_entity!(sender, transform);
+                add_component!(sender, x, self.block.clone());
             }
 
             _ => {
                 return;
             },
         };
-
-        if let Err(e) = sender.send(cmd) {
-            eprintln!("Failed to send MoveInstance command: {}", e);
-        }
     }
 }
 
@@ -382,20 +325,10 @@ mod tests {
 
             }).setup(|game| {
                 game.scene().add_gui(EngineStats::new());
-
-                let transform = Transform { 
-                    position: vec3(0.0, 0.0, 0.0),
-                    rotation: Quaternion::one(),
-                    scale: vec3(1.0, 1.0, 1.0)
-                };
-
-                if let Err(e) = game.spawn_model("scene1/scene1", transform) {
-                    eprintln!("{}", e);
-                }
             });
 
         for _ in 0..10 {
-            game.dispatch_event(GearEvent::MouseMotion(0.0, 0.0));
+            game.dispatch_event(GearEvent::MouseMotion(10.0, 10.0));
             game.dispatch_event(GearEvent::Update());
         }
     }

@@ -85,7 +85,6 @@ pub struct CameraFollow {
 }
 
 impl CameraFollow {
-    /// Creates a new `CameraFollow` with the specified target.
     pub fn new(target: Entity) -> Self {
         Self {
             target,
@@ -94,19 +93,8 @@ impl CameraFollow {
         }
     }
 
-    /// Sets a new target entity for the camera.
     pub fn set_target(&mut self, target: Entity) {
         self.target = target;
-    }
-
-    /// Sets the position offset relative to the target.
-    pub fn set_position_offset(&mut self, offset: Vector3<f32>) {
-        self.position_offset = offset;
-    }
-
-    /// Sets the rotation offset relative to the target.
-    pub fn set_rotation_offset(&mut self, offset: Quaternion<f32>) {
-        self.rotation_offset = offset;
     }
 }
 
@@ -161,19 +149,9 @@ impl FreeFlyCamera {
         }
     }
 
-    /// Updates the camera's yaw and pitch based on delta input.
-    pub fn update_rotation(&mut self, delta_yaw: Rad<f32>, delta_pitch: Rad<f32>) {
-        self.yaw += delta_yaw;
-        self.pitch += delta_pitch;
-
+    pub fn lock_pitch(&mut self) {
         let limit = std::f32::consts::FRAC_PI_2 - 0.01;
-
         self.pitch.0 = self.pitch.0.clamp(-limit, limit);
-    }
-
-    /// Translates the camera by the given delta vector.
-    pub fn update_position(&mut self, delta: Vector3<f32>) {
-        self.position += delta;
     }
 
     /// Computes the forward vector based on current yaw and pitch.
@@ -263,4 +241,174 @@ impl Command for ModifyCameraHandle {
         };
         (self.f)(&mut *control.handler, game);
     }
+}
+
+/// Modifies a camera component of a specific type associated with an entity using a closure.
+///
+/// This macro is intended as a base for higher-level camera control macros.
+///
+/// # Parameters
+/// - `$sender`: The command sender used to schedule the modification.
+/// - `$entity`: The entity ID of the camera component.
+/// - `$ty`: The type of the camera component (e.g., `FreeFlyCamera`, `CameraFollow`).
+/// - `|$cam, $game| $body`: A closure that receives the mutable camera component and game context.
+///
+/// # Example
+/// ```
+/// modify_camera_handle!(sender, camera_entity, FreeFlyCamera, |cam, game| {
+///     cam.position = vec3(0.0, 5.0, 0.0);
+/// });
+/// ```
+#[macro_export]
+macro_rules! modify_camera_handle {
+    ( $sender:expr, $entity:expr, $ty:ty, |$cam:ident, $game:ident| $body:block ) => {{
+        let cmd = $crate::ModifyCameraHandle::for_type::<$ty>(
+            $entity,
+            move |$cam, $game| $body,
+        );
+        if let Err(e) = $sender.send(Box::new(cmd)) {
+            eprintln!("Failed to send ModifyCameraHandle: {}", e);
+        }
+    }};
+}
+
+/// Applies a delta position to a `FreeFlyCamera` component.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `FreeFlyCamera`.
+/// - `$delta`: The position delta to apply (e.g., `Vector3<f32>`).
+#[macro_export]
+macro_rules! update_freefly_position {
+    ($sender:expr, $entity:expr, $delta:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+            cam.position += $delta;
+        });
+    };
+}
+
+/// Applies a yaw and pitch delta to a `FreeFlyCamera`.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `FreeFlyCamera`.
+/// - `$delta_yaw`: Change in yaw (horizontal rotation).
+/// - `$delta_pitch`: Change in pitch (vertical rotation).
+#[macro_export]
+macro_rules! update_freefly_rotation {
+    ($sender:expr, $entity:expr, $delta_yaw:expr, $delta_pitch:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+            cam.yaw += $delta_yaw;
+            cam.pitch += $delta_pitch;
+            cam.lock_pitch();
+        });
+    };
+}
+
+/// Sets the absolute position of a `FreeFlyCamera`.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `FreeFlyCamera`.
+/// - `$position`: The new camera position (`Vector3<f32>`).
+#[macro_export]
+macro_rules! set_freefly_position {
+    ($sender:expr, $entity:expr, $position:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+            cam.position = $position;
+        });
+    };
+}
+
+/// Sets the absolute yaw and pitch of a `FreeFlyCamera`.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `FreeFlyCamera`.
+/// - `$yaw`: New yaw angle (`Rad<f32>`).
+/// - `$pitch`: New pitch angle (`Rad<f32>`).
+#[macro_export]
+macro_rules! set_freefly_rotation {
+    ($sender:expr, $entity:expr, $yaw:expr, $pitch:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+            cam.yaw = $yaw;
+            cam.pitch = $pitch;
+            cam.lock_pitch();
+        });
+    };
+}
+
+/// Applies a delta offset to the `position_offset` of a `CameraFollow` component.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `CameraFollow`.
+/// - `$delta_offset`: Delta offset (`Vector3<f32>`) to apply.
+#[macro_export]
+macro_rules! update_camerafollow_position_offset {
+    ($sender:expr, $entity:expr, $delta_offset:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+            cam.position_offset += $delta_offset;
+        });
+    };
+}
+
+/// Applies a delta rotation offset to a `CameraFollow` component.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `CameraFollow`.
+/// - `$delta_offset`: Rotation delta (`Quaternion<f32>`) to apply.
+#[macro_export]
+macro_rules! update_camerafollow_rotation_offset {
+    ($sender:expr, $entity:expr, $delta_offset:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+            cam.rotation_offset = delta_offset * cam.rotation_offset;
+        });
+    };
+}
+
+/// Sets the absolute `rotation_offset` for a `CameraFollow` component.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `CameraFollow`.
+/// - `$rotation`: The new rotation offset (`Quaternion<f32>`).
+#[macro_export]
+macro_rules! set_camerafollow_rotation_offset {
+    ($sender:expr, $entity:expr, $rotation:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+            cam.rotation_offset = $rotation;
+        });
+    };
+}
+
+/// Sets the absolute `position_offset` for a `CameraFollow` component.
+///
+/// # Parameters
+/// - `$sender`: The command sender.
+/// - `$entity`: The entity ID with a `CameraFollow`.
+/// - `$position`: The new position offset (`Vector3<f32>`).
+#[macro_export]
+macro_rules! set_camerafollow_position_offset {
+    ($sender:expr, $entity:expr, $position:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+            cam.position_offset = $position;
+        });
+    };
+}
+
+/// Sets the `target` entity for a `CameraFollow` component.
+///
+/// # Parameters
+/// - `$sender`: The command sender used to modify the camera component.
+/// - `$entity`: The entity ID of the camera that owns the `CameraFollow` component.
+/// - `$target`: The new target entity to follow.
+#[macro_export]
+macro_rules! set_camerafollow_target {
+    ($sender:expr, $entity:expr, $target:expr) => {
+        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+            cam.target = $target;
+        });
+    };
 }

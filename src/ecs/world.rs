@@ -111,7 +111,7 @@ impl World {
         Self {
             next_id: 0,
             storage: ComponentStorage::new(),
-            capacity: 10000000,
+            capacity: 64,
         }
     }
 

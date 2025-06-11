@@ -16,7 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::Camera;
-use crate::ModelInstance;
+use crate::Model3d;
 use crate::RenderBatch;
 use crate::RenderTag;
 use crate::Command;
@@ -103,8 +103,8 @@ impl Render {
         let mut opaque_batches = vec![];
         let mut transparent_instances = vec![];
 
-        for (_ent, model_inst, transform) in game.scene.world.query2::<ModelInstance, Transform>() {
-            let Some(render_obj) = game.scene.render_objects.get(&model_inst.name) else {
+        for (_ent, model3d, transform) in game.scene.world.query2::<Model3d, Transform>() {
+            let Some(render_obj) = game.scene.render_objects.get(&model3d) else {
                 continue;
             };
 
@@ -139,7 +139,7 @@ impl Render {
                 match tag {
                     RenderTag::Opaque => {
                         opaque_batches.push((
-                                model_inst.name.clone(),
+                                model3d,
                                 lod_index,
                                 mesh_index,
                                 raw,
@@ -151,7 +151,7 @@ impl Render {
 
                         transparent_instances.push((
                                 depth,
-                                model_inst.name.clone(),
+                                model3d,
                                 lod_index,
                                 mesh_index,
                                 raw,
@@ -162,17 +162,17 @@ impl Render {
             }
         }
 
-        let mut opaque_group_map: HashMap<(String, usize, usize), Vec<InstanceRaw>> = HashMap::new();
-        for (name, lod, mesh_idx, raw) in opaque_batches {
-            opaque_group_map.entry((name, lod, mesh_idx)).or_default().push(raw);
+        let mut opaque_group_map: HashMap<(Model3d, usize, usize), Vec<InstanceRaw>> = HashMap::new();
+        for (model3d, lod, mesh_idx, raw) in opaque_batches {
+            opaque_group_map.entry((model3d.clone(), lod, mesh_idx)).or_default().push(raw);
         }
 
         let mut opaque_render_data = vec![];
-        for ((name, lod, mesh_idx), instances) in opaque_group_map {
+        for ((model3d, lod, mesh_idx), instances) in opaque_group_map {
             opaque_render_data.push(RenderBatch {
                 tag: RenderTag::Opaque,
                 prepared_models: vec![ModelRenderData {
-                    object_name: name,
+                    model3d,
                     lod_index: lod,
                     instance_data: Arc::from(instances.clone()),
                     mesh_ranges: vec![MeshRenderRange {
@@ -185,11 +185,11 @@ impl Render {
 
         transparent_instances.sort_by(|a, b| b.0.total_cmp(&a.0));
 
-        let transparent_render_data = transparent_instances.into_iter().map(|(_, name, lod, mesh_idx, raw)| {
+        let transparent_render_data = transparent_instances.into_iter().map(|(_, model3d, lod, mesh_idx, raw)| {
             RenderBatch {
                 tag: RenderTag::SortedTransparent,
                 prepared_models: vec![ModelRenderData {
-                    object_name: name,
+                    model3d: model3d.clone(),
                     lod_index: lod,
                     instance_data: Arc::from([raw]),
                     mesh_ranges: vec![MeshRenderRange {

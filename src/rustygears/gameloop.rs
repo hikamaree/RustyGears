@@ -54,7 +54,6 @@ impl ApplicationHandler for Game {
 
             WindowEvent::RedrawRequested => {
                 self.update();
-                Game::dispatch_event(self, GearEvent::Update());
             }
 
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {

@@ -20,7 +20,9 @@ mod gameview;
 mod gameloop;
 mod gear;
 mod resources;
+mod commandsender;
 
 pub use game::*;
 pub use gameview::*;
 pub use gear::*;
+pub use commandsender::*;

@@ -79,7 +79,11 @@ pub trait Gear: Any + Send + Sync {
     ///
     /// # Parameters
     /// - `game`: A read-only snapshot of the current game state.
-    fn update(&mut self, game: GameView ) {
+    fn update(&mut self, game: GameView) {
+        let _ = game;
+    }
+
+    fn render(&mut self, game: GameView) {
         let _ = game;
     }
 
@@ -147,6 +151,16 @@ pub enum GearEvent {
     /// }
     /// ```
     Update(),
+
+    /// Dispatched when an update cycle occurs (e.g., physics or logic update).
+    ///
+    /// ### Example Usage
+    /// ```rust
+    /// if let GearEvent::RenderFrame() = event {
+    ///     println!("Rendering");
+    /// }
+    /// ```
+    RenderFrame(),
 
     /// Dispatched when the window is resized.
     ///

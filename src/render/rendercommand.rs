@@ -126,7 +126,7 @@ impl Command for RenderCommand {
                     render_pass.set_pipeline(pipeline);
 
                     for model_data in &batch.prepared_models {
-                        let key = format!("{}:lod{}:mesh{}", model_data.object_name, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
+                        let key = format!("{:?}:lod{}:mesh{}", model_data.model3d, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
                         let buffer = graphics.buffers.entry(key)
                             .and_modify(|b| {
                                 b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
@@ -138,13 +138,13 @@ impl Command for RenderCommand {
                                     model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
                                     wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                                     BufferStrategy::Triple,
-                                    &model_data.object_name,
+                                    "majmun",
                                 )
                             });
 
                         render_pass.set_vertex_buffer(1, buffer.current().slice(..));
 
-                        if let Some(render_object) = scene.get_render_object(&model_data.object_name) {
+                        if let Some(render_object) = scene.get_render_object(&model_data.model3d) {
                             graphics.t_count += render_pass.draw_model_instanced(
                                 &render_object.lods[model_data.lod_index],
                                 camera_bg,

@@ -15,12 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Model3d;
 use crate::Camera;
-use crate::ModelInstance;
 use crate::Command;
 use crate::EguiRenderer;
-use crate::Entity;
-use crate::Transform;
 use crate::BindGroupLayoutKey;
 use crate::RenderObject;
 use crate::Gear;
@@ -42,6 +40,8 @@ use winit::event_loop::EventLoop;
 
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
+
+use tokio::runtime::Runtime;
 
 pub(crate) struct MouseDelta {
     pub dx: f64,
@@ -81,6 +81,7 @@ pub struct Game {
     pub(crate) scene: Arc<UnsafeCell<WorldScene>>,
     commands: VecDeque<Box<dyn Command>>,
     pub(crate) mouse_delta: MouseDelta,
+    pub runtime: Runtime,
 }
 
 impl Game {
@@ -91,6 +92,8 @@ impl Game {
     /// A new `Game` instance.
     pub fn new() -> Self {
         let (command_sender, command_receiver) = crossbeam::channel::unbounded();
+
+        let runtime = tokio::runtime::Runtime::new().unwrap();
 
         Self {
             setupfns: VecDeque::new(),
@@ -103,7 +106,8 @@ impl Game {
             time: Time::new(),
             scene: Arc::new(UnsafeCell::new(WorldScene::default())),
             commands: VecDeque::new(),
-            mouse_delta: MouseDelta { dx: 0.0, dy: 0.0 }
+            mouse_delta: MouseDelta { dx: 0.0, dy: 0.0 },
+            runtime,
         }
     }
 
@@ -166,6 +170,9 @@ impl Game {
                     GearEvent::WindowResize(physical_size) => {
                         let _ = physical_size;
                     }
+                    GearEvent::RenderFrame() => {
+                        gear.render(msg.game);
+                    },
                 }
             }
         });
@@ -289,10 +296,6 @@ impl Game {
     /// - Uploads camera information to the GPU.
     /// - Updates the global time system.
     pub(crate) fn update(&mut self) {
-        self.dispatch_event(GearEvent::MouseMotion(self.mouse_delta.dx, self.mouse_delta.dy));
-        self.mouse_delta.dx = 0.0;
-        self.mouse_delta.dy = 0.0;
-
         self.time.update();
 
         let scene = unsafe { &mut *self.scene.get() };
@@ -313,47 +316,19 @@ impl Game {
             graphics.update(camera);
         }
 
+        self.dispatch_event(GearEvent::MouseMotion(self.mouse_delta.dx, self.mouse_delta.dy));
+        self.mouse_delta.dx = 0.0;
+        self.mouse_delta.dy = 0.0;
+
         while let Some(cmd) = self.commands.pop_front() {
             cmd.apply(self);
         }
-    }
 
-    /// Spawns a new model instance into the ECS world.
-    ///
-    /// If the model at `file_path` has not been previously loaded, this function attempts
-    /// to load it first. Upon success, a new [`Entity`] is created with the given [`Transform`]
-    /// and a [`ModelInstance`] component referencing the model.
-    ///
-    /// # Parameters
-    /// - `file_path`: Relative path to the model file (e.g., `"tree/tree.obj"`).
-    ///               This path is also used as the model's registration key.
-    /// - `transform`: World-space transform to assign to the new entity.
-    ///
-    /// # Returns
-    /// - `Ok(Entity)` if the model is successfully loaded (or already loaded) and the entity is spawned.
-    /// - `Err(String)` if loading the model fails.
-    ///
-    /// # Errors
-    /// This function returns an error if:
-    /// - The model file path is invalid.
-    /// - No LODs are found for the model.
-    /// - Loading the model or GPU upload fails.
-    /// - Required GPU resources (like texture layouts) are missing.
-    pub fn spawn_model(&mut self, file_path: &str, transform: Transform) -> Result<Entity, String> {
-        if !self.scene().render_objects.contains_key(file_path) {
-            if let Err(err) = self.load_model(file_path) {
-                return Err(format!("Failed to load model '{}': {}", file_path, err));
-            }
+        Game::dispatch_event(self, GearEvent::Update());
+
+        while let Some(cmd) = self.commands.pop_front() {
+            cmd.apply(self);
         }
-
-        let entity = self.scene().world.spawn();
-
-        self.scene().world.insert(entity, transform);
-        self.scene().world.insert(entity, ModelInstance {
-            name: file_path.to_string(),
-        });
-
-        Ok(entity)
     }
 
     /// Loads a model and registers it in the scene's render object registry.
@@ -377,8 +352,16 @@ impl Game {
     /// - No matching `.obj` LOD files are found.
     /// - Loading any of the model LODs fails.
     /// - Required GPU resources (e.g., bind group layouts) are missing.
-    pub fn load_model(&mut self, name: &str) -> Result<(), String> {
+    pub fn load_model(&mut self, name: &str) -> Result<Model3d, String> {
         let scene = unsafe { &mut *self.scene.get() };
+
+        let model = Model3d {
+            path: name.to_string()
+        };
+
+        if scene.render_objects.contains_key(&model) {
+            return Ok(model);
+        }
 
         let Ok(graphics) = self.graphics() else {
             return Err("Graohics is not initialized".into());
@@ -445,7 +428,7 @@ impl Game {
             return Err(format!("Failed to load any LOD for model '{}'", name));
         }
 
-        scene.add_render_object(name.to_string(), RenderObject { lods });
-        Ok(())
+        scene.add_render_object(model.clone(), RenderObject { lods });
+        Ok(model)
     }
 }

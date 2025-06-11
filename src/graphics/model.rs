@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::dummy_texture;
+use crate::Model3d;
 use crate::RenderTag;
 use crate::InstanceRaw;
 use std::sync::Arc;
@@ -33,7 +34,7 @@ pub struct MeshRenderRange {
 pub struct ModelRenderData {
     pub instance_data: Arc<[InstanceRaw]>,
     pub mesh_ranges: Vec<MeshRenderRange>,
-    pub object_name: String,
+    pub model3d: Model3d,
     pub lod_index: usize,
 }
 

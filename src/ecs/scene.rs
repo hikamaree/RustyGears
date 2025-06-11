@@ -26,6 +26,11 @@ use crate::Camera;
 use crate::RenderObject;
 use crate::Gui;
 
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct Model3d {
+    pub path: String
+}
+
 /// Represents the state of a scene in the game engine using an ECS-based architecture.
 ///
 /// `WorldScene` holds all entities, components, renderable objects,
@@ -44,7 +49,7 @@ use crate::Gui;
 #[derive(Default)]
 pub struct WorldScene {
     pub world: World,
-    pub render_objects: HashMap<String, RenderObject>,
+    pub render_objects: HashMap<Model3d, RenderObject>,
     pub active_camera: Option<Entity>,
     pub render_gui: Vec<Box<dyn Gui + Send + Sync>>,
 }
@@ -56,7 +61,7 @@ impl WorldScene {
     /// # Parameters
     /// - `name`: A unique string identifier for the render object.
     /// - `object`: The `RenderObject` to add.
-    pub fn add_render_object(&mut self, name: String, object: RenderObject) {
+    pub fn add_render_object(&mut self, name: Model3d, object: RenderObject) {
         self.render_objects.insert(name, object);
     }
 
@@ -67,7 +72,7 @@ impl WorldScene {
     ///
     /// # Returns
     /// - `Some(&RenderObject)` if found, or `None` otherwise.
-    pub fn get_render_object(&self, name: &str) -> Option<&RenderObject> {
+    pub fn get_render_object(&self, name: &Model3d) -> Option<&RenderObject> {
         self.render_objects.get(name)
     }
 
