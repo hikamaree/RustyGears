@@ -28,6 +28,7 @@ use crate::Time;
 use crate::GameView;
 use crate::WorldScene;
 
+use std::any::Any;
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
@@ -79,7 +80,6 @@ pub struct Game {
     pub gui: Option<EguiRenderer>,
     pub time: Time,
     pub(crate) scene: Arc<UnsafeCell<WorldScene>>,
-    commands: VecDeque<Box<dyn Command>>,
     pub(crate) mouse_delta: MouseDelta,
     pub runtime: Runtime,
 }
@@ -105,7 +105,6 @@ impl Game {
             gui: None,
             time: Time::new(),
             scene: Arc::new(UnsafeCell::new(WorldScene::default())),
-            commands: VecDeque::new(),
             mouse_delta: MouseDelta { dx: 0.0, dy: 0.0 },
             runtime,
         }
@@ -170,9 +169,6 @@ impl Game {
                     GearEvent::WindowResize(physical_size) => {
                         let _ = physical_size;
                     }
-                    GearEvent::RenderFrame() => {
-                        gear.render(msg.game);
-                    },
                 }
             }
         });
@@ -259,10 +255,6 @@ impl Game {
             self.gear_channels.remove(&id);
             self.gear_handles.remove(&id);
         }
-
-        while let Ok(cmd) = self.command_receiver.try_recv() {
-            self.commands.push_back(cmd);
-        }
     }
 
     /// Returns a mutable reference to the active game scene (`WorldScene`).
@@ -310,7 +302,6 @@ impl Game {
 
         let final_transform = scene.get_camera_transform(camera_entity);
 
-
         if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
             camera.update_view_proj(&final_transform, &graphics.projection);
             graphics.update(camera);
@@ -320,13 +311,19 @@ impl Game {
         self.mouse_delta.dx = 0.0;
         self.mouse_delta.dy = 0.0;
 
-        while let Some(cmd) = self.commands.pop_front() {
-            cmd.apply(self);
-        }
-
         Game::dispatch_event(self, GearEvent::Update());
 
-        while let Some(cmd) = self.commands.pop_front() {
+        let mut render_command: Option<Box<dyn Command>> = None;
+
+        while let Ok(cmd) = self.command_receiver.try_recv() {
+            if (&*cmd as &dyn Any).type_id() == std::any::TypeId::of::<crate::RenderCommand>() {
+                render_command = Some(cmd);
+            } else {
+                cmd.apply(self);
+            }
+        }
+
+        if let Some(cmd) = render_command {
             cmd.apply(self);
         }
     }

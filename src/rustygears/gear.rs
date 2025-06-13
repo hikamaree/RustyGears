@@ -83,10 +83,6 @@ pub trait Gear: Any + Send + Sync {
         let _ = game;
     }
 
-    fn render(&mut self, game: GameView) {
-        let _ = game;
-    }
-
     /// Called when a mouse motion event occurs.
     ///
     /// # Parameters
@@ -151,16 +147,6 @@ pub enum GearEvent {
     /// }
     /// ```
     Update(),
-
-    /// Dispatched when an update cycle occurs (e.g., physics or logic update).
-    ///
-    /// ### Example Usage
-    /// ```rust
-    /// if let GearEvent::RenderFrame() = event {
-    ///     println!("Rendering");
-    /// }
-    /// ```
-    RenderFrame(),
 
     /// Dispatched when the window is resized.
     ///

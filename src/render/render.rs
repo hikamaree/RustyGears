@@ -80,20 +80,20 @@ impl Render {
     /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
+        let Some(sender) = self.sender.as_ref() else {
+            return;
+        };
+
         let Some(camera_entity) = game.scene.active_camera else {
-            if let Some(sender) = self.sender.as_ref() {
-                if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
-                    game.graphics.window.request_redraw();
-                }
+            if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
+                game.graphics.window.request_redraw();
             }
             return;
         };
 
         let Some(camera) = game.scene.world.get::<Camera>(camera_entity) else {
-            if let Some(sender) = self.sender.as_ref() {
-                if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
-                    game.graphics.window.request_redraw();
-                }
+            if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
+                game.graphics.window.request_redraw();
             }
             return;
         };
@@ -205,10 +205,8 @@ impl Render {
             .chain(transparent_render_data)
             .collect();
 
-        if let Some(sender) = self.sender.as_ref() {
-            if let Ok(_) = sender.send(Box::new(RenderCommand { batches })) {
-                game.graphics.window.request_redraw();
-            }
+        if let Ok(_) = sender.send(Box::new(RenderCommand { batches })) {
+            game.graphics.window.request_redraw();
         }
     }
 }

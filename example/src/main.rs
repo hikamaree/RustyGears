@@ -96,7 +96,7 @@ impl Gear for MyGame {
         self.sender = Some(sender);
 
         const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 64;
+        const NUM_INSTANCES_PER_ROW: usize = 256;
 
         for z in 0..NUM_INSTANCES_PER_ROW {
             for x in 0..NUM_INSTANCES_PER_ROW {

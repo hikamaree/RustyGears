@@ -17,11 +17,13 @@
 
 use crate::Game;
 
+use std::any::Any;
+
 /// A trait that represents a game command that can be executed on a [`Game`] instance.
 ///
 /// Implementors of this trait define logic to modify game state.
 
-pub trait Command: Send + Sync {
+pub trait Command: Any + Send + Sync + 'static {
 
     /// Applies the command to the given game instance.
     ///
@@ -29,6 +31,5 @@ pub trait Command: Send + Sync {
     ///
     /// # Parameters
     /// - `game`: A mutable reference to the [`Game`] instance to modify.
-
     fn apply(self: Box<Self>, game: &mut Game);
 }
