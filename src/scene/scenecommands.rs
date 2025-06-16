@@ -36,7 +36,12 @@ impl<R: Send + 'static> Command for CommandWithResult<R> {
 macro_rules! spawn_entity {
     ( $sender:expr, $( $comp:expr ),* $(,)? ) => {{
         $sender.send_command(move |game| {
-            let mut builder = game.scene().spawn();
+            let scene = match game.components.get_mut::<WorldScene>() {
+                Ok(scene) => scene,
+                Err(_) => todo!(),
+            };
+
+            let mut builder = scene.spawn();
             $(
                 builder = builder.with($comp);
             )*
@@ -51,7 +56,11 @@ macro_rules! update_entity_position {
         let entity = $entity;
         let delta = $delta;
         $sender.send_command(move |game| {
-            if let Some(t) = game.scene().world.get_mut::<Transform>(entity) {
+            let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
+
+            if let Some(t) = scene.world.get_mut::<Transform>(entity) {
                 t.position += delta;
             }
         })
@@ -77,7 +86,11 @@ macro_rules! add_component {
         let entity = $entity;
         let component = $component;
         $sender.send_command(move |game| {
-            game.scene().world.insert(entity, component);
+            let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
+
+            scene.world.insert(entity, component);
         })
     }};
 }
@@ -87,7 +100,11 @@ macro_rules! set_default_camera {
     ( $sender:expr, $camera:expr ) => {{
         let camera = $camera;
         $sender.send_command(move |game| {
-            game.scene().set_active_camera(camera);
+            let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
+
+            scene.set_active_camera(camera);
         })
     }};
 }
@@ -98,7 +115,11 @@ macro_rules! set_instance_transform {
         let entity = $entity;
         let transform = $transform;
         $sender.send_command(move |game| {
-            if let Some(t) = game.scene().world.get_mut::<Transform>(entity) {
+            let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
+
+            if let Some(t) = scene.world.get_mut::<Transform>(entity) {
                 *t = transform;
             } else {
                 game.scene().world.insert(entity, transform);

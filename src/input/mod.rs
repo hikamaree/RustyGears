@@ -15,22 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+mod input;
 
-use std::any::TypeId;
-use std::any::Any;
-use std::collections::HashMap;
-
-/// A read-only view of the current game state, provided to [`Gear`]s when handling events.
-///
-/// `GameView` allows gears to inspect parts of the game world such as other gears, graphics state, timing information,
-/// and the scene. It provides safe access without allowing direct mutation of the game.
-pub struct GameView {
-    pub(crate) components: HashMap<TypeId, &'static (dyn Any + Send + Sync)>,
-}
-
-impl GameView {
-    pub fn get<T: 'static + Send + Sync>(&self) -> Option<&T> {
-        let type_id = TypeId::of::<T>();
-        self.components.get(&type_id)?.downcast_ref::<T>()
-    }
-}
+pub use input::*;

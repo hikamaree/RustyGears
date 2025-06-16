@@ -15,8 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::cell::UnsafeCell;
-use std::sync::Arc;
 use winit::window::WindowAttributes;
 use winit::event::DeviceEvent;
 use winit::event::DeviceId;
@@ -31,10 +29,15 @@ use crate::GearEvent;
 use crate::Game;
 use crate::Graphics;
 use crate::EguiRenderer;
+use crate::Input;
 
 impl ApplicationHandler for Game {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
-        let Ok(graphics) = self.graphics() else {
+        let Ok(graphics) = self.components.get_mut::<Graphics>() else {
+            return;
+        };
+
+        let Ok(input) = self.components.get_mut::<Input>() else {
             return;
         };
 
@@ -57,7 +60,10 @@ impl ApplicationHandler for Game {
             }
 
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
-                Game::dispatch_event(self, GearEvent::KeyboardInput(key, state));
+                match state {
+                    winit::event::ElementState::Pressed => input.press_key(key),
+                    winit::event::ElementState::Released => input.release_key(&key),
+                }
             }
 
             _ => {}
@@ -67,10 +73,13 @@ impl ApplicationHandler for Game {
     }
 
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
+        let Ok(input) = self.components.get_mut::<Input>() else {
+            return;
+        };
+
         match event {
             winit::event::DeviceEvent::MouseMotion { delta } => {
-                self.mouse_delta.dx += delta.0;
-                self.mouse_delta.dy += delta.1;
+                input.update_mouse_delta(delta.0, delta.1);
             }
 
             _ => {}
@@ -103,7 +112,7 @@ impl ApplicationHandler for Game {
 
         let egui = EguiRenderer::new(&graphics.device, graphics.config.format, None, 1, &graphics.window);
 
-        self.graphics = Arc::new(UnsafeCell::new(Some(graphics)));
+        self.components.insert(graphics);
 
         self.gui = Some(egui);
 

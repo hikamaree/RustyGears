@@ -21,8 +21,10 @@ mod gameloop;
 mod gear;
 mod resources;
 mod commandsender;
+mod components;
 
 pub use game::*;
 pub use gameview::*;
 pub use gear::*;
 pub use commandsender::*;
+pub(crate) use components::*;

@@ -462,7 +462,7 @@ pub struct SetTrianglesCount {
 
 impl Command for SetTrianglesCount {
     fn apply(self: Box<Self>, game: &mut crate::Game) {
-        if let Ok(graphics) = game.graphics() {
+        if let Ok(graphics) = game.components.get_mut::<Graphics>() {
             graphics.t_count = self.count;
         }
     }

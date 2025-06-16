@@ -36,25 +36,31 @@ struct MyGame {
 
 impl MyGame {
     fn new(game: &mut Game) -> Self {
+        let truck = match game.load_model("truck/semi") {
+            Ok(truck) => truck,
+            Err(e) => {
+                println!("{}", e);
+                todo!()
+            },
+        };
+
+        let scene = match game.components.get_mut::<WorldScene>() {
+            Ok(scene) => scene,
+            Err(_) => todo!(),
+        };
+
         let transform = Transform {
             position: vec3(8.0, -10.0, 0.0),
             rotation: Quaternion::one(),
             scale: vec3(1.0, 1.0, 1.0) 
         };
 
-        let truck = match game.load_model("truck/semi") {
-            Ok(truck) => truck,
-            Err(_) => todo!(),
-        };
-
-        let truck = game.scene()
-            .spawn()
+        let truck = scene.spawn()
             .with(truck)
             .with(transform)
             .build();
 
-        let camera1 = game.scene()
-            .spawn()
+        let camera1 = scene.spawn()
             .with(Camera::new())
             .with(Transform::identity())
             .with(CameraControl {
@@ -62,10 +68,9 @@ impl MyGame {
             })
             .build();
 
-        game.scene().set_active_camera(camera1);
+        scene.set_active_camera(camera1);
 
-        let camera2 = game.scene()
-            .spawn()
+        let camera2 = scene.spawn()
             .with(Camera::new())
             .with(CameraControl {
                 handler: Box::new(CameraFollow{
@@ -89,53 +94,17 @@ impl MyGame {
             block,
         }
     }
-}
 
-impl Gear for MyGame {
-    fn setup(&mut self, game: &mut Game, sender: Sender<Box<dyn Command>>) {
-        self.sender = Some(sender);
-
-        const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 256;
-
-        for z in 0..NUM_INSTANCES_PER_ROW {
-            for x in 0..NUM_INSTANCES_PER_ROW {
-                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-
-                let position = vec3(x, -10.0, z);
-
-                let rotation = Quaternion::one();
-
-                let transform = Transform { 
-                    position,
-                    rotation,
-                    scale: vec3(300.0, 300.0, 300.0)
-                };
-
-                let miku = match game.load_model("miku/miku") {
-                    Ok(miku) => {
-                        miku
-                    },
-                    Err(e) => {
-                        eprintln!("{}", e);
-                        continue;
-                    },
-                };
-                game.scene()
-                    .spawn()
-                    .with(miku)
-                    .with(transform);
-            }
-        }
-    }
-
-    fn mouse_motion(&mut self, dx: f64, dy: f64, game: GameView) {
+    fn mouse_motion(&mut self, dx: f64, dy: f64, game: &GameView) {
         let Some(sender) = self.sender.as_ref() else {
             return;
         };
 
-        let Some(active_camera) = game.scene.active_camera else {
+        let Some(scene) = game.get::<WorldScene>() else {
+            return;
+        };
+
+        let Some(active_camera) = scene.active_camera else {
             return;
         };
 
@@ -152,7 +121,7 @@ impl Gear for MyGame {
             let delta_yaw = Rad(-dx as f32 * sensitivity);
             let rot = Quaternion::from_angle_y(delta_yaw);
 
-            let cam_handle = match game.scene.world.get::<CameraControl>(self.camera2) {
+            let cam_handle = match scene.world.get::<CameraControl>(self.camera2) {
                 Some(controller) => match controller.handler.as_any().downcast_ref::<CameraFollow>() {
                     Some(handle) => handle,
                     None => return
@@ -160,7 +129,7 @@ impl Gear for MyGame {
                 None => return
             };
 
-            let Some(target_transform) = game.scene.world.get::<Transform>(cam_handle.target) else {
+            let Some(target_transform) = scene.world.get::<Transform>(cam_handle.target) else {
                 return;
             };
 
@@ -185,16 +154,25 @@ impl Gear for MyGame {
         }
     }
 
-    fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
+
+    fn keyboard_input(&mut self, input: &Input, game: &GameView) {
         let Some(sender) = self.sender.as_ref() else {
             return;
         };
 
-        let dt = game.time.delta_time();
+        let Some(scene) = game.get::<WorldScene>() else {
+            return;
+        };
+
+        let Some(time) = game.get::<Time>() else {
+            return;
+        };
+
+        let dt = time.delta_time();
 
         let speed = 50.0;
 
-        let cam_handle = match game.scene.world.get::<CameraControl>(self.camera1) {
+        let cam_handle = match scene.world.get::<CameraControl>(self.camera1) {
             Some(controller) => match controller.handler.as_any().downcast_ref::<FreeFlyCamera>() {
                 Some(handle) => handle,
                 None => return
@@ -205,60 +183,111 @@ impl Gear for MyGame {
         let forward = cam_handle.forward();
         let right = cam_handle.right();
 
-        match key {
-            KeyCode::KeyC => {
-                if state == ElementState::Released {
-                    return;
-                }
-                let Some(active_camera) = game.scene.active_camera else {
-                    return;
-                };
-
-                let camera = if active_camera == self.camera1 {
-                    self.camera2
-                } else {
-                    self.camera1
-                };
-
-                set_default_camera!(sender, camera);
-            }
-
-            KeyCode::ArrowUp => {
-                update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, speed * dt));
-            }
-            KeyCode::ArrowDown => {
-                update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, -speed * dt));
-            }
-
-            KeyCode::KeyW => {
-                update_freefly_position!(sender, self.camera1, forward * speed * dt);
-            }
-            KeyCode::KeyS => {
-                update_freefly_position!(sender, self.camera1, -forward * speed * dt);
-            }
-            KeyCode::KeyA => {
-                update_freefly_position!(sender, self.camera1, -right * speed * dt);
-            }
-            KeyCode::KeyD => {
-                update_freefly_position!(sender, self.camera1, right * speed * dt);
-            }
-
-            KeyCode::KeyE => {
-                self.h += 1.0;
-                let transform = Transform {
-                    position: vec3(0.0, 30.0, -self.h),
-                    rotation: Quaternion::one(),
-                    scale: vec3(1.0, 1.0, 1.0) 
-                };
-
-                let x = spawn_entity!(sender, transform);
-                add_component!(sender, x, self.block.clone());
-            }
-
-            _ => {
+        if input.is_key_pressed(KeyCode::KeyC) {
+            let Some(active_camera) = scene.active_camera else {
                 return;
+            };
+
+            let camera = if active_camera == self.camera1 {
+                self.camera2
+            } else {
+                self.camera1
+            };
+
+            set_default_camera!(sender, camera);
+        }
+
+        if input.is_key_pressed(KeyCode::ArrowUp) {
+            update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, speed * dt));
+        }
+
+        if input.is_key_pressed(KeyCode::ArrowDown) {
+            update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, -speed * dt));
+        }
+
+        if input.is_key_pressed(KeyCode::KeyW) {
+            update_freefly_position!(sender, self.camera1, forward * speed * dt);
+        }
+
+        if input.is_key_pressed(KeyCode::KeyS) {
+            update_freefly_position!(sender, self.camera1, -forward * speed * dt);
+        }
+
+        if input.is_key_pressed(KeyCode::KeyA) {
+            update_freefly_position!(sender, self.camera1, -right * speed * dt);
+        }
+
+        if input.is_key_pressed(KeyCode::KeyD) {
+            update_freefly_position!(sender, self.camera1, right * speed * dt);
+        }
+
+        if input.is_key_pressed(KeyCode::KeyE) {
+            self.h += 1.0;
+            let transform = Transform {
+                position: vec3(0.0, 30.0, -self.h),
+                rotation: Quaternion::one(),
+                scale: vec3(1.0, 1.0, 1.0) 
+            };
+
+            let x = spawn_entity!(sender, transform);
+            add_component!(sender, x, self.block.clone());
+        }
+    }
+}
+
+impl Gear for MyGame {
+    fn setup(&mut self, game: &mut Game, sender: Sender<Box<dyn Command>>) {
+        self.sender = Some(sender);
+
+        let miku = match game.load_model("miku/miku") {
+            Ok(miku) => {
+                miku
+            },
+            Err(e) => {
+                eprintln!("{}", e);
+                todo!()
             },
         };
+
+        let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+            return;
+        };
+
+        const SPACE_BETWEEN: f32 = 15.0;
+        const NUM_INSTANCES_PER_ROW: usize = 64;
+
+        for z in 0..NUM_INSTANCES_PER_ROW {
+            for x in 0..NUM_INSTANCES_PER_ROW {
+                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                let position = vec3(x, -10.0, z);
+
+                let rotation = Quaternion::one();
+
+                let transform = Transform { 
+                    position,
+                    rotation,
+                    scale: vec3(300.0, 300.0, 300.0)
+                };
+
+                scene.spawn()
+                    .with(miku.clone())
+                    .with(transform);
+                }
+        }
+    }
+
+    fn update(&mut self, game: GameView) {
+        let Some(input) = game.get::<Input>() else {
+            return;
+        };
+
+        let mm = input.mouse_delta();
+
+        self.mouse_motion(mm.dx, mm.dy, &game);
+
+        self.keyboard_input(input, &game);
     }
 }
 
@@ -268,7 +297,10 @@ pub fn main() {
         let mygame = MyGame::new(game);
         game.add_gear("mygame".into(), mygame);
     }).setup(|game| {
-        game.scene().add_gui(EngineStats::new());
+        let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+            return;
+        };
+        scene.add_gui(EngineStats::new());
 
         // let transform = Transform { 
         //     position: vec3(0.0, 0.0, 0.0),
@@ -324,7 +356,11 @@ mod tests {
                 game.add_gear("mygame".into(), mygame);
 
             }).setup(|game| {
-                game.scene().add_gui(EngineStats::new());
+                if let Err(err) = game.components.with::<WorldScene, _>(|scene| {
+                    scene.add_gui(EngineStats::new());
+                }) {
+                    eprintln!("Failed to add EngineStats to scene: {}", err);
+                }
             });
 
         for _ in 0..10 {

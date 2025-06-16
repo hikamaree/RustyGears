@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::ComponentMap;
+use crate::Input;
 use crate::Model3d;
 use crate::Camera;
 use crate::Command;
@@ -29,8 +31,6 @@ use crate::GameView;
 use crate::WorldScene;
 
 use std::any::Any;
-use std::sync::Arc;
-use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::thread::JoinHandle;
@@ -44,14 +44,9 @@ use crossbeam::channel::Sender;
 
 use tokio::runtime::Runtime;
 
-pub(crate) struct MouseDelta {
-    pub dx: f64,
-    pub dy: f64,
-}
-
 pub struct GearMessage {
     pub gear_event: GearEvent,
-    pub game: GameView<'static>,
+    pub game: GameView,
 }
 
 /// Represents the core application state, managing rendering, scene data, time progression,
@@ -66,26 +61,21 @@ pub struct GearMessage {
 /// - `gear_handles`: Join handles to running gear threads for lifecycle control.
 /// - `command_receiver`: Channel for receiving commands from the game engine to be executed.
 /// - `command_sender`: Channel for sending commands to the game engine.
-/// - `graphics`: Interior-mutable reference to the GPU rendering context and pipeline state.
 /// - `gui`: Optional immediate-mode GUI renderer (e.g., egui).
-/// - `time`: Tracks timing, delta time, and frame progression.
-/// - `scene`: Interior-mutable reference to the curr
+/// - `runtime`: Tokio runtime for executing asynchronous tasks on background threads.
+/// - `components`: Central component registry used to store and access engine-wide subsystems and shared state via type-safe accessors.
 pub struct Game {
     pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
     pub(crate) gear_channels: HashMap<String, Sender<GearMessage>>,
     pub(crate) gear_handles: HashMap<String, JoinHandle<()>>,
     pub(crate) command_receiver: Receiver<Box<dyn Command>>,
     pub(crate) command_sender: Sender<Box<dyn Command>>,
-    pub graphics: Arc<UnsafeCell<Option<Graphics>>>,
     pub gui: Option<EguiRenderer>,
-    pub time: Time,
-    pub(crate) scene: Arc<UnsafeCell<WorldScene>>,
-    pub(crate) mouse_delta: MouseDelta,
     pub runtime: Runtime,
+    pub components: ComponentMap,
 }
 
 impl Game {
-
     /// Creates a new `Game` instance with default components.
     ///
     /// # Returns
@@ -95,18 +85,21 @@ impl Game {
 
         let runtime = tokio::runtime::Runtime::new().unwrap();
 
+        let mut components = ComponentMap::new();
+
+        components.insert(WorldScene::default());
+        components.insert(Time::new());
+        components.insert(Input::new());
+
         Self {
             setupfns: VecDeque::new(),
             gear_channels: HashMap::new(),
             gear_handles: HashMap::new(),
             command_sender,
             command_receiver,
-            graphics: Arc::new(UnsafeCell::new(None)),
             gui: None,
-            time: Time::new(),
-            scene: Arc::new(UnsafeCell::new(WorldScene::default())),
-            mouse_delta: MouseDelta { dx: 0.0, dy: 0.0 },
             runtime,
+            components,
         }
     }
 
@@ -137,10 +130,6 @@ impl Game {
     ///
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
-    ///
-    /// # Panics
-    /// Will panic if the gear fails to receive events due to channel errors or thread issues.
-    /// This function assumes gear event handling is fallible only in case of programmer error or gear crash.
     pub fn add_gear<T: Gear + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
         let setup_sender = self.command_sender.clone();
         gear.setup(self, setup_sender);
@@ -223,14 +212,7 @@ impl Game {
     /// game.dispatch_event(GearEvent::Update());
     /// ```
     pub fn dispatch_event(&mut self, event: GearEvent) {
-        let graphics = match unsafe { & *self.graphics.get() } {
-            Some(graphics) => graphics,
-            None => return
-        };
-
-        let scene = unsafe { &*self.scene.get() };
-
-        let time = self.time.clone();
+        let engine = self.components.get_view();
 
         let mut dead_gears = Vec::new();
 
@@ -240,9 +222,7 @@ impl Game {
             let result = sender.send(GearMessage {
                 gear_event,
                 game: GameView {
-                    graphics,
-                    time,
-                    scene,
+                    components: engine.clone()
                 },
             });
 
@@ -257,30 +237,6 @@ impl Game {
         }
     }
 
-    /// Returns a mutable reference to the active game scene (`WorldScene`).
-    ///
-    /// This function uses interior mutability via `UnsafeCell`, so it is marked unsafe internally.
-    ///
-    /// # Safety
-    /// The caller must ensure no aliasing mutable references exist simultaneously.
-    pub fn scene(&self) -> &mut WorldScene {
-        unsafe { &mut *self.scene.get() }
-    }
-
-    /// Returns a mutable reference to the active graphics backend (`Graphics`).
-    ///
-    /// This uses `UnsafeCell` to access the interior mutable state safely in single-threaded context.
-    ///
-    /// # Panics
-    /// Panics if the graphics backend has not been initialized (`None`).
-    pub fn graphics(&self) -> Result<&mut Graphics, &'static str> {
-        let graphics = unsafe { &mut *self.graphics.get() };
-        match graphics {
-            Some(graphics) => Ok(graphics),
-            None => Err("graphics is not initialized")
-        }
-    }
-
     /// Updates camera matrices, GPU state, and timing for the current frame.
     ///
     /// This method:
@@ -288,11 +244,17 @@ impl Game {
     /// - Uploads camera information to the GPU.
     /// - Updates the global time system.
     pub(crate) fn update(&mut self) {
-        self.time.update();
+        let Ok(time) = self.components.get_mut::<Time>() else {
+            return;
+        };
 
-        let scene = unsafe { &mut *self.scene.get() };
+        time.update();
 
-        let Ok(graphics) = self.graphics() else {
+        let Ok(scene) = self.components.get_mut::<WorldScene>() else {
+            return;
+        };
+
+        let Ok(graphics) = self.components.get_mut::<Graphics>() else {
             return;
         };
 
@@ -306,10 +268,6 @@ impl Game {
             camera.update_view_proj(&final_transform, &graphics.projection);
             graphics.update(camera);
         }
-
-        self.dispatch_event(GearEvent::MouseMotion(self.mouse_delta.dx, self.mouse_delta.dy));
-        self.mouse_delta.dx = 0.0;
-        self.mouse_delta.dy = 0.0;
 
         Game::dispatch_event(self, GearEvent::Update());
 
@@ -326,6 +284,12 @@ impl Game {
         if let Some(cmd) = render_command {
             cmd.apply(self);
         }
+
+        let Ok(input) = self.components.get_mut::<Input>() else {
+            return;
+        };
+
+        input.reset_mouse_delta();
     }
 
     /// Loads a model and registers it in the scene's render object registry.
@@ -350,7 +314,16 @@ impl Game {
     /// - Loading any of the model LODs fails.
     /// - Required GPU resources (e.g., bind group layouts) are missing.
     pub fn load_model(&mut self, name: &str) -> Result<Model3d, String> {
-        let scene = unsafe { &mut *self.scene.get() };
+        let scene = match self.components.get_mut::<WorldScene>() {
+            Ok(scene) => scene,
+            Err(e) => return Err(e),
+        };
+
+        let graphics = match self.components.get_mut::<Graphics>() {
+            Ok(graphics) => graphics,
+            Err(e) => return Err(e),
+        };
+
 
         let model = Model3d {
             path: name.to_string()
@@ -359,10 +332,6 @@ impl Game {
         if scene.render_objects.contains_key(&model) {
             return Ok(model);
         }
-
-        let Ok(graphics) = self.graphics() else {
-            return Err("Graohics is not initialized".into());
-        };
 
         let Some(texture_layout) = graphics.bind_group_layouts.get(&BindGroupLayoutKey::Texture) else {
             return Err("Missing texture bind group layout".into());

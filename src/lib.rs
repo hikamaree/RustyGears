@@ -25,6 +25,7 @@ mod winit;
 mod scene;
 mod ecs;
 mod render;
+mod input;
 
 pub mod math {
     pub use cgmath::*;
@@ -47,6 +48,7 @@ pub use camera::*;
 pub use scene::*;
 pub use ecs::*;
 pub use render::*;
+pub use input::*;
 
 pub use crossbeam::channel::Receiver;
 pub use crossbeam::channel::Sender;

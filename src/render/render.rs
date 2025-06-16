@@ -16,6 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::Camera;
+use crate::Graphics;
 use crate::Model3d;
 use crate::RenderBatch;
 use crate::RenderTag;
@@ -28,6 +29,7 @@ use crate::GameView;
 use crate::Gear;
 use crate::InstanceRaw;
 use crate::Transform;
+use crate::WorldScene;
 
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -84,27 +86,35 @@ impl Render {
             return;
         };
 
-        let Some(camera_entity) = game.scene.active_camera else {
+        let Some(scene) = game.get::<WorldScene>() else {
+            return;
+        };
+
+        let Some(graphics) = game.get::<Graphics>() else {
+            return;
+        };
+
+        let Some(camera_entity) = scene.active_camera else {
             if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
-                game.graphics.window.request_redraw();
+                graphics.window.request_redraw();
             }
             return;
         };
 
-        let Some(camera) = game.scene.world.get::<Camera>(camera_entity) else {
+        let Some(camera) = scene.world.get::<Camera>(camera_entity) else {
             if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
-                game.graphics.window.request_redraw();
+                graphics.window.request_redraw();
             }
             return;
         };
 
-        let camera_transform = game.scene.get_camera_transform(camera_entity);
+        let camera_transform = scene.get_camera_transform(camera_entity);
 
         let mut opaque_batches = vec![];
         let mut transparent_instances = vec![];
 
-        for (_ent, model3d, transform) in game.scene.world.query2::<Model3d, Transform>() {
-            let Some(render_obj) = game.scene.render_objects.get(&model3d) else {
+        for (_ent, model3d, transform) in scene.world.query2::<Model3d, Transform>() {
+            let Some(render_obj) = scene.render_objects.get(&model3d) else {
                 continue;
             };
 
@@ -206,7 +216,7 @@ impl Render {
             .collect();
 
         if let Ok(_) = sender.send(Box::new(RenderCommand { batches })) {
-            game.graphics.window.request_redraw();
+            graphics.window.request_redraw();
         }
     }
 }

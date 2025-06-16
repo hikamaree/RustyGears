@@ -22,8 +22,10 @@ use egui::Vec2;
 use egui::Rgba;
 use egui::Area;
 
+use crate::Graphics;
 use crate::Gui;
 use crate::GameView;
+use crate::Time;
 
 use super::gpu::GpuInfo;
 
@@ -47,7 +49,15 @@ impl Gui for EngineStats {
             return;
         };
 
-        gpu.update(game.time.total_time());
+        let Some(time) = game.get::<Time>() else {
+            return;
+        };
+
+        let Some(graphics) = game.get::<Graphics>() else {
+            return;
+        };
+
+        gpu.update(time.total_time());
 
         Area::new("game_stats".into())
             .fixed_pos([0.0, 0.0])
@@ -69,13 +79,13 @@ impl Gui for EngineStats {
 
                 ui.put(rect.shrink(padding), |ui: &mut egui::Ui| {
                     ui.vertical(|ui: &mut egui::Ui| -> egui::Response {
-                        ui.label(RichText::new(format!("FPS: {}", game.time.fps()))
+                        ui.label(RichText::new(format!("FPS: {}", time.fps()))
                             .monospace()
                             .color(Color32::WHITE));
                         ui.label(RichText::new(format!("{}", gpu.display()))
                             .monospace()
                             .color(Color32::WHITE));
-                        ui.label(RichText::new(format!("Rendering:\n  Triangles: {}", game.graphics.t_count))
+                        ui.label(RichText::new(format!("Rendering:\n  Triangles: {}", graphics.t_count))
                             .monospace()
                             .color(Color32::WHITE))
                     }).response

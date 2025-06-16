@@ -19,12 +19,14 @@ use egui_wgpu::ScreenDescriptor;
 use crate::DrawModel;
 use crate::BufferStrategy;
 use crate::Buffer;
+use crate::Graphics;
 use crate::InstanceRaw;
 use crate::Game;
 use crate::GameView;
 use crate::Command;
 use crate::ModelRenderData;
 use crate::RenderTag;
+use crate::WorldScene;
 
 /// A batch of models that share the same render pipeline and camera.
 ///
@@ -75,10 +77,11 @@ pub struct RenderCommand {
 
 impl Command for RenderCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let scene = unsafe { &*game.scene.get() };
+        let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+            return;
+        };
 
-        let graphics = unsafe { &mut *game.graphics.get() };
-        let Some(graphics) = graphics.as_mut() else {
+        let Ok(graphics) = game.components.get_mut::<Graphics>() else {
             return;
         };
 
@@ -163,9 +166,7 @@ impl Command for RenderCommand {
         };
 
         let gameview = GameView {
-            graphics,
-            scene,
-            time: game.time.clone(),
+            components: game.components.get_view()
         };
 
         if let Some(gui) = game.gui.as_mut() {

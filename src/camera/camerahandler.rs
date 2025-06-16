@@ -23,6 +23,7 @@ use crate::Transform;
 use crate::World;
 use crate::Entity;
 use crate::Command;
+use crate::WorldScene;
 
 use cgmath::Vector3;
 use cgmath::Rotation3;
@@ -234,12 +235,21 @@ impl ModifyCameraHandle {
 
 impl Command for ModifyCameraHandle {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let scene = unsafe { &mut *game.scene.get() };
+        let handler_ptr = {
+            let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
 
-        let Some(control) = scene.world.get_mut::<CameraControl>(self.entity) else {
-            return;
+            let Some(control) = scene.world.get_mut::<CameraControl>(self.entity) else {
+                return;
+            };
+
+            &mut *control.handler as *mut _
         };
-        (self.f)(&mut *control.handler, game);
+
+        unsafe {
+            (self.f)(&mut *handler_ptr, game);
+        }
     }
 }
 
