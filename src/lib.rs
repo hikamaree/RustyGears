@@ -26,6 +26,7 @@ mod scene;
 mod ecs;
 mod render;
 mod input;
+mod terminal;
 
 pub mod math {
     pub use cgmath::*;
@@ -49,6 +50,7 @@ pub use scene::*;
 pub use ecs::*;
 pub use render::*;
 pub use input::*;
+pub use terminal::*;
 
 pub use crossbeam::channel::Receiver;
 pub use crossbeam::channel::Sender;

@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
+
 use egui_wgpu::ScreenDescriptor;
 use crate::DrawModel;
 use crate::BufferStrategy;
@@ -169,6 +171,8 @@ impl Command for RenderCommand {
             components: game.components.get_view()
         };
 
+        let mut commands: VecDeque<Box<dyn Command>> = VecDeque::new();
+
         if let Some(gui) = game.gui.as_mut() {
             gui.draw(
                 &graphics.device,
@@ -176,12 +180,17 @@ impl Command for RenderCommand {
                 &mut encoder,
                 &graphics.window,
                 &view, screen_descriptor,
-                &scene.render_gui,
+                &mut scene.render_gui,
                 &gameview,
+                &mut commands
             );
         }
 
         graphics.queue.submit(Some(encoder.finish()));
         output.present();
+
+        while let Some(cmd) = commands.pop_front() {
+            cmd.apply(game);
+        }
     }
 }

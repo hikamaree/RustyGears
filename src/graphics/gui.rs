@@ -15,9 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
 use crate::GameView;
+use crate::Command;
 use egui::Context;
 
 pub trait Gui: Send + Sync {
-    fn render_gui(&self, game: &GameView, context: &Context);
+    fn render_gui(&mut self, game: &GameView, context: &Context, commands: &mut VecDeque<Box<dyn Command>>);
 }

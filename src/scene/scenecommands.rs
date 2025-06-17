@@ -20,6 +20,16 @@ use crate::Game;
 
 use tokio::sync::oneshot;
 
+pub struct CommandFunction {
+    pub run: Box<dyn FnOnce(&mut Game) + Send + Sync + 'static>,
+}
+
+impl Command for CommandFunction {
+    fn apply(self: Box<Self>, game: &mut Game) {
+        (self.run)(game);
+    }
+}
+
 pub struct CommandWithResult<R> {
     pub run: Box<dyn FnOnce(&mut Game) -> R + Send + Sync>,
     pub respond_to: oneshot::Sender<R>,

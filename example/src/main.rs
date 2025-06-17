@@ -117,7 +117,6 @@ impl MyGame {
 
             update_freefly_rotation!(sender, self.camera1, delta_yaw, delta_pitch);
         } else if active_camera == self.camera2 {
-
             let delta_yaw = Rad(-dx as f32 * sensitivity);
             let rot = Quaternion::from_angle_y(delta_yaw);
 
@@ -301,6 +300,7 @@ pub fn main() {
             return;
         };
         scene.add_gui(EngineStats::new());
+        scene.add_gui(TerminalGui::new());
 
         // let transform = Transform { 
         //     position: vec3(0.0, 0.0, 0.0),

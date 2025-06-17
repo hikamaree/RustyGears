@@ -45,6 +45,11 @@ impl ApplicationHandler for Game {
             return;
         }
 
+        let Some(gui) = self.gui.as_mut() else {
+            return;
+        };
+        gui.handle_input(&graphics.window, &event);
+
         match event {
             WindowEvent::CloseRequested => {
                 Game::dispatch_event(self, GearEvent::Exit());
@@ -60,6 +65,9 @@ impl ApplicationHandler for Game {
             }
 
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
+                if gui.context.wants_keyboard_input() {
+                    return;
+                }
                 match state {
                     winit::event::ElementState::Pressed => input.press_key(key),
                     winit::event::ElementState::Released => input.release_key(&key),
@@ -68,8 +76,6 @@ impl ApplicationHandler for Game {
 
             _ => {}
         }
-
-        Game::dispatch_event(self, GearEvent::WindowEvent(event.clone()));
     }
 
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {

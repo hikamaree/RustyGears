@@ -15,6 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
+
+use crate::Command;
 use crate::GameView;
 use crate::Gui;
 use egui::epaint::Shadow;
@@ -81,15 +84,16 @@ impl EguiRenderer {
         window: &Window,
         window_surface_view: &TextureView,
         screen_descriptor: ScreenDescriptor,
-        run_ui: &Vec<Box<dyn Gui + Send + Sync>>,
+        run_ui: &mut Vec<Box<dyn Gui + Send + Sync>>,
         game: &GameView,
+        commands: &mut VecDeque<Box<dyn Command>>,
     ) {
         let raw_input = self.state.take_egui_input(&window);
         let full_output = self.context.run(raw_input, |_ui| {
             self.context.set_cursor_icon(egui::CursorIcon::None);
-            for gui_component in run_ui {
-                gui_component.render_gui(game, &self.context);
-            }
+            run_ui.into_iter().for_each(|gui_component| {
+                gui_component.render_gui(game, &self.context, commands);
+            });
         });
 
         self.state

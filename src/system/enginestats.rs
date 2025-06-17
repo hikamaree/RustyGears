@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::collections::VecDeque;
+
 use egui::Color32;
 use egui::RichText;
 use egui::Rect;
@@ -22,6 +24,7 @@ use egui::Vec2;
 use egui::Rgba;
 use egui::Area;
 
+use crate::Command;
 use crate::Graphics;
 use crate::Gui;
 use crate::GameView;
@@ -29,26 +32,20 @@ use crate::Time;
 
 use super::gpu::GpuInfo;
 
-use std::sync::Mutex;
-
 pub struct EngineStats {
-    gpu: Mutex<GpuInfo>,
+    gpu: GpuInfo,
 }
 
 impl EngineStats {
     pub fn new() -> Self {
         Self {
-            gpu: Mutex::new(GpuInfo::new()),
+            gpu: GpuInfo::new(),
         }
     }
 }
 
 impl Gui for EngineStats {
-    fn render_gui(&self, game: &GameView, ctx: &egui::Context) {
-        let Ok(mut gpu) = self.gpu.lock() else {
-            return;
-        };
-
+    fn render_gui(&mut self, game: &GameView, ctx: &egui::Context, _commands: &mut VecDeque<Box<dyn Command + 'static>>) {
         let Some(time) = game.get::<Time>() else {
             return;
         };
@@ -57,7 +54,7 @@ impl Gui for EngineStats {
             return;
         };
 
-        gpu.update(time.total_time());
+        self.gpu.update(time.total_time());
 
         Area::new("game_stats".into())
             .fixed_pos([0.0, 0.0])
@@ -82,7 +79,7 @@ impl Gui for EngineStats {
                         ui.label(RichText::new(format!("FPS: {}", time.fps()))
                             .monospace()
                             .color(Color32::WHITE));
-                        ui.label(RichText::new(format!("{}", gpu.display()))
+                        ui.label(RichText::new(format!("{}", self.gpu.display()))
                             .monospace()
                             .color(Color32::WHITE));
                         ui.label(RichText::new(format!("Rendering:\n  Triangles: {}", graphics.t_count))
