@@ -15,6 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
+use once_cell::sync::OnceCell; // use tokio::sync::OnceCell;
+use crate::Logs;
 use crate::ComponentMap;
 use crate::Input;
 use crate::Model3d;
@@ -44,6 +47,8 @@ use crossbeam::channel::Sender;
 
 use tokio::runtime::Runtime;
 
+pub static COMMAND_SENDER: OnceCell<Sender<Box<dyn Command>>> = OnceCell::new();
+
 pub struct GearMessage {
     pub gear_event: GearEvent,
     pub game: GameView,
@@ -69,7 +74,6 @@ pub struct Game {
     pub(crate) gear_channels: HashMap<String, Sender<GearMessage>>,
     pub(crate) gear_handles: HashMap<String, JoinHandle<()>>,
     pub(crate) command_receiver: Receiver<Box<dyn Command>>,
-    pub(crate) command_sender: Sender<Box<dyn Command>>,
     pub gui: Option<EguiRenderer>,
     pub runtime: Runtime,
     pub components: ComponentMap,
@@ -83,6 +87,8 @@ impl Game {
     pub fn new() -> Self {
         let (command_sender, command_receiver) = crossbeam::channel::unbounded();
 
+        COMMAND_SENDER.set(command_sender.clone()).unwrap();
+
         let runtime = tokio::runtime::Runtime::new().unwrap();
 
         let mut components = ComponentMap::new();
@@ -90,12 +96,12 @@ impl Game {
         components.insert(WorldScene::default());
         components.insert(Time::new());
         components.insert(Input::new());
+        components.insert(Logs::default());
 
         Self {
             setupfns: VecDeque::new(),
             gear_channels: HashMap::new(),
             gear_handles: HashMap::new(),
-            command_sender,
             command_receiver,
             gui: None,
             runtime,
@@ -131,8 +137,7 @@ impl Game {
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
     pub fn add_gear<T: Gear + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
-        let setup_sender = self.command_sender.clone();
-        gear.setup(self, setup_sender);
+        gear.setup(self);
         let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
         self.gear_channels.insert(id.clone(), gear_sender.clone());
 
@@ -222,7 +227,7 @@ impl Game {
             let result = sender.send(GearMessage {
                 gear_event,
                 game: GameView {
-                    components: engine.clone()
+                    components: engine.clone(),
                 },
             });
 

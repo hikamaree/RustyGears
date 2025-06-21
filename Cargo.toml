@@ -17,3 +17,4 @@ egui-winit = { version = "0.31.1", default-features = false }
 egui-wgpu = "0.31.1"
 crossbeam = "0.8.4"
 dyn-clone = "1.0.19"
+once_cell = "1.21.3"

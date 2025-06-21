@@ -20,21 +20,18 @@ use crate::Graphics;
 use crate::Model3d;
 use crate::RenderBatch;
 use crate::RenderTag;
-use crate::Command;
 use crate::RenderCommand;
 use crate::ModelRenderData;
 use crate::MeshRenderRange;
-use crate::Game;
 use crate::GameView;
 use crate::Gear;
 use crate::InstanceRaw;
 use crate::Transform;
 use crate::WorldScene;
+use crate::COMMAND_SENDER;
 
 use std::sync::Arc;
 use std::collections::HashMap;
-
-use crossbeam::channel::Sender;
 
 use cgmath::InnerSpace;
 use cgmath::Matrix4;
@@ -56,9 +53,7 @@ use cgmath::Matrix4;
 /// # Fields
 /// - `sender`: A command sender used to pass prepared [`RenderCommand`]s to the main game loop or renderer.
 #[derive(Debug, Default)]
-pub struct Render {
-    pub sender: Option<Sender<Box<dyn Command>>>,
-}
+pub struct Render;
 
 impl Render {
     /// Prepares and submits a [`RenderCommand`] containing all visible model instances in the scene.
@@ -82,7 +77,7 @@ impl Render {
     /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
-        let Some(sender) = self.sender.as_ref() else {
+        let Some(sender) = COMMAND_SENDER.get() else {
             return;
         };
 
@@ -222,10 +217,6 @@ impl Render {
 }
 
 impl Gear for Render {
-    fn setup(&mut self, _game: &mut Game, sender: Sender<Box<dyn Command>>) {
-        self.sender = Some(sender);
-    }
-
     fn update(&mut self, mut game: GameView) {
         self.render(&mut game);
     }

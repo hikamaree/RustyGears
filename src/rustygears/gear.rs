@@ -17,14 +17,11 @@
 
 use crate::GameView;
 use winit::event::WindowEvent;
-use crate::Command;
 use std::any::Any;
 use winit::dpi::PhysicalSize;
 use crate::ElementState;
 use crate::KeyCode;
 use crate::Game;
-
-use crossbeam::channel::Sender;
 
 /// # Gear Trait and GearEvent Enum
 ///
@@ -68,8 +65,7 @@ pub trait Gear: Any + Send + Sync {
     /// # Parameters
     /// - `game`: A mutable reference to the game state during setup. Use this to directly modify entities or world state.
     /// - `sender`: A command sender for scheduling actions via `Command`. Can be cloned and stored for future use.
-    fn setup(&mut self, game: &mut Game, sender: Sender<Box<dyn Command>>) {
-        let _ = sender;
+    fn setup(&mut self, game: &mut Game) {
         let _ = game;
     }
 

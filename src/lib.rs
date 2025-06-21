@@ -27,6 +27,7 @@ mod ecs;
 mod render;
 mod input;
 mod terminal;
+mod logs;
 
 pub mod math {
     pub use cgmath::*;
@@ -51,6 +52,7 @@ pub use ecs::*;
 pub use render::*;
 pub use input::*;
 pub use terminal::*;
+pub use logs::*;
 
 pub use crossbeam::channel::Receiver;
 pub use crossbeam::channel::Sender;

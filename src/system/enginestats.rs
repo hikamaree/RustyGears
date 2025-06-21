@@ -19,9 +19,6 @@ use std::collections::VecDeque;
 
 use egui::Color32;
 use egui::RichText;
-use egui::Rect;
-use egui::Vec2;
-use egui::Rgba;
 use egui::Area;
 
 use crate::Command;
@@ -56,37 +53,31 @@ impl Gui for EngineStats {
 
         self.gpu.update(time.total_time());
 
-        Area::new("game_stats".into())
-            .fixed_pos([0.0, 0.0])
+        Area::new("engine_stats".into())
+            .fixed_pos([10.0, 10.0])
             .show(ctx, |ui| {
-                let padding = 10.0;
-                let text_size = Vec2::new(200.0, 100.0);
-
-                let rect = Rect::from_min_size(
-                    egui::pos2(10.0, 10.0),
-                    text_size + Vec2::splat(padding * 2.0)
-                );
-
-                let bg_color = Rgba::from_rgba_premultiplied(0.0, 0.0, 0.0, 0.5);
-                ui.painter().rect_filled(
-                    rect,
-                    10.0,
-                    bg_color
-                );
-
-                ui.put(rect.shrink(padding), |ui: &mut egui::Ui| {
-                    ui.vertical(|ui: &mut egui::Ui| -> egui::Response {
-                        ui.label(RichText::new(format!("FPS: {}", time.fps()))
-                            .monospace()
-                            .color(Color32::WHITE));
-                        ui.label(RichText::new(format!("{}", self.gpu.display()))
-                            .monospace()
-                            .color(Color32::WHITE));
-                        ui.label(RichText::new(format!("Rendering:\n  Triangles: {}", graphics.t_count))
-                            .monospace()
-                            .color(Color32::WHITE))
-                    }).response
-                });
+                egui::Frame::window(&ctx.style())
+                    .fill(Color32::from_black_alpha(200))
+                    .show(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.set_min_width(200.0);
+                            ui.label(
+                                RichText::new(format!("FPS: {}", time.fps()))
+                                .monospace()
+                                .color(Color32::WHITE),
+                            );
+                            ui.label(
+                                RichText::new(format!("{}", self.gpu.display()))
+                                .monospace()
+                                .color(Color32::WHITE),
+                            );
+                            ui.label(
+                                RichText::new(format!("Rendering:\n  Triangles: {}", graphics.t_count))
+                                .monospace()
+                                .color(Color32::WHITE),
+                            );
+                        });
+                    });
             });
     }
 }

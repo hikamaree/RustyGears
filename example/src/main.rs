@@ -26,7 +26,6 @@ use rusty_gears::math::vec3;
 use rusty_gears::*;
 
 struct MyGame {
-    pub sender: Option<Sender<Box<dyn Command>>>,
     pub truck: Entity,
     pub h: f32,
     pub camera1: Entity,
@@ -86,7 +85,6 @@ impl MyGame {
         };
 
         Self {
-            sender: None,
             truck, 
             h: 0.0,
             camera1,
@@ -96,10 +94,6 @@ impl MyGame {
     }
 
     fn mouse_motion(&mut self, dx: f64, dy: f64, game: &GameView) {
-        let Some(sender) = self.sender.as_ref() else {
-            return;
-        };
-
         let Some(scene) = game.get::<WorldScene>() else {
             return;
         };
@@ -115,7 +109,7 @@ impl MyGame {
             let delta_yaw = Rad(-dx as f32 * sensitivity);
             let delta_pitch = Rad(-dy as f32 * sensitivity);
 
-            update_freefly_rotation!(sender, self.camera1, delta_yaw, delta_pitch);
+            update_freefly_rotation!(self.camera1, delta_yaw, delta_pitch);
         } else if active_camera == self.camera2 {
             let delta_yaw = Rad(-dx as f32 * sensitivity);
             let rot = Quaternion::from_angle_y(delta_yaw);
@@ -148,17 +142,13 @@ impl MyGame {
                 -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2),
             );
 
-            set_camerafollow_position_offset!(sender, self.camera2, new_position_offset);
-            set_camerafollow_rotation_offset!(sender, self.camera2, new_rotation_offset);
+            set_camerafollow_position_offset!(self.camera2, new_position_offset);
+            set_camerafollow_rotation_offset!(self.camera2, new_rotation_offset);
         }
     }
 
 
     fn keyboard_input(&mut self, input: &Input, game: &GameView) {
-        let Some(sender) = self.sender.as_ref() else {
-            return;
-        };
-
         let Some(scene) = game.get::<WorldScene>() else {
             return;
         };
@@ -193,31 +183,31 @@ impl MyGame {
                 self.camera1
             };
 
-            set_default_camera!(sender, camera);
+            set_default_camera!(camera);
         }
 
         if input.is_key_pressed(KeyCode::ArrowUp) {
-            update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, speed * dt));
+            update_entity_position!(self.truck, Vector3::new(0.0, 0.0, speed * dt));
         }
 
         if input.is_key_pressed(KeyCode::ArrowDown) {
-            update_entity_position!(sender, self.truck, Vector3::new(0.0, 0.0, -speed * dt));
+            update_entity_position!(self.truck, Vector3::new(0.0, 0.0, -speed * dt));
         }
 
         if input.is_key_pressed(KeyCode::KeyW) {
-            update_freefly_position!(sender, self.camera1, forward * speed * dt);
+            update_freefly_position!(self.camera1, forward * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyS) {
-            update_freefly_position!(sender, self.camera1, -forward * speed * dt);
+            update_freefly_position!(self.camera1, -forward * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyA) {
-            update_freefly_position!(sender, self.camera1, -right * speed * dt);
+            update_freefly_position!(self.camera1, -right * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyD) {
-            update_freefly_position!(sender, self.camera1, right * speed * dt);
+            update_freefly_position!(self.camera1, right * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyE) {
@@ -228,16 +218,15 @@ impl MyGame {
                 scale: vec3(1.0, 1.0, 1.0) 
             };
 
-            let x = spawn_entity!(sender, transform);
-            add_component!(sender, x, self.block.clone());
+            if let Some(x) = spawn_entity!(transform) {
+                add_component!(x, self.block.clone());
+            }
         }
     }
 }
 
 impl Gear for MyGame {
-    fn setup(&mut self, game: &mut Game, sender: Sender<Box<dyn Command>>) {
-        self.sender = Some(sender);
-
+    fn setup(&mut self, game: &mut Game) {
         let miku = match game.load_model("miku/miku") {
             Ok(miku) => {
                 miku
@@ -300,7 +289,7 @@ pub fn main() {
             return;
         };
         scene.add_gui(EngineStats::new());
-        scene.add_gui(TerminalGui::new());
+        scene.add_gui(TerminalGui::new(TerminalGui::default_commands()));
 
         // let transform = Transform { 
         //     position: vec3(0.0, 0.0, 0.0),

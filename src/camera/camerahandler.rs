@@ -258,26 +258,27 @@ impl Command for ModifyCameraHandle {
 /// This macro is intended as a base for higher-level camera control macros.
 ///
 /// # Parameters
-/// - `$sender`: The command sender used to schedule the modification.
 /// - `$entity`: The entity ID of the camera component.
 /// - `$ty`: The type of the camera component (e.g., `FreeFlyCamera`, `CameraFollow`).
 /// - `|$cam, $game| $body`: A closure that receives the mutable camera component and game context.
 ///
 /// # Example
 /// ```
-/// modify_camera_handle!(sender, camera_entity, FreeFlyCamera, |cam, game| {
+/// modify_camera_handle!(camera_entity, FreeFlyCamera, |cam, game| {
 ///     cam.position = vec3(0.0, 5.0, 0.0);
 /// });
 /// ```
 #[macro_export]
 macro_rules! modify_camera_handle {
-    ( $sender:expr, $entity:expr, $ty:ty, |$cam:ident, $game:ident| $body:block ) => {{
-        let cmd = $crate::ModifyCameraHandle::for_type::<$ty>(
-            $entity,
-            move |$cam, $game| $body,
-        );
-        if let Err(e) = $sender.send(Box::new(cmd)) {
-            eprintln!("Failed to send ModifyCameraHandle: {}", e);
+    ( $entity:expr, $ty:ty, |$cam:ident, $game:ident| $body:block ) => {{
+        if let Some(sender) = $crate::COMMAND_SENDER.get() {
+            let cmd = $crate::ModifyCameraHandle::for_type::<$ty>(
+                $entity,
+                move |$cam, $game| $body,
+            );
+            let _ = sender.send(Box::new(cmd));
+        } else {
+            eprintln!("COMMAND_SENDER not initialized");
         }
     }};
 }
@@ -290,8 +291,8 @@ macro_rules! modify_camera_handle {
 /// - `$delta`: The position delta to apply (e.g., `Vector3<f32>`).
 #[macro_export]
 macro_rules! update_freefly_position {
-    ($sender:expr, $entity:expr, $delta:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+    ($entity:expr, $delta:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::FreeFlyCamera, |cam, _game| {
             cam.position += $delta;
         });
     };
@@ -306,8 +307,8 @@ macro_rules! update_freefly_position {
 /// - `$delta_pitch`: Change in pitch (vertical rotation).
 #[macro_export]
 macro_rules! update_freefly_rotation {
-    ($sender:expr, $entity:expr, $delta_yaw:expr, $delta_pitch:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+    ($entity:expr, $delta_yaw:expr, $delta_pitch:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::FreeFlyCamera, |cam, _game| {
             cam.yaw += $delta_yaw;
             cam.pitch += $delta_pitch;
             cam.lock_pitch();
@@ -323,8 +324,8 @@ macro_rules! update_freefly_rotation {
 /// - `$position`: The new camera position (`Vector3<f32>`).
 #[macro_export]
 macro_rules! set_freefly_position {
-    ($sender:expr, $entity:expr, $position:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+    ($entity:expr, $position:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::FreeFlyCamera, |cam, _game| {
             cam.position = $position;
         });
     };
@@ -339,8 +340,8 @@ macro_rules! set_freefly_position {
 /// - `$pitch`: New pitch angle (`Rad<f32>`).
 #[macro_export]
 macro_rules! set_freefly_rotation {
-    ($sender:expr, $entity:expr, $yaw:expr, $pitch:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::FreeFlyCamera, |cam, _game| {
+    ($entity:expr, $yaw:expr, $pitch:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::FreeFlyCamera, |cam, _game| {
             cam.yaw = $yaw;
             cam.pitch = $pitch;
             cam.lock_pitch();
@@ -356,8 +357,8 @@ macro_rules! set_freefly_rotation {
 /// - `$delta_offset`: Delta offset (`Vector3<f32>`) to apply.
 #[macro_export]
 macro_rules! update_camerafollow_position_offset {
-    ($sender:expr, $entity:expr, $delta_offset:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+    ($entity:expr, $delta_offset:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::CameraFollow, |cam, _game| {
             cam.position_offset += $delta_offset;
         });
     };
@@ -371,8 +372,8 @@ macro_rules! update_camerafollow_position_offset {
 /// - `$delta_offset`: Rotation delta (`Quaternion<f32>`) to apply.
 #[macro_export]
 macro_rules! update_camerafollow_rotation_offset {
-    ($sender:expr, $entity:expr, $delta_offset:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+    ($entity:expr, $delta_offset:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::CameraFollow, |cam, _game| {
             cam.rotation_offset = delta_offset * cam.rotation_offset;
         });
     };
@@ -386,8 +387,8 @@ macro_rules! update_camerafollow_rotation_offset {
 /// - `$rotation`: The new rotation offset (`Quaternion<f32>`).
 #[macro_export]
 macro_rules! set_camerafollow_rotation_offset {
-    ($sender:expr, $entity:expr, $rotation:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+    ($entity:expr, $rotation:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::CameraFollow, |cam, _game| {
             cam.rotation_offset = $rotation;
         });
     };
@@ -401,8 +402,8 @@ macro_rules! set_camerafollow_rotation_offset {
 /// - `$position`: The new position offset (`Vector3<f32>`).
 #[macro_export]
 macro_rules! set_camerafollow_position_offset {
-    ($sender:expr, $entity:expr, $position:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+    ($entity:expr, $position:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::CameraFollow, |cam, _game| {
             cam.position_offset = $position;
         });
     };
@@ -416,8 +417,8 @@ macro_rules! set_camerafollow_position_offset {
 /// - `$target`: The new target entity to follow.
 #[macro_export]
 macro_rules! set_camerafollow_target {
-    ($sender:expr, $entity:expr, $target:expr) => {
-        $crate::modify_camera_handle!($sender, $entity, $crate::CameraFollow, |cam, _game| {
+    ($entity:expr, $target:expr) => {
+        $crate::modify_camera_handle!($entity, $crate::CameraFollow, |cam, _game| {
             cam.target = $target;
         });
     };
