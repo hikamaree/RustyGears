@@ -15,22 +15,34 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::VecDeque;
-
-use crate::Command;
 use crate::GameView;
 use crate::Gui;
+
 use egui::epaint::Shadow;
-use egui::{Context, Visuals};
+use egui::Visuals;
+use egui::Context;
+
 use egui_wgpu::ScreenDescriptor;
 use egui_wgpu::Renderer;
+use egui_wgpu::wgpu::TextureView;
+use egui_wgpu::wgpu::TextureFormat;
+use egui_wgpu::wgpu::Queue;
+use egui_wgpu::wgpu::Device;
+use egui_wgpu::wgpu::CommandEncoder;
+use egui_wgpu::wgpu;
 
 use egui_winit::State;
-use egui_wgpu::wgpu::{CommandEncoder, Device, Queue, TextureFormat, TextureView};
-use egui_wgpu::wgpu;
 use egui_winit::winit::event::WindowEvent;
 use egui_winit::winit::window::Window;
 
+/// Integrates the `egui` immediate-mode GUI with WGPU rendering.
+///
+/// `EguiRenderer` handles the full lifecycle of `egui`:
+/// - managing context and input state,
+/// - processing UI draw commands,
+/// - and issuing rendering commands to WGPU.
+///
+/// It is intended to be used as a subrenderer in a larger render pipeline.
 pub struct EguiRenderer {
     pub context: Context,
     pub state: State,
@@ -38,6 +50,17 @@ pub struct EguiRenderer {
 }
 
 impl EguiRenderer {
+    /// Creates a new [`EguiRenderer`] instance with the given WGPU and window parameters.
+    ///
+    /// # Arguments
+    /// * `device` - The WGPU device used to allocate resources.
+    /// * `output_color_format` - The format of the render target.
+    /// * `output_depth_format` - Optional depth format (unused by egui).
+    /// * `msaa_samples` - MSAA sample count for rendering.
+    /// * `window` - The platform window used to drive input handling.
+    ///
+    /// # Returns
+    /// A fully initialized `EguiRenderer`.
     pub fn new(
         device: &Device,
         output_color_format: TextureFormat,
@@ -72,10 +95,35 @@ impl EguiRenderer {
         }
     }
 
+    /// Processes a single input event from the windowing system.
+    ///
+    /// This should be called for every event in the main event loop before rendering.
+    ///
+    /// # Arguments
+    /// * `window` - The window that received the event.
+    /// * `event` - The window event to pass into egui.
     pub fn handle_input(&mut self, window: &Window, event: &WindowEvent) {
         let _ = self.state.on_window_event(window, event);
     }
 
+    /// Renders the egui UI and submits draw commands to the current frame.
+    ///
+    /// This method collects input events from the window and feeds them into the egui context.
+    /// It then executes user-defined GUI logic provided via `run_ui`, which builds up the interface.
+    /// After the UI is constructed, any textures that have changed are uploaded to the GPU.
+    /// The shapes produced by egui are tessellated into vertex and index buffers.
+    /// A render pass is created targeting the given surface view, and the UI is drawn.
+    /// Finally, any textures that have been marked for release by egui are freed from the renderer.
+    ///
+    /// # Arguments
+    /// * `device` - The WGPU device.
+    /// * `queue` - The WGPU queue for buffer uploads.
+    /// * `encoder` - The command encoder for the current frame.
+    /// * `window` - The platform window.
+    /// * `window_surface_view` - The target texture view to render into.
+    /// * `screen_descriptor` - Screen dimensions and scale factor.
+    /// * `run_ui` - A list of GUI components implementing [`Gui`] to render.
+    /// * `game` - A read-only view into the ECS and game state.
     pub fn draw<'a>(
         &mut self,
         device: &Device,
@@ -86,13 +134,12 @@ impl EguiRenderer {
         screen_descriptor: ScreenDescriptor,
         run_ui: &mut Vec<Box<dyn Gui + Send + Sync>>,
         game: &GameView,
-        commands: &mut VecDeque<Box<dyn Command>>,
     ) {
         let raw_input = self.state.take_egui_input(&window);
         let full_output = self.context.run(raw_input, |_ui| {
             self.context.set_cursor_icon(egui::CursorIcon::None);
             run_ui.into_iter().for_each(|gui_component| {
-                gui_component.render_gui(game, &self.context, commands);
+                gui_component.render_gui(game, &self.context);
             });
         });
 

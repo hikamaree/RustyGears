@@ -16,11 +16,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::GameView;
-use winit::event::WindowEvent;
 use std::any::Any;
-use winit::dpi::PhysicalSize;
-use crate::ElementState;
-use crate::KeyCode;
 use crate::Game;
 
 /// # Gear Trait and GearEvent Enum
@@ -39,10 +35,6 @@ use crate::Game;
 /// impl Gear for ExampleGear {
 ///     fn update(&mut self, game: GameView) {
 ///         println!("Game updated. Delta time: {:?}", game.time.delta_time());
-///     }
-///
-///     fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
-///         println!("Key {:?} is {:?}", key, state);
 ///     }
 /// }
 /// ```
@@ -79,40 +71,6 @@ pub trait Gear: Any + Send + Sync {
         let _ = game;
     }
 
-    /// Called when a mouse motion event occurs.
-    ///
-    /// # Parameters
-    /// - `dx`: Horizontal mouse movement in pixels.
-    /// - `dy`: Vertical mouse movement in pixels.
-    /// - `game`: A read-only snapshot of the current game state.
-    fn mouse_motion(&mut self, dx: f64, dy: f64, game: GameView) {
-        let _ = dx;
-        let _ = dy;
-        let _ = game;
-    }
-
-    /// Called when a keyboard key is pressed or released.
-    ///
-    /// # Parameters
-    /// - `key`: The keyboard key involved in the input event.
-    /// - `state`: The state of the key (`Pressed` or `Released`).
-    /// - `game`: A read-only snapshot of the current game state.
-    fn keyboard_input(&mut self, key: KeyCode, state: ElementState, game: GameView) {
-        let _ = key;
-        let _ = state;
-        let _ = game;
-    }
-
-    /// Called when a window-related event occurs (e.g. resize, focus, input method).
-    ///
-    /// # Parameters
-    /// - `window_event`: The window event from winit.
-    /// - `game`: A read-only snapshot of the current game state.
-    fn window_event(&mut self, window_event: &WindowEvent, game: GameView) {
-        let _ = window_event;
-        let _ = game;
-    }
-
     /// Called when the gear is being shut down or removed from the game.
     ///
     /// This method provides an opportunity to perform any necessary cleanup,
@@ -144,53 +102,6 @@ pub enum GearEvent {
     /// ```
     Update(),
 
-    /// Dispatched when the window is resized.
-    ///
-    /// ### Example Usage
-    /// ```rust
-    /// if let GearEvent::WindowResize(size) = event {
-    ///     println!("New size: {}x{}", size.width, size.height);
-    /// }
-    /// ```
-    WindowResize(PhysicalSize<u32>),
-
-    /// Dispatched when a keyboard key is pressed or released.
-    ///
-    /// The event carries the key code and its state (`Pressed` or `Released`).
-    ///
-    /// ### Example Usage
-    /// ```rust
-    /// if let GearEvent::KeyboardInput(key, state) = event {
-    ///     println!("Key: {:?}, State: {:?}", key, state);
-    /// }
-    /// ```
-    KeyboardInput(KeyCode, ElementState),
-
-    /// Dispatched when the mouse moves, providing the new coordinates.
-    ///
-    /// ### Example Usage
-    /// ```rust
-    /// if let GearEvent::MouseMotion(x, y) = event {
-    ///     println!("Mouse moved: x = {}, y = {}", x, y);
-    /// }
-    /// ```
-    MouseMotion(f64, f64),
-
-    /// Dispatched for raw `winit` window events that do not fall under other categories.
-    ///
-    /// This allows low-level event handling, such as focus changes, mouse wheel input,
-    /// DPI changes, etc.
-    ///
-    /// ### Example Usage
-    /// ```rust
-    /// use winit::event::WindowEvent;
-    ///
-    /// if let GearEvent::WindowEvent(WindowEvent::Focused(focused)) = event {
-    ///     println!("Window focus: {}", focused);
-    /// }
-    /// ```
-    WindowEvent(winit::event::WindowEvent),
-
     /// Signals that the gear thread should shut down gracefully.
     ///
     /// This is typically dispatched during engine shutdown or when dynamically removing a gear.
@@ -203,4 +114,31 @@ pub enum GearEvent {
     /// }
     /// ```
     Exit(),
+}
+
+/// Message sent to a gear thread containing an event and a view of the game state.
+///
+/// `GearMessage` is used internally by the engine to communicate between the main thread and
+/// background "gear" systems. Each message encapsulates a specific [`GearEvent`] to be processed,
+/// as well as a lightweight [`GameView`] allowing read-only access to shared components.
+///
+/// Gear systems receive these messages via a channel and handle them by reacting to the event kind.
+///
+/// # Fields
+/// - `gear_event`: The event to be handled by the gear system, such as `Update`, `Exit` etc.
+/// - `game`: A snapshot of the current game state (`GameView`) with access to components and scene data.
+///
+/// # See also
+/// - [`Gear`]: The trait implemented by gear systems that receive and process these messages.
+/// - [`GameView`]: A read-only handle to shared game state components.
+/// - [`GearEvent`]: Enum describing the type of gear-related event being dispatched.
+pub struct GearMessage {
+    pub gear_event: GearEvent,
+    pub game: GameView,
+}
+
+pub struct UpdateDoneCommand;
+
+impl crate::Command for UpdateDoneCommand {
+    fn apply(self: Box<Self>, _: &mut Game) {}
 }

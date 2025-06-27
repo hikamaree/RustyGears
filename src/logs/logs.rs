@@ -134,13 +134,9 @@ impl Command for LogCommand {
 #[macro_export]
 macro_rules! log {
     ( $kind:expr, $($msg:tt)+ ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let _ = sender.send(Box::new($crate::LogCommand {
-                kind: $kind.clone(),
-                msg: format!($($msg)+),
-            }));
-        } else {
-            eprintln!("COMMAND_SENDER is not initialized");
-        }
+        $crate::send_command($crate::LogCommand {
+            kind: $kind.clone(),
+            msg: format!($($msg)+),
+        });
     }};
 }

@@ -22,6 +22,10 @@ mod texture;
 mod pipeline;
 mod eguirender;
 mod gui;
+mod vertex;
+mod renderbatch;
+mod light;
+mod material;
 
 pub use graphics::*;
 pub use buffer::*;
@@ -29,3 +33,7 @@ pub use model::*;
 pub use texture::*;
 pub use eguirender::*;
 pub use gui::*;
+pub use vertex::*;
+pub use renderbatch::*;
+pub use light::*;
+pub use material::*;

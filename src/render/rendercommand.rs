@@ -15,9 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::VecDeque;
-
 use egui_wgpu::ScreenDescriptor;
+use crate::EguiRenderer;
 use crate::DrawModel;
 use crate::BufferStrategy;
 use crate::Buffer;
@@ -26,31 +25,8 @@ use crate::InstanceRaw;
 use crate::Game;
 use crate::GameView;
 use crate::Command;
-use crate::ModelRenderData;
-use crate::RenderTag;
 use crate::WorldScene;
-
-/// A batch of models that share the same render pipeline and camera.
-///
-/// Each `RenderBatch` contains all instance data, mesh visibility info,
-/// and associated rendering metadata needed to draw a group of models
-/// using the same `RenderTag` (i.e., pipeline configuration).
-///
-/// These batches are grouped by the `Render` gear when preparing a `RenderCommand` to optimize rendering.
-///
-/// # Fields
-/// - `prepared_models`: Models and their per-instance data that passed frustum culling.
-/// - `tag`: The render pipeline tag used to select the appropriate GPU pipeline.
-#[derive(Debug)]
-pub struct RenderBatch {
-    /// A list of models and associated instance data that are ready to be drawn.
-    /// Each entry contains the mesh, instance transforms, and per-mesh visibility info.
-    pub prepared_models: Vec<ModelRenderData>,
-
-    /// Identifies the render pipeline (shaders, layout, etc.) to use for this batch.
-    /// Models with the same `RenderTag` can be drawn together.
-    pub tag: RenderTag,
-}
+use crate::RenderBatch;
 
 /// A render command containing all data necessary to draw the entire frame.
 ///
@@ -92,7 +68,7 @@ impl Command for RenderCommand {
         let output = match graphics.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(e) => {
-                eprintln!("Failed to get current texture: {e:?}");
+                crate::log!(crate::LogKind::Error, "Failed to get current texture: {e:?}");
                 return;
             }
         };
@@ -171,9 +147,7 @@ impl Command for RenderCommand {
             components: game.components.get_view()
         };
 
-        let mut commands: VecDeque<Box<dyn Command>> = VecDeque::new();
-
-        if let Some(gui) = game.gui.as_mut() {
+        if let Ok(gui) = game.components.get_mut::<EguiRenderer>() {
             gui.draw(
                 &graphics.device,
                 &graphics.queue,
@@ -182,15 +156,10 @@ impl Command for RenderCommand {
                 &view, screen_descriptor,
                 &mut scene.render_gui,
                 &gameview,
-                &mut commands
             );
-        }
-
+        };
+        
         graphics.queue.submit(Some(encoder.finish()));
         output.present();
-
-        while let Some(cmd) = commands.pop_front() {
-            cmd.apply(game);
-        }
     }
 }

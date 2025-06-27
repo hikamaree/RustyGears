@@ -21,6 +21,17 @@ use wgpu::Queue;
 use wgpu::Device;
 use image::GenericImageView;
 
+/// A GPU-resident texture with associated view and sampler.
+///
+/// This struct represents a complete bindable texture unit in WGPU. It includes the underlying
+/// `wgpu::Texture` resource used for storing texel data, a `wgpu::TextureView` that provides access
+/// to the texture from shaders, and a `wgpu::Sampler` that defines how the texture is filtered and sampled.
+///
+/// `Texture` instances are typically used for material inputs such as diffuse, normal, and dissolve maps,
+/// but they can also be used as render targets or for procedurally generated data.
+///
+/// `Texture` objects are used for material textures (diffuse, normal, dissolve), 
+/// render targets, and procedural texture creation.
 #[derive(Debug, Clone)]
 pub struct Texture {
     pub texture: wgpu::Texture,
@@ -28,8 +39,21 @@ pub struct Texture {
     pub sampler: wgpu::Sampler,
 }
 
+/// A lazily initialized global fallback texture used when actual textures are missing.
+///
+/// This dummy texture is a solid white pixel.
 static DUMMY_TEXTURE: OnceLock<Arc<Texture>> = OnceLock::new();
 
+/// Returns a reference-counted fallback texture (1x1 white pixel).
+///
+/// This is used whenever a material lacks a texture (e.g., diffuse, normal, or dissolve).
+///
+/// # Arguments
+/// * `device` - The GPU device.
+/// * `queue` - The GPU queue to upload texture data.
+///
+/// # Returns
+/// A globally shared `Arc<Texture>`.
 pub(crate) fn dummy_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<Texture> {
     DUMMY_TEXTURE.get_or_init(|| {
         Arc::new(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("dummy"), false))
@@ -37,10 +61,26 @@ pub(crate) fn dummy_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<T
 }
 
 impl Texture {
+    /// Recommended texture format used for weighted blended OIT accumulation buffer.
     pub const ACCUM_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
+
+    /// Format used for the revealage buffer in weighted blended OIT.
     pub const REVEALAGE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
+
+    /// Format used for depth textures in rendering pipelines.
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
+    /// Creates a depth texture that matches the given surface configuration.
+    ///
+    /// This is typically used as a depth buffer in render passes.
+    ///
+    /// # Arguments
+    /// * `device` - The GPU device.
+    /// * `config` - The surface config (used to get width/height).
+    /// * `label` - A debug label for the texture.
+    ///
+    /// # Returns
+    /// A depth `Texture` object with `DEPTH_FORMAT`.
     pub fn create_depth_texture(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
@@ -83,12 +123,34 @@ impl Texture {
         }
     }
 
+    /// Loads a texture from a byte buffer (e.g., from a file or memory).
+    ///
+    /// # Arguments
+    /// * `device` - The GPU device.
+    /// * `queue` - The GPU queue to upload the texture data.
+    /// * `bytes` - The image data in memory.
+    /// * `label` - Optional debug name.
+    /// * `is_normal_map` - Whether the texture is a normal map (affects gamma).
+    ///
+    /// # Returns
+    /// A `Texture` if loading succeeded, or an error message.
     pub fn from_bytes(device: &Device, queue: &Queue, bytes: &[u8], label: &str, is_normal_map: bool) -> Result<Self, String> {
         let img = image::load_from_memory(bytes)
             .map_err(|err| format!("Failed to decode image: {}", err))?;
         Ok(Self::from_image(device, queue, &img, Some(label), is_normal_map))
     }
 
+    /// Creates a texture from a decoded image.
+    ///
+    /// # Arguments
+    /// * `device` - The GPU device.
+    /// * `queue` - The GPU queue to upload data.
+    /// * `img` - The image to convert into a GPU texture.
+    /// * `label` - Optional debug label.
+    /// * `is_normal_map` - Whether to use linear or sRGB format.
+    ///
+    /// # Returns
+    /// A fully constructed `Texture` ready for use.
     pub fn from_image(device: &Device, queue: &Queue, img: &image::DynamicImage, label: Option<&str>, is_normal_map: bool) -> Self {
         let dimensions = img.dimensions();
         let rgba = img.to_rgba8();
@@ -148,6 +210,19 @@ impl Texture {
         }
     }
 
+    /// Creates a 1x1 solid-color texture (RGBA).
+    ///
+    /// Useful for dummy materials or procedural effects.
+    ///
+    /// # Arguments
+    /// * `device` - The GPU device.
+    /// * `queue` - The command queue for texture upload.
+    /// * `color` - The RGBA color as f32 values (0.0–1.0).
+    /// * `label` - Optional debug label.
+    /// * `is_normal_map` - Whether the texture is a normal map (affects format).
+    ///
+    /// # Returns
+    /// A simple solid-color `Texture`.
     pub fn from_color(device: &Device, queue: &Queue, color: [f32; 4], label: Option<&str>, is_normal_map: bool) -> Self {
         let rgba = [
             (color[0] * 255.0) as u8,

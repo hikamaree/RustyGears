@@ -223,7 +223,8 @@ impl ModifyCameraHandle {
                 if let Some(concrete) = handle.as_any_mut().downcast_mut::<T>() {
                     f(concrete, game);
                 } else {
-                    eprintln!(
+                    crate::log!(
+                        crate::LogKind::Error,
                         "ModifyCameraHandle: type mismatch (expected {})",
                         std::any::type_name::<T>()
                     );
@@ -271,15 +272,11 @@ impl Command for ModifyCameraHandle {
 #[macro_export]
 macro_rules! modify_camera_handle {
     ( $entity:expr, $ty:ty, |$cam:ident, $game:ident| $body:block ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let cmd = $crate::ModifyCameraHandle::for_type::<$ty>(
-                $entity,
-                move |$cam, $game| $body,
-            );
-            let _ = sender.send(Box::new(cmd));
-        } else {
-            eprintln!("COMMAND_SENDER not initialized");
-        }
+        let cmd = $crate::ModifyCameraHandle::for_type::<$ty>(
+            $entity,
+            move |$cam, $game| $body,
+        );
+        $crate::send_command(cmd);
     }};
 }
 

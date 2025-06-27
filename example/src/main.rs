@@ -38,7 +38,7 @@ impl MyGame {
         let truck = match game.load_model("truck/semi") {
             Ok(truck) => truck,
             Err(e) => {
-                println!("{}", e);
+                log!(LogKind::Error, "{}", e);
                 todo!()
             },
         };
@@ -85,7 +85,7 @@ impl MyGame {
         };
 
         Self {
-            truck, 
+            truck,
             h: 0.0,
             camera1,
             camera2,
@@ -102,10 +102,9 @@ impl MyGame {
             return;
         };
 
-        let sensitivity = 0.005;
+        let sensitivity = 0.002;
 
         if active_camera == self.camera1 {
-            let sensitivity = 0.002;
             let delta_yaw = Rad(-dx as f32 * sensitivity);
             let delta_pitch = Rad(-dy as f32 * sensitivity);
 
@@ -232,7 +231,7 @@ impl Gear for MyGame {
                 miku
             },
             Err(e) => {
-                eprintln!("{}", e);
+                log!(LogKind::Error, "{}", e);
                 todo!()
             },
         };
@@ -297,9 +296,9 @@ pub fn main() {
         //     scale: vec3(1.0, 1.0, 1.0)
         // };
         //
-        // if let Err(e) = game.spawn_model("scene1/scene1", transform) {
-        //     eprintln!("{}", e);
-        // }
+        // if let Ok(scene1) = game.load_model("scene1/scene1") {
+        //     spawn_entity!(scene1, transform);
+        // };
         //
         // let transform = Transform { 
         //     position: vec3(40.0, 0.0, 0.0),
@@ -307,9 +306,9 @@ pub fn main() {
         //     scale: vec3(0.5, 0.5, 0.5)
         // };
         //
-        // if let Err(e) = game.spawn_model("scene2/scene2", transform) {
-        //     eprintln!("{}", e);
-        // }
+        // if let Ok(scene2) = game.load_model("scene2/scene2") {
+        //     spawn_entity!(scene2, transform);
+        // };
         //
         // let transform = Transform { 
         //     position: vec3(0.0, 0.0, 40.0),
@@ -317,9 +316,9 @@ pub fn main() {
         //     scale: vec3(7.0, 7.0, 7.0)
         // };
         //
-        // if let Err(e) = game.spawn_model("scene3/scene3", transform) {
-        //     eprintln!("{}", e);
-        // }
+        // if let Ok(scene3) = game.load_model("scene3/scene3") {
+        //     spawn_entity!(scene3, transform);
+        // };
         //
         // let transform = Transform { 
         //     position: vec3(25.0, 0.0, 20.0),
@@ -327,9 +326,9 @@ pub fn main() {
         //     scale: vec3(0.3, 0.3, 0.3)
         // };
         //
-        // if let Err(e) = game.spawn_model("scene4/scene4", transform) {
-        //     eprintln!("{}", e);
-        // }
+        // if let Ok(scene4) = game.load_model("scene4/scene4") {
+        //     spawn_entity!(scene4, transform);
+        // };
     }).run();
 }
 
@@ -348,12 +347,11 @@ mod tests {
                 if let Err(err) = game.components.with::<WorldScene, _>(|scene| {
                     scene.add_gui(EngineStats::new());
                 }) {
-                    eprintln!("Failed to add EngineStats to scene: {}", err);
+                    log!(LogKind::Error, "Failed to add EngineStats to scene: {}", err);
                 }
             });
 
         for _ in 0..10 {
-            game.dispatch_event(GearEvent::MouseMotion(10.0, 10.0));
             game.dispatch_event(GearEvent::Update());
         }
     }

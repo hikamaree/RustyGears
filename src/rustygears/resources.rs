@@ -84,7 +84,7 @@ pub async fn load_model(path: &Path, device: &Device, queue: &Queue, layout: &wg
     let obj_materials = match maybe_materials {
         Ok(materials) => materials,
         Err(e) => {
-            eprintln!("{}", e);
+            crate::log!(crate::LogKind::Error, "{}", e);
             Vec::new()
         }
     };

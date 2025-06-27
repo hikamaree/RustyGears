@@ -26,11 +26,6 @@ use cgmath::Vector3;
 use cgmath::One;
 use cgmath::Zero;
 
-#[derive(Debug, Clone)]
-pub struct ModelInstance {
-    pub name: String,
-}
-
 /// Represents a renderable object in the scene, which may have multiple
 /// levels of detail (LODs) depending on camera distance or rendering strategy.
 ///
@@ -121,23 +116,4 @@ impl Transform {
             scale: Vector3::new(1.0, 1.0, 1.0),
         }
     }
-}
-
-/// An enum representing different rendering tags for objects in the scene.
-///
-/// Render tags are used to classify and specify how an object should be rendered.
-/// For example, objects may be rendered with different materials or effects, like PBR (Physically Based Rendering),
-/// Unlit, Wireframe mode, etc. Custom tags can also be created with a string value.
-///
-/// # Variants
-/// - `Opaque`: The default render tag for fully opaque geometry. Rendered first without sorting.
-/// - `SortedTransparent`: Transparent objects that require depth-based sorting for correct rendering (e.g. glass).
-/// - `WeightedTransparent`: Transparent objects rendered using weighted blended order-independent transparency.
-/// - `Custom(String)`: A custom render tag identified by a string, useful for user-defined rendering passes or effects.
-#[derive(Debug, Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
-pub enum RenderTag {
-    Opaque,
-    SortedTransparent,
-    WeightedTransparent,
-    Custom(String),
 }

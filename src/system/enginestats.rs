@@ -15,13 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::collections::VecDeque;
-
 use egui::Color32;
 use egui::RichText;
 use egui::Area;
 
-use crate::Command;
 use crate::Graphics;
 use crate::Gui;
 use crate::GameView;
@@ -30,19 +27,29 @@ use crate::Time;
 use super::gpu::GpuInfo;
 
 pub struct EngineStats {
+    show: bool,
     gpu: GpuInfo,
 }
 
 impl EngineStats {
     pub fn new() -> Self {
         Self {
+            show: true,
             gpu: GpuInfo::new(),
         }
+    }
+
+    pub fn show(&mut self, show: bool) {
+        self.show = show;
     }
 }
 
 impl Gui for EngineStats {
-    fn render_gui(&mut self, game: &GameView, ctx: &egui::Context, _commands: &mut VecDeque<Box<dyn Command + 'static>>) {
+    fn render_gui(&mut self, game: &GameView, ctx: &egui::Context) {
+        if !self.show {
+            return;
+        }
+
         let Some(time) = game.get::<Time>() else {
             return;
         };

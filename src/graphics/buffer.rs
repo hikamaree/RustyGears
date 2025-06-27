@@ -38,6 +38,7 @@ pub struct Buffer {
     pub strategy: BufferStrategy,
     pub label: String,
     pub size: usize,
+    pub usage: wgpu::BufferUsages,
 }
 
 impl Buffer {
@@ -80,6 +81,7 @@ impl Buffer {
             strategy,
             label: label.to_string(),
             size,
+            usage,
         }
     }
 
@@ -126,7 +128,7 @@ impl Buffer {
                     device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some(&format!("{}_buffer_{}", self.label, i)),
                         size: self.size as u64,
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                        usage: self.usage,
                         mapped_at_creation: false,
                     })
                 })

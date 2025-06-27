@@ -15,15 +15,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-
-use once_cell::sync::OnceCell; // use tokio::sync::OnceCell;
+use crate::GearMessage;
 use crate::Logs;
 use crate::ComponentMap;
 use crate::Input;
 use crate::Model3d;
-use crate::Camera;
 use crate::Command;
-use crate::EguiRenderer;
 use crate::BindGroupLayoutKey;
 use crate::RenderObject;
 use crate::Gear;
@@ -33,10 +30,8 @@ use crate::Time;
 use crate::GameView;
 use crate::WorldScene;
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::thread::JoinHandle;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -47,13 +42,6 @@ use crossbeam::channel::Sender;
 
 use tokio::runtime::Runtime;
 
-pub static COMMAND_SENDER: OnceCell<Sender<Box<dyn Command>>> = OnceCell::new();
-
-pub struct GearMessage {
-    pub gear_event: GearEvent,
-    pub game: GameView,
-}
-
 /// Represents the core application state, managing rendering, scene data, time progression,
 /// and communication with worker threads ("gears").
 ///
@@ -63,18 +51,13 @@ pub struct GearMessage {
 /// # Fields
 /// - `setupfns`: Queue of initialization functions executed during game setup.
 /// - `gear_channels`: Channels used to communicate with asynchronous worker systems ("gears").
-/// - `gear_handles`: Join handles to running gear threads for lifecycle control.
 /// - `command_receiver`: Channel for receiving commands from the game engine to be executed.
-/// - `command_sender`: Channel for sending commands to the game engine.
-/// - `gui`: Optional immediate-mode GUI renderer (e.g., egui).
 /// - `runtime`: Tokio runtime for executing asynchronous tasks on background threads.
 /// - `components`: Central component registry used to store and access engine-wide subsystems and shared state via type-safe accessors.
 pub struct Game {
     pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
     pub(crate) gear_channels: HashMap<String, Sender<GearMessage>>,
-    pub(crate) gear_handles: HashMap<String, JoinHandle<()>>,
     pub(crate) command_receiver: Receiver<Box<dyn Command>>,
-    pub gui: Option<EguiRenderer>,
     pub runtime: Runtime,
     pub components: ComponentMap,
 }
@@ -86,10 +69,9 @@ impl Game {
     /// A new `Game` instance.
     pub fn new() -> Self {
         let (command_sender, command_receiver) = crossbeam::channel::unbounded();
+        crate::init_command_sender(command_sender);
 
-        COMMAND_SENDER.set(command_sender.clone()).unwrap();
-
-        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let runtime = tokio::runtime::Runtime::new().expect("ERROR: Failed to create tokio runtime");
 
         let mut components = ComponentMap::new();
 
@@ -101,9 +83,7 @@ impl Game {
         Self {
             setupfns: VecDeque::new(),
             gear_channels: HashMap::new(),
-            gear_handles: HashMap::new(),
             command_receiver,
-            gui: None,
             runtime,
             components,
         }
@@ -141,33 +121,22 @@ impl Game {
         let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
         self.gear_channels.insert(id.clone(), gear_sender.clone());
 
-        let handle = std::thread::spawn(move || {
+        std::thread::spawn(move || {
             while let Ok(msg) = gear_receiver.recv() {
                 match msg.gear_event {
                     GearEvent::Update() => {
                         gear.update(msg.game);
+                        crate::send_command(super::UpdateDoneCommand);
                     },
-                    GearEvent::MouseMotion(dx, dy) => {
-                        gear.mouse_motion(dx, dy, msg.game);
-                    },
-                    GearEvent::KeyboardInput(key, state) => {
-                        gear.keyboard_input(key, state, msg.game);
-                    },
-                    GearEvent::WindowEvent(ref window_event) => {
-                        gear.window_event(&window_event, msg.game);
-                    }
                     GearEvent::Exit() => {
                         gear.exit(msg.game);
+                        crate::send_command(super::UpdateDoneCommand);
                         break;
-                    }
-                    GearEvent::WindowResize(physical_size) => {
-                        let _ = physical_size;
                     }
                 }
             }
         });
 
-        self.gear_handles.insert(id, handle);
         self
     }
 
@@ -218,7 +187,7 @@ impl Game {
     /// ```
     pub fn dispatch_event(&mut self, event: GearEvent) {
         let engine = self.components.get_view();
-
+        
         let mut dead_gears = Vec::new();
 
         for (id, sender) in &self.gear_channels {
@@ -238,63 +207,25 @@ impl Game {
 
         for id in dead_gears {
             self.gear_channels.remove(&id);
-            self.gear_handles.remove(&id);
-        }
-    }
-
-    /// Updates camera matrices, GPU state, and timing for the current frame.
-    ///
-    /// This method:
-    /// - Retrieves the active camera and updates its view/projection matrices.
-    /// - Uploads camera information to the GPU.
-    /// - Updates the global time system.
-    pub(crate) fn update(&mut self) {
-        let Ok(time) = self.components.get_mut::<Time>() else {
-            return;
-        };
-
-        time.update();
-
-        let Ok(scene) = self.components.get_mut::<WorldScene>() else {
-            return;
-        };
-
-        let Ok(graphics) = self.components.get_mut::<Graphics>() else {
-            return;
-        };
-
-        let Some(camera_entity) = scene.active_camera else {
-            return;
-        };
-
-        let final_transform = scene.get_camera_transform(camera_entity);
-
-        if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
-            camera.update_view_proj(&final_transform, &graphics.projection);
-            graphics.update(camera);
         }
 
-        Game::dispatch_event(self, GearEvent::Update());
+        let mut pending_gear_updates = self.gear_channels.len();
 
-        let mut render_command: Option<Box<dyn Command>> = None;
+        let mut commands: Vec<Box<dyn Command>> = Vec::new();
 
-        while let Ok(cmd) = self.command_receiver.try_recv() {
-            if (&*cmd as &dyn Any).type_id() == std::any::TypeId::of::<crate::RenderCommand>() {
-                render_command = Some(cmd);
-            } else {
-                cmd.apply(self);
+        while pending_gear_updates > 0 {
+            if let Ok(cmd) = self.command_receiver.recv() {
+                if (&*cmd as &dyn std::any::Any).downcast_ref::<crate::UpdateDoneCommand>().is_some() {
+                    pending_gear_updates -= 1;
+                } else {
+                    commands.push(cmd);
+                }
             }
         }
 
-        if let Some(cmd) = render_command {
+        for cmd in commands {
             cmd.apply(self);
         }
-
-        let Ok(input) = self.components.get_mut::<Input>() else {
-            return;
-        };
-
-        input.reset_mouse_delta();
     }
 
     /// Loads a model and registers it in the scene's render object registry.
@@ -342,10 +273,6 @@ impl Game {
             return Err("Missing texture bind group layout".into());
         };
 
-        let Ok(rt) = tokio::runtime::Runtime::new() else {
-            return Err("Failed to create Tokio runtime".into());
-        };
-
         let base_path = Path::new("resources").join(name);
         let Some(parent_dir) = base_path.parent() else {
             return Err(format!("Invalid model path: {}", base_path.display()));
@@ -384,7 +311,7 @@ impl Game {
         let lods: Vec<_> = obj_paths
             .into_iter()
             .map(|path| {
-                rt.block_on(async {
+                self.runtime.block_on(async {
                     super::resources::load_model(
                         &path,
                         &graphics.device,

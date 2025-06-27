@@ -15,11 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::COMMAND_SENDER;
 use crate::Command;
 use crate::Game;
-
-use tokio::sync::oneshot;
 
 /// A simple boxed function that mutably operates on the [`Game`] instance.
 ///
@@ -33,54 +30,6 @@ impl Command for CommandFunction {
         (self.run)(game);
     }
 }
-
-/// A command that computes a result from the game state and sends it back through a one-shot channel.
-///
-/// Used when a return value is needed from a system running on the main thread.
-pub struct CommandWithResult<R> {
-    pub run: Box<dyn FnOnce(&mut Game) -> R + Send + Sync>,
-    pub respond_to: oneshot::Sender<R>,
-}
-
-impl<R: Send + 'static> Command for CommandWithResult<R> {
-    fn apply(self: Box<Self>, game: &mut Game) {
-        let result = (self.run)(game);
-        let _ = self.respond_to.send(result);
-    }
-}
-
-/// Sends a command to be executed on the main thread and retrieves a result synchronously (if available).
-///
-/// This is a helper for invoking [`CommandWithResult`] and receiving its result.
-///
-/// # Arguments
-/// * `f` - A closure that reads the game state and returns a value.
-///
-/// # Returns
-/// * `Some(value)` if the command ran successfully and returned a result.
-/// * `None` if the global command sender is not available.
-///
-/// # Example
-/// ```
-/// let position = send_command_with_result(|game| {
-///     game.scene().get_camera_position()
-/// });
-/// ```
-pub fn send_command_with_result<T: Send + 'static>(
-    f: impl FnOnce(&mut Game) -> T + Send + Sync + 'static
-) -> Option<T> {
-    let sender = COMMAND_SENDER.get()?;
-    let (tx, mut rx) = oneshot::channel();
-
-    let cmd = CommandWithResult {
-        run: Box::new(f),
-        respond_to: tx,
-    };
-
-    let _ = sender.send(Box::new(cmd));
-    rx.try_recv().ok()
-}
-
 
 /// Spawns a new entity into the scene with the given components,
 /// and returns its entity ID synchronously.
@@ -114,18 +63,16 @@ macro_rules! spawn_entity {
 #[macro_export]
 macro_rules! update_entity_position {
     ( $entity:expr, $delta:expr ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let entity = $entity;
-            let delta = $delta;
-            let _ = sender.send(Box::new($crate::CommandFunction {
-                run: Box::new(move |game| {
-                    let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                    if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
-                        t.position += delta;
-                    }
-                }),
-            }));
-        }
+        let entity = $entity;
+        let delta = $delta;
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
+                    t.position += delta;
+                }
+            }),
+        });
     }};
 }
 
@@ -133,17 +80,15 @@ macro_rules! update_entity_position {
 #[macro_export]
 macro_rules! update_entity_rotation {
     ( $entity:expr, $delta:expr ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let entity = $entity;
-            let delta = $delta;
-            let _ = sender.send(Box::new($crate::CommandFunction {
-                run: Box::new(move |game| {
-                    if let Some(t) = game.scene().world.get_mut::<$crate::Transform>(entity) {
-                        t.rotation = delta * t.rotation;
-                    }
-                }),
-            }));
-        }
+        let entity = $entity;
+        let delta = $delta;
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                if let Some(t) = game.scene().world.get_mut::<$crate::Transform>(entity) {
+                    t.rotation = delta * t.rotation;
+                }
+            }),
+        });
     }};
 }
 
@@ -151,16 +96,14 @@ macro_rules! update_entity_rotation {
 #[macro_export]
 macro_rules! add_component {
     ( $entity:expr, $component:expr ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let entity = $entity;
-            let component = $component;
-            let _ = sender.send(Box::new($crate::CommandFunction {
-                run: Box::new(move |game| {
-                    let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                    scene.world.insert(entity, component);
-                }),
-            }));
-        }
+        let entity = $entity;
+        let component = $component;
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                scene.world.insert(entity, component);
+            }),
+        });
     }};
 }
 
@@ -168,15 +111,13 @@ macro_rules! add_component {
 #[macro_export]
 macro_rules! set_default_camera {
     ( $camera:expr ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let camera = $camera;
-            let _ = sender.send(Box::new($crate::CommandFunction {
-                run: Box::new(move |game| {
-                    let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                    scene.set_active_camera(camera);
-                }),
-            }));
-        }
+        let camera = $camera;
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                scene.set_active_camera(camera);
+            }),
+        });
     }};
 }
 
@@ -186,19 +127,17 @@ macro_rules! set_default_camera {
 #[macro_export]
 macro_rules! set_instance_transform {
     ( $entity:expr, $transform:expr ) => {{
-        if let Some(sender) = $crate::COMMAND_SENDER.get() {
-            let entity = $entity;
-            let transform = $transform;
-            let _ = sender.send(Box::new($crate::CommandFunction {
-                run: Box::new(move |game| {
-                    let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                    if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
-                        *t = transform;
-                    } else {
-                        game.scene().world.insert(entity, transform);
-                    }
-                }),
-            }));
-        }
+        let entity = $entity;
+        let transform = $transform;
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
+                    *t = transform;
+                } else {
+                    game.scene().world.insert(entity, transform);
+                }
+            }),
+        });
     }};
 }

@@ -292,10 +292,10 @@ impl World {
     /// ```
     pub fn debug_print_entities<T: Component>(&self) {
         if let Some(slice) = self.storage.get_slice::<T>() {
-            println!("Entities:");
+            crate::log!(crate::LogKind::Debug, "Entities:");
             for (i, slot) in slice.iter().enumerate() {
                 if slot.is_some() {
-                    println!("Entity({})", i);
+                    crate::log!(crate::LogKind::Debug, "Entity({})", i);
                 }
             }
         }

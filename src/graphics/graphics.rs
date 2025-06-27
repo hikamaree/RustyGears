@@ -15,13 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::InstanceRaw;
 use crate::Camera;
 use crate::DEFAULT_CAMERA_BUFFER_SIZE;
 use crate::LightUniform;
 use crate::BufferStrategy;
 use crate::Buffer;
 use crate::graphics::pipeline::*;
-use crate::Command;
 use crate::Projection;
 use crate::Vertex;
 use crate::ModelVertex;
@@ -33,75 +33,14 @@ use wgpu::Adapter;
 use wgpu::Instance;
 use winit::window::Window;
 
-use super::dummy_texture;
-
-#[allow(dead_code)]
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct InstanceRaw {
-    pub model: [[f32; 4]; 4],
-    pub normal: [[f32; 3]; 3],
-}
-
-impl Vertex for InstanceRaw {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 7,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                    shader_location: 8,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
-                    shader_location: 9,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 19]>() as wgpu::BufferAddress,
-                    shader_location: 10,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 22]>() as wgpu::BufferAddress,
-                    shader_location: 11,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
-    }
-}
-
-
-
-
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BindGroupLayoutKey {
-    Camera,
-    Texture,
-    Light,
-    Custom(&'static str),
-}
-
+/// A central object responsible for GPU resource management, pipeline setup, and surface presentation.
+///
+/// The `Graphics` struct encapsulates the core state required to render frames using WGPU. It owns the
+/// logical device, command queue, rendering surface, and all configurations associated with the window output.
+/// In addition to the raw WGPU components, it stores texture resources, camera projection settings,
+/// bind group layouts, shader pipelines, GPU buffers, and runtime bind groups.
+///
+/// Most high-level rendering systems interact with this type to access WGPU internals safely and consistently.
 #[derive(Clone)]
 pub struct Graphics {
     pub window: Arc<Window>,
@@ -121,7 +60,6 @@ pub struct Graphics {
 
     pub buffers: HashMap<String, Buffer>,
     pub bind_groups: HashMap<BindGroupLayoutKey, wgpu::BindGroup>,
-
 
     pub t_count: u32,
 }
@@ -186,7 +124,7 @@ impl Graphics {
         let bind_group_layouts = HashMap::new();
         let pipelines = HashMap::new();
 
-        dummy_texture(&device, &queue);
+        crate::dummy_texture(&device, &queue);
 
         let mut graphics = Graphics {
             window,
@@ -442,7 +380,6 @@ impl Graphics {
         }
     }
 
-
     pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
@@ -455,15 +392,16 @@ impl Graphics {
     }
 }
 
-#[derive(Debug)]
-pub struct SetTrianglesCount {
-    pub count: u32,
+/// A unique key used to identify bind group layouts within the renderer.
+///
+/// This enum is used to map specific purposes (such as camera uniforms, textures, or lighting data)
+/// to corresponding `wgpu::BindGroupLayout` entries. The `Custom` variant allows extending the system
+/// with user-defined layout identifiers that remain globally consistent across shaders and pipeline creation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindGroupLayoutKey {
+    Camera,
+    Texture,
+    Light,
+    Custom(&'static str),
 }
 
-impl Command for SetTrianglesCount {
-    fn apply(self: Box<Self>, game: &mut crate::Game) {
-        if let Ok(graphics) = game.components.get_mut::<Graphics>() {
-            graphics.t_count = self.count;
-        }
-    }
-}

@@ -30,6 +30,7 @@ use crate::Game;
 use crate::Graphics;
 use crate::EguiRenderer;
 use crate::Input;
+use crate::Time;
 
 impl ApplicationHandler for Game {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window_id: WindowId, event: WindowEvent) {
@@ -41,19 +42,20 @@ impl ApplicationHandler for Game {
             return;
         };
 
+        let Ok(gui) = self.components.get_mut::<EguiRenderer>() else {
+            return;
+        };
+
         if window_id != graphics.window.id() {
             return;
         }
 
-        let Some(gui) = self.gui.as_mut() else {
-            return;
-        };
         gui.handle_input(&graphics.window, &event);
 
         match event {
             WindowEvent::CloseRequested => {
-                Game::dispatch_event(self, GearEvent::Exit());
-                event_loop.exit()
+                self.dispatch_event(GearEvent::Exit());
+                event_loop.exit();
             }
 
             WindowEvent::Resized(physical_size) => {
@@ -61,7 +63,19 @@ impl ApplicationHandler for Game {
             }
 
             WindowEvent::RedrawRequested => {
-                self.update();
+                self.dispatch_event(GearEvent::Update());
+
+                if let Ok(time) = self.components.get_mut::<Time>() {
+                    time.update();
+                };
+
+                if let Ok(input) = self.components.get_mut::<Input>() {
+                    input.reset_mouse_delta();
+                };
+
+                if let Ok(graphics) = self.components.get_mut::<Graphics>() {
+                    graphics.window.request_redraw();
+                };
             }
 
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
@@ -103,7 +117,7 @@ impl ApplicationHandler for Game {
             .expect("failed to create window");
 
         if let Err(e) = window.set_cursor_grab(winit::window::CursorGrabMode::Confined) {
-            eprintln!("{}", e);
+            crate::log!(crate::LogKind::Error, "{}", e);
         }
 
         window.set_cursor_visible(false);
@@ -119,8 +133,7 @@ impl ApplicationHandler for Game {
         let egui = EguiRenderer::new(&graphics.device, graphics.config.format, None, 1, &graphics.window);
 
         self.components.insert(graphics);
-
-        self.gui = Some(egui);
+        self.components.insert(egui);
 
         while let Some(setup_fn) = self.setupfns.pop_front() {
             setup_fn(self);

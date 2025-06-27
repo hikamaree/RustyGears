@@ -43,7 +43,7 @@ type BoxedComponent = Arc<UnsafeCell<dyn Any + Send + Sync>>;
 /// game.components.insert(Time::new());
 ///
 /// game.components.with::<Time, _>(|time| {
-///     time.advance(dt);
+///     time.update();
 /// });
 /// ```
 pub struct ComponentMap {

@@ -1,6 +1,6 @@
 # Blender 4.4.0
 # www.blender.org
-mtllib miku_lod2.mtl
+mtllib miku.mtl
 o body
 v 0.006583 0.013033 -0.000590
 v 0.006603 0.013012 -0.000632

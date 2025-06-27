@@ -54,7 +54,6 @@ pub struct WorldScene {
     pub render_gui: Vec<Box<dyn Gui + Send + Sync>>,
 }
 
-
 impl WorldScene {
     /// Adds a new `RenderObject` to the scene.
     ///

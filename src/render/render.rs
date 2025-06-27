@@ -15,8 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Camera;
 use crate::Graphics;
+use crate::send_command;
+use crate::Camera;
+use crate::CommandFunction;
 use crate::Model3d;
 use crate::RenderBatch;
 use crate::RenderTag;
@@ -28,13 +30,15 @@ use crate::Gear;
 use crate::InstanceRaw;
 use crate::Transform;
 use crate::WorldScene;
-use crate::COMMAND_SENDER;
 
 use std::sync::Arc;
 use std::collections::HashMap;
 
 use cgmath::InnerSpace;
 use cgmath::Matrix4;
+
+use rayon::iter::ParallelIterator;
+use rayon::iter::IntoParallelIterator;
 
 /// A gear responsible for preparing and sending render commands to the renderer.
 ///
@@ -77,97 +81,82 @@ impl Render {
     /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
-        let Some(sender) = COMMAND_SENDER.get() else {
-            return;
-        };
-
         let Some(scene) = game.get::<WorldScene>() else {
             return;
         };
 
-        let Some(graphics) = game.get::<Graphics>() else {
-            return;
-        };
-
         let Some(camera_entity) = scene.active_camera else {
-            if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
-                graphics.window.request_redraw();
-            }
             return;
         };
 
         let Some(camera) = scene.world.get::<Camera>(camera_entity) else {
-            if let Ok(_) = sender.send(Box::new(RenderCommand { batches: vec![] })) {
-                graphics.window.request_redraw();
-            }
             return;
         };
 
         let camera_transform = scene.get_camera_transform(camera_entity);
 
-        let mut opaque_batches = vec![];
-        let mut transparent_instances = vec![];
+        let (opaque_batches, mut transparent_instances): (Vec<_>, Vec<_>) = scene
+            .world
+            .query2::<Model3d, Transform>()
+            .into_par_iter()
+            .map(|(_ent, model3d, transform)| {
+                let render_obj = match scene.render_objects.get(&model3d) {
+                    Some(obj) => obj,
+                    None => return (vec![], vec![]),
+                };
 
-        for (_ent, model3d, transform) in scene.world.query2::<Model3d, Transform>() {
-            let Some(render_obj) = scene.render_objects.get(&model3d) else {
-                continue;
-            };
+                let dist = (camera_transform.position - transform.position).magnitude();
+                let lod_index = match dist {
+                    d if d < 100.0 => 0,
+                    d if d < 300.0 => 1.min(render_obj.lods.len() - 1),
+                    d if d < 500.0 => 2.min(render_obj.lods.len() - 1),
+                    _ => render_obj.lods.len() - 1,
+                };
 
-            let dist = (camera_transform.position - transform.position).magnitude();
-            let lod_index = match dist {
-                d if d < 100.0 => 0,
-                d if d < 300.0 => 1.min(render_obj.lods.len() - 1),
-                d if d < 500.0 => 2.min(render_obj.lods.len() - 1),
-                _ => render_obj.lods.len() - 1,
-            };
-
-            let lod_model = &render_obj.lods[lod_index];
-            let raw = transform.raw();
-
-            for (mesh_index, mesh) in lod_model.meshes.iter().enumerate() {
-                let tag = &mesh.render_tag;
-
-                let center_local = mesh.bounding_sphere.center.extend(1.0);
+                let lod_model = &render_obj.lods[lod_index];
+                let raw = transform.raw();
                 let model_mat = Matrix4::from(raw.model);
-                let center_world = model_mat * center_local;
 
-                let scale = model_mat.x.truncate().magnitude()
-                    .max(model_mat.y.truncate().magnitude())
-                    .max(model_mat.z.truncate().magnitude());
+                let mut local_opaque = Vec::new();
+                let mut local_transparent = Vec::new();
 
-                let radius = mesh.bounding_sphere.radius * scale;
+                for (mesh_index, mesh) in lod_model.meshes.iter().enumerate() {
+                    let center_local = mesh.bounding_sphere.center.extend(1.0);
+                    let center_world = model_mat * center_local;
 
-                if !camera.can_see4(center_world, radius) {
-                    continue;
+                    let scale = model_mat.x.truncate().magnitude()
+                        .max(model_mat.y.truncate().magnitude())
+                        .max(model_mat.z.truncate().magnitude());
+
+                    let radius = mesh.bounding_sphere.radius * scale;
+
+                    if !camera.can_see4(center_world, radius) {
+                        continue;
+                    }
+
+                    match mesh.render_tag {
+                        RenderTag::Opaque => {
+                            local_opaque.push((model3d, lod_index, mesh_index, raw));
+                        }
+                        RenderTag::SortedTransparent => {
+                            let delta = center_world.truncate() - camera_transform.position;
+                            let depth = camera.forward.dot(delta);
+                            local_transparent.push((depth, model3d, lod_index, mesh_index, raw));
+                        }
+                        _ => {}
+                    }
                 }
 
-                match tag {
-                    RenderTag::Opaque => {
-                        opaque_batches.push((
-                                model3d,
-                                lod_index,
-                                mesh_index,
-                                raw,
-                        ));
-                    }
-                    RenderTag::SortedTransparent => {
-                        let delta = center_world.truncate() - camera_transform.position;
-                        let depth = camera.forward.dot(delta);
+                (local_opaque, local_transparent)
+            }).reduce(|| (Vec::new(), Vec::new()),
+                |mut acc, (opaque, transparent)| {
+                    acc.0.extend(opaque);
+                    acc.1.extend(transparent);
+                    acc
+                },
+            );
 
-                        transparent_instances.push((
-                                depth,
-                                model3d,
-                                lod_index,
-                                mesh_index,
-                                raw,
-                        ));
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        let mut opaque_group_map: HashMap<(Model3d, usize, usize), Vec<InstanceRaw>> = HashMap::new();
+        let mut opaque_group_map: HashMap<(Model3d, usize, usize), Vec<InstanceRaw>> = HashMap::with_capacity(opaque_batches.len() / 2);
         for (model3d, lod, mesh_idx, raw) in opaque_batches {
             opaque_group_map.entry((model3d.clone(), lod, mesh_idx)).or_default().push(raw);
         }
@@ -210,9 +199,31 @@ impl Render {
             .chain(transparent_render_data)
             .collect();
 
-        if let Ok(_) = sender.send(Box::new(RenderCommand { batches })) {
-            graphics.window.request_redraw();
-        }
+        send_command(RenderCommand { batches });
+
+        send_command(CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+                    return;
+                };
+
+                let Ok(graphics) = game.components.get_mut::<Graphics>() else {
+                    return;
+                };
+
+                let Some(camera_entity) = scene.active_camera else {
+                    return;
+                };
+
+                let final_transform = scene.get_camera_transform(camera_entity);
+
+                if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
+                    camera.update_view_proj(&final_transform, &graphics.projection);
+                    graphics.update(camera);
+                }
+
+            }),
+        });
     }
 }
 
