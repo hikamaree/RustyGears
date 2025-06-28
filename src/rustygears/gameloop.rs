@@ -58,10 +58,6 @@ impl ApplicationHandler for Game {
                 event_loop.exit();
             }
 
-            WindowEvent::Resized(physical_size) => {
-                graphics.resize(physical_size);
-            }
-
             WindowEvent::RedrawRequested => {
                 self.dispatch_event(GearEvent::Update());
 

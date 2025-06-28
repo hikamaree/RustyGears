@@ -15,29 +15,37 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use cgmath::vec3;
-use cgmath::One;
-use cgmath::Quaternion;
-
 use egui::TextEdit;
 use egui::ScrollArea;
 use egui::RichText;
 use egui::Context;
 use egui::Color32;
 
-use std::any::Any;
 use std::collections::HashMap;
 
-use crate::send_command;
-use crate::CommandFunction;
 use crate::GameView;
 use crate::Gui;
 use crate::Logs;
 use crate::LogKind;
-use crate::Game;
 
+/// A function signature used to define terminal commands.
+///
+/// Terminal commands take a slice of string slices representing arguments and are required
+/// to be thread-safe and static. These functions are typically registered in a command map
+/// and invoked through the in-game terminal.
 pub type TerminalCommandFn = dyn Fn(&[&str]) + Send + Sync + 'static;
 
+/// A GUI-based terminal for user input and command execution.
+///
+/// The terminal displays log output and allows users to input commands in a text interface
+/// powered by `egui`. It maintains an internal history of input commands that can be navigated
+/// using the up and down arrow keys. Commands are matched against a map of registered handlers,
+/// which are functions that implement specific in-game functionality.
+///
+/// Pressing the backtick (`) key toggles the terminal display, and pressing Escape hides it.
+/// The terminal automatically focuses the input field when visible, and pressing Enter executes
+/// the current command. Log output is colored by kind, including informational messages, warnings,
+/// errors, and command I/O.
 pub struct TerminalGui {
     input: String,
     display: bool,
@@ -46,6 +54,10 @@ pub struct TerminalGui {
 }
 
 impl TerminalGui {
+    /// Constructs a new terminal with a map of available commands.
+    ///
+    /// The command map associates command strings with functions that handle their behavior.
+    /// The map is owned by the terminal and used to look up handlers during execution.
     pub fn new(command_map: HashMap<String, Box<TerminalCommandFn>>) -> Self {
         Self {
             input: String::new(),
@@ -55,6 +67,10 @@ impl TerminalGui {
         }
     }
 
+    /// Returns the color associated with a given log kind.
+    ///
+    /// Each `LogKind` variant is mapped to a distinct color for easier visual identification
+    /// in the terminal UI.
     fn color_for_kind(kind: &LogKind) -> Color32 {
         match kind {
             LogKind::Info => Color32::CYAN,
@@ -66,76 +82,11 @@ impl TerminalGui {
         }
     }
 
-    pub fn default_commands() -> HashMap<String, Box<TerminalCommandFn>> {
-        let mut map: HashMap<String, Box<TerminalCommandFn>> = HashMap::new();
-
-        map.insert(
-            "echo".to_string(),
-            Box::new(|args: &[&str]| {
-                crate::log!(LogKind::Output, "{}", args.join(" "));
-            }),
-        );
-
-        map.insert(
-            "spawn_miku".to_string(),
-            Box::new(|_args: &[&str]| {
-                send_command(CommandFunction {
-                    run: Box::new(move |game: &mut Game| {
-                        let Ok(scene) = game.components.get_mut::<crate::WorldScene>() else {
-                            return;
-                        };
-
-                        let transform = crate::Transform {
-                            position: vec3(15.0, 15.0, 15.0),
-                            rotation: Quaternion::one(),
-                            scale: vec3(300.0, 300.0, 300.0),
-                        };
-
-                        scene.spawn()
-                            .with(crate::Model3d { path: "miku/miku".into() })
-                            .with(transform);
-                    }),
-                });
-            }),
-        );
-
-        map.insert(
-            "show_stats".to_string(),
-            Box::new(|args: &[&str]| {
-                let Some(arg0) = args.get(0) else {
-                    crate::log!(LogKind::Warning, "Usage: show_stats [true|false|1|0]");
-                    return;
-                };
-
-                let arg = arg0.to_lowercase();
-                let show = match arg.as_str() {
-                    "true" | "1" => true,
-                    "false" | "0" => false,
-                    _ => {
-                        crate::log!(LogKind::Warning, "Usage: show_stats [true|false|1|0]");
-                        return;
-                    }
-                };
-
-                send_command( CommandFunction {
-                    run: Box::new(move |game: &mut Game| {
-                        let Ok(scene) = game.components.get_mut::<crate::WorldScene>() else {
-                            return;
-                        };
-
-                        for gui in &mut scene.render_gui {
-                            if let Some(engine_stats) = (&mut **gui as &mut dyn Any).downcast_mut::<crate::EngineStats>() {
-                                engine_stats.show(show);
-                            }
-                        }
-                    }),
-                });
-            }),
-        );
-
-        map
-    }
-
+    /// Parses and executes a single line of input as a terminal command.
+    ///
+    /// The line is split into a command name and argument list. If the command is found
+    /// in the registered map, the corresponding function is invoked with the arguments.
+    /// If no matching command exists, an error is logged.
     fn execute_command(&mut self, command: &str) {
         crate::log!(LogKind::Input, "{}", command);
 
@@ -251,7 +202,7 @@ impl Gui for TerminalGui {
                                         .monospace()
                                         .color(Self::color_for_kind(kind)),
                                     );
-                                }
+                    }
                             });
 
                         ui.separator();

@@ -288,7 +288,7 @@ pub fn main() {
             return;
         };
         scene.add_gui(EngineStats::new());
-        scene.add_gui(TerminalGui::new(TerminalGui::default_commands()));
+        scene.add_gui(TerminalGui::new(default_terminal_commands()));
 
         // let transform = Transform { 
         //     position: vec3(0.0, 0.0, 0.0),

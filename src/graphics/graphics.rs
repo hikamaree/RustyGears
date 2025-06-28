@@ -146,6 +146,8 @@ impl Graphics {
 
         graphics.initialize_default_resources();
 
+        graphics.set_resolution(graphics.window.inner_size());
+
         Ok(graphics)
     }
 
@@ -380,7 +382,7 @@ impl Graphics {
         }
     }
 
-    pub(crate) fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
+    pub(crate) fn set_resolution(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
             self.config.width = new_size.width;
@@ -403,5 +405,26 @@ pub enum BindGroupLayoutKey {
     Texture,
     Light,
     Custom(&'static str),
+}
+
+pub struct SetResolution {
+    pub resolution: winit::dpi::PhysicalSize<u32>,
+}
+
+impl crate::Command for SetResolution {
+    fn apply(self: Box<Self>, game: &mut crate::Game) {
+        if let Ok(graphics) = game.components.get_mut::<Graphics>() {
+            graphics.set_resolution(self.resolution);
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! set_resolution {
+    ( $x:expr, $y:expr ) => {{
+        $crate::send_command($crate::SetResolution {
+            resolution: winit::dpi::PhysicalSize::new($x, $y),
+        });
+    }};
 }
 
