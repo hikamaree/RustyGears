@@ -59,6 +59,30 @@ macro_rules! spawn_entity {
     }};
 }
 
+/// Adds one or more components to an existing entity.
+///
+/// This macro sends a command to the ECS world to attach additional components
+/// to the specified entity. Each component is inserted individually.
+///
+/// # Example
+/// ```
+/// insert_components!(entity, Transform::default(), MyComponent { ... });
+/// ```
+#[macro_export]
+macro_rules! add_components {
+    ( $entity:expr, $( $comp:expr ),* $(,)? ) => {{
+        let entity = $entity;
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                $(
+                    scene.world.insert(entity, $comp);
+                )*
+            }),
+        });
+    }};
+}
+
 /// Adds a delta to the position of the given entity's [`Transform`] component.
 #[macro_export]
 macro_rules! update_entity_position {
@@ -87,21 +111,6 @@ macro_rules! update_entity_rotation {
                 if let Some(t) = game.scene().world.get_mut::<$crate::Transform>(entity) {
                     t.rotation = delta * t.rotation;
                 }
-            }),
-        });
-    }};
-}
-
-/// Adds a new component to an existing entity in the scene.
-#[macro_export]
-macro_rules! add_component {
-    ( $entity:expr, $component:expr ) => {{
-        let entity = $entity;
-        let component = $component;
-        $crate::send_command($crate::CommandFunction {
-            run: Box::new(move |game| {
-                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                scene.world.insert(entity, component);
             }),
         });
     }};
@@ -139,5 +148,86 @@ macro_rules! set_instance_transform {
                 }
             }),
         });
+    }};
+}
+
+/// Adds a `RenderObject` to the current scene and returns its corresponding `Model3d` handle.
+///
+/// This macro registers a renderable object (with its LODs) into the scene’s
+/// `models3d` map and returns a `Model3d` that can be used for components like `Model3d`.
+///
+/// # Arguments
+/// - `$name`: A string literal or expression representing the model name (e.g. `"tree"`)
+/// - `$object`: An already constructed `RenderObject`
+///
+/// # Example
+/// ```
+/// let tree_model = add_render_object!("tree", tree_render_object);
+/// commands.spawn().insert(tree_model);
+/// ```
+#[macro_export]
+macro_rules! add_model3d {
+    ( $name:expr, $object:expr ) => {{
+        match $crate::send_command_with_result(move |game| {
+            let scene = match game.components.get_mut::<$crate::WorldScene>() {
+                Ok(scene) => scene,
+                Err(_) => return Err("No WorldScene registered".to_string()),
+            };
+
+            let model = $crate::Model3d {
+                path: $name.to_string(),
+            };
+
+            scene.add_model3d(model.clone(), $object);
+
+            Ok(model)
+        }).await {
+            Some(Ok(model)) => Some(model),
+            Some(Err(e)) => {
+                log!($crate::LogKind::Error, "Failed to insert render object: {}", e);
+                None
+            }
+            None => {
+                log!($crate::LogKind::Error, "send_command_with_result failed to execute");
+                None
+            }
+        }
+    }};
+}
+
+/// Loads a `.obj` model and registers it in the scene’s render registry,
+/// returning the corresponding `Model3d` handle.
+///
+/// This macro first loads the model using [`Model::from_obj`], then constructs a
+/// [`RenderObject`] from it, and finally calls [`add_model3d!`] to insert it into the ECS.
+///
+/// # Arguments
+/// - `$path`: Relative path to the `.obj` file (e.g., `"tree/tree.obj"`)
+/// - `$game`: A `&GameView` reference used for GPU access
+///
+/// # Returns
+/// - `Some(Model3d)` on success
+/// - `None` on error (with logging)
+///
+/// # Example
+/// ```
+/// let Some(model3d) = load_obj_model!("tree/tree.obj", game).await else {
+///     return;
+/// };
+/// ```
+///
+#[macro_export]
+macro_rules! load_obj_model {
+    ( $path:expr, $game:expr ) => {{
+        let model_result = $crate::Model::from_obj($path, $game).await;
+        let model = match model_result {
+            Ok(m) => m,
+            Err(e) => {
+                log!($crate::LogKind::Error, "Failed to load model '{}': {}", $path, e);
+                Model::default()
+            }
+        };
+
+        $crate::add_model3d!($path, model)
     }};
 }

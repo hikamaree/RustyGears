@@ -15,40 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-mod camera;
-mod graphics;
-mod physics;
-mod time;
-mod rustygears;
-mod system;
-mod winit;
-mod scene;
-mod ecs;
-mod render;
-mod input;
-mod terminal;
-mod logs;
-mod landscape;
+use crate::Gear;
 
-pub mod math {
-    pub use cgmath::*;
+pub struct Physics {
 }
 
-pub use graphics::*;
-
-pub use time::Time;
-pub use rustygears::*;
-pub use winit::*;
-pub use system::*;
-pub use camera::*;
-pub use scene::*;
-pub use ecs::*;
-pub use render::*;
-pub use input::*;
-pub use terminal::*;
-pub use logs::*;
-pub use physics::*;
-pub use landscape::*;
-
-pub use crossbeam::channel::Receiver;
-pub use crossbeam::channel::Sender;
+impl Gear for Physics {
+    async fn update(&mut self, _game: crate::GameView) {
+        todo!()
+    }
+}

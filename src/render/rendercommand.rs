@@ -125,9 +125,9 @@ impl Command for RenderCommand {
 
                         render_pass.set_vertex_buffer(1, buffer.current().slice(..));
 
-                        if let Some(render_object) = scene.get_render_object(&model_data.model3d) {
+                        if let Some(render_object) = scene.get_model3d(&model_data.model3d) {
                             graphics.t_count += render_pass.draw_model_instanced(
-                                &render_object.lods[model_data.lod_index],
+                                &render_object,
                                 camera_bg,
                                 light_bg,
                                 &model_data.mesh_ranges,

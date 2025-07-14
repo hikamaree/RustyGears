@@ -15,7 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+use once_cell::sync::OnceCell;
 use crate::Texture;
+
+static DEFAULT_MATERIAL: OnceCell<Arc<Material>> = OnceCell::new();
 
 /// A GPU-ready material that contains textures and render-time parameters.
 ///
@@ -24,7 +28,7 @@ use crate::Texture;
 /// `wgpu::BindGroup` used to bind the material to the GPU pipeline.
 ///
 /// This is typically created per unique material defined in a model file (e.g., `.mtl`).
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Material {
     pub name: String,
     pub diffuse_texture: Option<Texture>,
@@ -63,7 +67,7 @@ impl Material {
         dissolve: f32,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
-        let dummy = crate::dummy_texture(device, queue);
+        let dummy = Texture::default(device, queue);
 
         let mut entries = Vec::new();
 
@@ -151,6 +155,40 @@ impl Material {
     pub fn use_weighted_blended(&self) -> bool {
         // TODO
         false
+    }
+
+    /// Returns a lazily initialized global fallback material.
+    ///
+    /// This function attempts to load a material using `assets/default.png` for diffuse,
+    /// and falls back to white if not available. Normal and dissolve textures are optional.
+    /// The resulting material is stored globally and reused.
+    ///
+    /// # Arguments
+    /// - `device`: The GPU device.
+    /// - `queue`: The GPU queue.
+    /// - `layout`: The bind group layout used for materials.
+    ///
+    /// # Returns
+    /// `Arc<Material>` representing a global fallback material.
+    pub fn default(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
+    ) -> Arc<Material> {
+        DEFAULT_MATERIAL.get_or_init(|| {
+            let material = Material::new(
+                device,
+                queue,
+                "default",
+                None,
+                None,
+                None,
+                1.0,
+                layout,
+            );
+
+            Arc::new(material)
+        }).clone()
     }
 }
 

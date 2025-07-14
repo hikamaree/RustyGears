@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::RenderObject;
 use crate::Graphics;
 use crate::send_command;
 use crate::Camera;
@@ -97,14 +98,9 @@ impl Render {
 
         let (opaque_batches, mut transparent_instances): (Vec<_>, Vec<_>) = scene
             .world
-            .query2::<Model3d, Transform>()
+            .query2::<RenderObject, Transform>()
             .into_par_iter()
-            .map(|(_ent, model3d, transform)| {
-                let render_obj = match scene.render_objects.get(&model3d) {
-                    Some(obj) => obj,
-                    None => return (vec![], vec![]),
-                };
-
+            .map(|(_ent, render_obj, transform)| {
                 let dist = (camera_transform.position - transform.position).magnitude();
                 let lod_index = match dist {
                     d if d < 100.0 => 0,
@@ -113,7 +109,11 @@ impl Render {
                     _ => render_obj.lods.len() - 1,
                 };
 
-                let lod_model = &render_obj.lods[lod_index];
+                let model3d = render_obj.lods[lod_index].clone();
+
+                let Some(lod_model) = scene.get_model3d(&model3d) else {
+                    return (vec![], vec![]);
+                };
                 let raw = transform.raw();
                 let model_mat = Matrix4::from(raw.model);
 
@@ -136,12 +136,12 @@ impl Render {
 
                     match mesh.render_tag {
                         RenderTag::Opaque => {
-                            local_opaque.push((model3d, lod_index, mesh_index, raw));
+                            local_opaque.push((model3d.clone(), lod_index, mesh_index, raw));
                         }
                         RenderTag::SortedTransparent => {
                             let delta = center_world.truncate() - camera_transform.position;
                             let depth = camera.forward.dot(delta);
-                            local_transparent.push((depth, model3d, lod_index, mesh_index, raw));
+                            local_transparent.push((depth, model3d.clone(), lod_index, mesh_index, raw));
                         }
                         _ => {}
                     }
@@ -228,7 +228,7 @@ impl Render {
 }
 
 impl Gear for Render {
-    fn update(&mut self, mut game: GameView) {
+    async fn update(&mut self, mut game: GameView) {
         self.render(&mut game);
     }
 }

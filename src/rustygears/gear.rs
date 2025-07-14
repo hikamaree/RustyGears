@@ -57,8 +57,10 @@ pub trait Gear: Any + Send + Sync {
     /// # Parameters
     /// - `game`: A mutable reference to the game state during setup. Use this to directly modify entities or world state.
     /// - `sender`: A command sender for scheduling actions via `Command`. Can be cloned and stored for future use.
-    fn setup(&mut self, game: &mut Game) {
-        let _ = game;
+    fn setup(&mut self, game: &GameView) -> impl std::future::Future<Output = ()> + Send {
+        async {
+            let _ = game;
+        }
     }
 
     /// Called once per frame during the game’s update phase.
@@ -67,9 +69,7 @@ pub trait Gear: Any + Send + Sync {
     ///
     /// # Parameters
     /// - `game`: A read-only snapshot of the current game state.
-    fn update(&mut self, game: GameView) {
-        let _ = game;
-    }
+    fn update(&mut self, game: GameView) -> impl std::future::Future<Output = ()> + Send;
 
     /// Called when the gear is being shut down or removed from the game.
     ///
@@ -81,8 +81,10 @@ pub trait Gear: Any + Send + Sync {
     ///
     /// # Parameters
     /// - `game`: A read-only snapshot of the current game state at shutdown time.
-    fn exit(&mut self, game: GameView ) {
-        let _ = game;
+    fn exit(&mut self, game: GameView ) -> impl std::future::Future<Output = ()> + Send {
+        async {
+            let _ = game;
+        }
     }
 }
 

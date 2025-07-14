@@ -19,7 +19,6 @@ mod game;
 mod gameview;
 mod gameloop;
 mod gear;
-mod resources;
 mod components;
 
 pub use game::*;

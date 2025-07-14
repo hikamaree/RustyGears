@@ -42,23 +42,7 @@ pub struct Texture {
 /// A lazily initialized global fallback texture used when actual textures are missing.
 ///
 /// This dummy texture is a solid white pixel.
-static DUMMY_TEXTURE: OnceLock<Arc<Texture>> = OnceLock::new();
-
-/// Returns a reference-counted fallback texture (1x1 white pixel).
-///
-/// This is used whenever a material lacks a texture (e.g., diffuse, normal, or dissolve).
-///
-/// # Arguments
-/// * `device` - The GPU device.
-/// * `queue` - The GPU queue to upload texture data.
-///
-/// # Returns
-/// A globally shared `Arc<Texture>`.
-pub(crate) fn dummy_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<Texture> {
-    DUMMY_TEXTURE.get_or_init(|| {
-        Arc::new(Texture::from_color(device, queue, [1.0, 1.0, 1.0, 1.0], Some("dummy"), false))
-    }).clone()
-}
+static DEFAULT_TEXTURE: OnceLock<Arc<Texture>> = OnceLock::new();
 
 impl Texture {
     /// Recommended texture format used for weighted blended OIT accumulation buffer.
@@ -288,4 +272,46 @@ impl Texture {
             sampler,
         }
     }
+
+    /// Returns a lazily initialized global fallback texture used when actual texture data is missing.
+    ///
+    /// This function attempts to load a default texture from the path `"assets/default.png"`.
+    /// If the file exists and is successfully loaded, it will be used as the global fallback texture.
+    /// Otherwise, a 1x1 solid white pixel texture will be created and used instead.
+    ///
+    /// This fallback texture is commonly used when a material does not specify a diffuse, normal,
+    /// or dissolve map. It ensures that shaders always have valid texture bindings, preventing
+    /// GPU errors or undefined behavior.
+    ///
+    /// The texture is created and uploaded to the GPU only once and is shared across all materials
+    /// using an `Arc<Texture>`. This allows for efficient reuse without duplicating resources.
+    ///
+    /// # Arguments
+    ///
+    /// * `device` - The GPU device used to allocate and upload the texture.
+    /// * `queue` - The GPU queue used to submit texture data to the device.
+    ///
+    /// # Returns
+    ///
+    /// A globally shared reference-counted [`Texture`] stored in an [`Arc`] wrapper./
+    pub fn default(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<Texture> {
+        DEFAULT_TEXTURE.get_or_init(|| {
+            let path = std::path::Path::new("resources/default.jpg");
+
+            if let Ok(bytes) = std::fs::read(path) {
+                if let Ok(tex) = Texture::from_bytes(device, queue, &bytes, "default.png", false) {
+                    return Arc::new(tex);
+                }
+            }
+
+            Arc::new(Texture::from_color(
+                    device,
+                    queue,
+                    [1.0, 1.0, 1.0, 1.0],
+                    Some("dummy_fallback"),
+                    false,
+            ))
+        }).clone()
+    }
+
 }

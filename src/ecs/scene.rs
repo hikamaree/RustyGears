@@ -23,7 +23,7 @@ use crate::World;
 use crate::Entity;
 use crate::Transform;
 use crate::Camera;
-use crate::RenderObject;
+use crate::Model;
 use crate::Gui;
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
@@ -49,7 +49,7 @@ pub struct Model3d {
 #[derive(Default)]
 pub struct WorldScene {
     pub world: World,
-    pub render_objects: HashMap<Model3d, RenderObject>,
+    pub models3d: HashMap<Model3d, Model>,
     pub active_camera: Option<Entity>,
     pub render_gui: Vec<Box<dyn Gui + Send + Sync>>,
 }
@@ -60,8 +60,8 @@ impl WorldScene {
     /// # Parameters
     /// - `name`: A unique string identifier for the render object.
     /// - `object`: The `RenderObject` to add.
-    pub fn add_render_object(&mut self, name: Model3d, object: RenderObject) {
-        self.render_objects.insert(name, object);
+    pub fn add_model3d(&mut self, name: Model3d, model: Model) {
+        self.models3d.insert(name, model);
     }
 
     /// Retrieves a reference to a render object by name.
@@ -71,8 +71,8 @@ impl WorldScene {
     ///
     /// # Returns
     /// - `Some(&RenderObject)` if found, or `None` otherwise.
-    pub fn get_render_object(&self, name: &Model3d) -> Option<&RenderObject> {
-        self.render_objects.get(name)
+    pub fn get_model3d(&self, name: &Model3d) -> Option<&Model> {
+        self.models3d.get(name)
     }
 
     /// Spawns a new entity in the scene's world.

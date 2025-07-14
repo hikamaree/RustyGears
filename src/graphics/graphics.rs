@@ -124,8 +124,6 @@ impl Graphics {
         let bind_group_layouts = HashMap::new();
         let pipelines = HashMap::new();
 
-        crate::dummy_texture(&device, &queue);
-
         let mut graphics = Graphics {
             window,
             instance,

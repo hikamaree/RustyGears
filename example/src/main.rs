@@ -30,32 +30,23 @@ struct MyGame {
     pub h: f32,
     pub camera1: Entity,
     pub camera2: Entity,
-    pub block: Model3d,
+    pub block: Option<RenderObject>,
 }
 
 impl MyGame {
     fn new(game: &mut Game) -> Self {
-        let truck = match game.load_model("truck/semi") {
-            Ok(truck) => truck,
-            Err(e) => {
-                log!(LogKind::Error, "{}", e);
-                todo!()
-            },
-        };
-
         let scene = match game.components.get_mut::<WorldScene>() {
             Ok(scene) => scene,
             Err(_) => todo!(),
         };
 
         let transform = Transform {
-            position: vec3(8.0, -10.0, 0.0),
+            position: vec3(0.0, 0.0, 0.0),
             rotation: Quaternion::one(),
             scale: vec3(1.0, 1.0, 1.0) 
         };
 
         let truck = scene.spawn()
-            .with(truck)
             .with(transform)
             .build();
 
@@ -79,21 +70,16 @@ impl MyGame {
                 })
             }).build();
 
-        let block = match game.load_model("truck/semi") {
-            Ok(truck) => truck,
-            Err(_) => todo!(),
-        };
-
         Self {
             truck,
             h: 0.0,
             camera1,
             camera2,
-            block,
+            block: None,
         }
     }
 
-    fn mouse_motion(&mut self, dx: f64, dy: f64, game: &GameView) {
+    async fn mouse_motion(&mut self, dx: f64, dy: f64, game: &GameView) {
         let Some(scene) = game.get::<WorldScene>() else {
             return;
         };
@@ -147,7 +133,7 @@ impl MyGame {
     }
 
 
-    fn keyboard_input(&mut self, input: &Input, game: &GameView) {
+    async fn keyboard_input(&mut self, input: &Input, game: &GameView) {
         let Some(scene) = game.get::<WorldScene>() else {
             return;
         };
@@ -217,64 +203,154 @@ impl MyGame {
                 scale: vec3(1.0, 1.0, 1.0) 
             };
 
-            if let Some(x) = spawn_entity!(transform) {
-                add_component!(x, self.block.clone());
+            if let Some(block) = self.block.clone() {
+                if let Some(x) = spawn_entity!(transform).await {
+                    add_components!(x, block);
+                }
             }
         }
     }
 }
 
 impl Gear for MyGame {
-    fn setup(&mut self, game: &mut Game) {
-        let miku = match game.load_model("miku/miku") {
-            Ok(miku) => {
-                miku
-            },
-            Err(e) => {
-                log!(LogKind::Error, "{}", e);
-                todo!()
-            },
+    async fn setup(&mut self, game: &GameView) {
+        if let Some(block) = load_obj_model!("truck/semi.obj", game) {
+            self.block = Some(RenderObject {
+                lods: vec![block]
+            });
         };
 
-        let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+        let Some(truck_lod0) = load_obj_model!("truck/semi.obj", game) else {
+            return;
+        };
+
+        let Some(truck_lod1) = load_obj_model!("truck/semi_lod1.obj", game) else {
+            return;
+        };
+
+        let Some(truck_lod2) = load_obj_model!("truck/semi_lod2.obj", game) else {
+            return;
+        };
+
+        add_components!(self.truck, RenderObject {lods: vec![truck_lod0, truck_lod1, truck_lod2]});
+
+        // miku //
+
+        let Some(miku_lod0) = load_obj_model!("miku/miku.obj", game) else {
+            return;
+        };
+
+        let Some(miku_lod1) = load_obj_model!("miku/miku_lod1.obj", game) else {
+            return;
+        };
+
+        let Some(miku_lod2) = load_obj_model!("miku/miku_lod2.obj", game) else {
             return;
         };
 
         const SPACE_BETWEEN: f32 = 15.0;
         const NUM_INSTANCES_PER_ROW: usize = 64;
 
-        for z in 0..NUM_INSTANCES_PER_ROW {
-            for x in 0..NUM_INSTANCES_PER_ROW {
-                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        let positions = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let x_pos = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z_pos = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    vec3(x_pos, 0.0, z_pos)
+                })
+            });
 
-                let position = vec3(x, -10.0, z);
+        for position in positions {
+            let transform = Transform {
+                position,
+                rotation: Quaternion::one(),
+                scale: vec3(300.0, 300.0, 300.0),
+            };
 
-                let rotation = Quaternion::one();
+            let miku = RenderObject {
+                lods: vec![miku_lod0.clone(), miku_lod1.clone(), miku_lod2.clone()],
+            };
 
-                let transform = Transform { 
-                    position,
-                    rotation,
-                    scale: vec3(300.0, 300.0, 300.0)
-                };
-
-                scene.spawn()
-                    .with(miku.clone())
-                    .with(transform);
-                }
+            spawn_entity!(miku.clone(), transform).await;
         }
+
+        // random scene //
+
+        let transform = Transform {
+            position: vec3(0.0, 0.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0)
+        };
+
+        if let Some(scene1) = load_obj_model!("scene1/scene1.obj", game) {
+            spawn_entity!( RenderObject{ lods: vec![scene1] }, transform).await;
+        };
+
+        let transform = Transform { 
+            position: vec3(40.0, 0.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(0.5, 0.5, 0.5)
+        };
+
+        if let Some(scene2) = load_obj_model!("scene2/scene2.obj", game) {
+            spawn_entity!( RenderObject{ lods: vec![scene2] }, transform).await;
+        };
+
+        let transform = Transform { 
+            position: vec3(0.0, 0.0, 40.0),
+            rotation: Quaternion::one(),
+            scale: vec3(7.0, 7.0, 7.0)
+        };
+
+        if let Some(scene3) = load_obj_model!("scene3/scene3.obj", game) {
+            spawn_entity!( RenderObject{ lods: vec![scene3] }, transform).await;
+        };
+
+        let transform = Transform { 
+            position: vec3(25.0, 0.0, 20.0),
+            rotation: Quaternion::from_axis_angle(Vector3::unit_y(), Rad(std::f32::consts::PI)),
+            scale: vec3(0.3, 0.3, 0.3)
+        };
+
+        if let Some(scene4) = load_obj_model!("scene4/scene4.obj", game) {
+            spawn_entity!( RenderObject{ lods: vec![scene4] }, transform).await;
+        };
+
+        //landscape//
+
+        log!(LogKind::Info, "loading landscape");
+
+        let Ok(landscape) = Landscape::from_heightmap("resources/heightmap.png", 1.0, 10.0) else {
+            log!(LogKind::Error, "failed to make landscape");
+            return;
+        };
+
+        let Ok(landscape_mesh) = landscape.clone().generate_model(game) else {
+            log!(LogKind::Error, "failed to make mesh for landscape");
+            return;
+        };
+
+
+        let Some(landscape_model3d) = add_model3d!("landscape", landscape_mesh) else {
+            log!(LogKind::Error, "failed to make model3d for landscape");
+            return;
+        };
+
+        let entity = spawn_entity!(RenderObject{lods: vec![landscape_model3d]}, landscape, Transform::identity()).await;
+
+        log!(LogKind::Info, "landscape loaded as {:?}", entity);
     }
 
-    fn update(&mut self, game: GameView) {
+    async fn update(&mut self, game: GameView) {
         let Some(input) = game.get::<Input>() else {
             return;
         };
 
         let mm = input.mouse_delta();
 
-        self.mouse_motion(mm.dx, mm.dy, &game);
+        self.mouse_motion(mm.dx, mm.dy, &game).await;
 
-        self.keyboard_input(input, &game);
+        self.keyboard_input(input, &game).await;
     }
 }
 
@@ -289,46 +365,6 @@ pub fn main() {
         };
         scene.add_gui(EngineStats::new());
         scene.add_gui(TerminalGui::new(default_terminal_commands()));
-
-        // let transform = Transform { 
-        //     position: vec3(0.0, 0.0, 0.0),
-        //     rotation: Quaternion::one(),
-        //     scale: vec3(1.0, 1.0, 1.0)
-        // };
-        //
-        // if let Ok(scene1) = game.load_model("scene1/scene1") {
-        //     spawn_entity!(scene1, transform);
-        // };
-        //
-        // let transform = Transform { 
-        //     position: vec3(40.0, 0.0, 0.0),
-        //     rotation: Quaternion::one(),
-        //     scale: vec3(0.5, 0.5, 0.5)
-        // };
-        //
-        // if let Ok(scene2) = game.load_model("scene2/scene2") {
-        //     spawn_entity!(scene2, transform);
-        // };
-        //
-        // let transform = Transform { 
-        //     position: vec3(0.0, 0.0, 40.0),
-        //     rotation: Quaternion::one(),
-        //     scale: vec3(7.0, 7.0, 7.0)
-        // };
-        //
-        // if let Ok(scene3) = game.load_model("scene3/scene3") {
-        //     spawn_entity!(scene3, transform);
-        // };
-        //
-        // let transform = Transform { 
-        //     position: vec3(25.0, 0.0, 20.0),
-        //     rotation: Quaternion::from_axis_angle(Vector3::unit_y(), Rad(std::f32::consts::PI)),
-        //     scale: vec3(0.3, 0.3, 0.3)
-        // };
-        //
-        // if let Ok(scene4) = game.load_model("scene4/scene4") {
-        //     spawn_entity!(scene4, transform);
-        // };
     }).run();
 }
 

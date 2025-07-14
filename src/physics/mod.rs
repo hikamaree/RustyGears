@@ -15,11 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod body;
-mod collision;
-pub mod collision_box;
-pub mod world;
-mod octree;
+mod rigidbody;
+mod colider;
+mod physics;
 
-pub use body::*;
-pub use world::*;
+pub use rigidbody::*;
+pub use colider::*;
+pub use physics::*;

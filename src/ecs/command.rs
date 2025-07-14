@@ -109,11 +109,11 @@ impl<R: Send + 'static> Command for CommandWithResult<R> {
 ///     game.scene().get_camera_position()
 /// });
 /// ```
-pub fn send_command_with_result<T: Send + 'static>(
+pub async fn send_command_with_result<T: Send + 'static>(
     f: impl FnOnce(&mut Game) -> T + Send + Sync + 'static
 ) -> Option<T> {
     let sender = COMMAND_SENDER.get()?;
-    let (tx, mut rx) = oneshot::channel();
+    let (tx, rx) = oneshot::channel();
 
     let cmd = CommandWithResult {
         run: Box::new(f),
@@ -121,7 +121,5 @@ pub fn send_command_with_result<T: Send + 'static>(
     };
 
     let _ = sender.send(Box::new(cmd));
-    rx.try_recv().ok()
-    }
-
-
+    rx.await.ok()
+}

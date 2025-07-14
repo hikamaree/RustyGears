@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Model;
+use crate::Model3d;
 use crate::InstanceRaw;
 
 use std::ops::Neg;
@@ -42,7 +42,7 @@ use cgmath::Zero;
 ///           Each `Model` contains mesh data and GPU-ready geometry.
 #[derive(Clone)]
 pub struct RenderObject {
-    pub lods: Vec<Model>,
+    pub lods: Vec<Model3d>,
 }
 
 /// A struct representing a 3D transformation that combines position, rotation, and scale.
