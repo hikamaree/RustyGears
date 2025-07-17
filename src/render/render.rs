@@ -96,6 +96,8 @@ impl Render {
 
         let camera_transform = scene.get_camera_transform(camera_entity);
 
+        let view_matrix = camera.calc_matrix(&camera_transform);
+
         let (opaque_batches, mut transparent_instances): (Vec<_>, Vec<_>) = scene
             .world
             .query2::<RenderObject, Transform>()
@@ -139,8 +141,9 @@ impl Render {
                             local_opaque.push((model3d.clone(), lod_index, mesh_index, raw));
                         }
                         RenderTag::SortedTransparent => {
-                            let delta = center_world.truncate() - camera_transform.position;
-                            let depth = camera.forward.dot(delta);
+                            let center_view = view_matrix * center_world;
+                            let depth = -center_view.z;
+
                             local_transparent.push((depth, model3d.clone(), lod_index, mesh_index, raw));
                         }
                         _ => {}
@@ -221,7 +224,6 @@ impl Render {
                     camera.update_view_proj(&final_transform, &graphics.projection);
                     graphics.update(camera);
                 }
-
             }),
         });
     }

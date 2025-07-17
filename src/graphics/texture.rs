@@ -273,45 +273,28 @@ impl Texture {
         }
     }
 
-    /// Returns a lazily initialized global fallback texture used when actual texture data is missing.
+    /// Returns a lazily initialized fallback texture used when no actual texture is provided.
     ///
-    /// This function attempts to load a default texture from the path `"assets/default.png"`.
-    /// If the file exists and is successfully loaded, it will be used as the global fallback texture.
-    /// Otherwise, a 1x1 solid white pixel texture will be created and used instead.
+    /// Creates a 1x1 solid gray pixel texture ([0.5, 0.5, 0.5, 1.0]) and uploads it to the GPU.
+    /// This ensures shaders always have a valid texture bound, preventing rendering errors.
     ///
-    /// This fallback texture is commonly used when a material does not specify a diffuse, normal,
-    /// or dissolve map. It ensures that shaders always have valid texture bindings, preventing
-    /// GPU errors or undefined behavior.
-    ///
-    /// The texture is created and uploaded to the GPU only once and is shared across all materials
-    /// using an `Arc<Texture>`. This allows for efficient reuse without duplicating resources.
+    /// The texture is created only once and shared across the application using an `Arc<Texture>`.
     ///
     /// # Arguments
-    ///
-    /// * `device` - The GPU device used to allocate and upload the texture.
-    /// * `queue` - The GPU queue used to submit texture data to the device.
+    /// * `device` - GPU device used for allocation.
+    /// * `queue` - GPU queue used for data upload.
     ///
     /// # Returns
-    ///
-    /// A globally shared reference-counted [`Texture`] stored in an [`Arc`] wrapper./
+    /// A shared [`Arc<Texture>`] fallback texture.
     pub fn default(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<Texture> {
         DEFAULT_TEXTURE.get_or_init(|| {
-            let path = std::path::Path::new("resources/default.jpg");
-
-            if let Ok(bytes) = std::fs::read(path) {
-                if let Ok(tex) = Texture::from_bytes(device, queue, &bytes, "default.png", false) {
-                    return Arc::new(tex);
-                }
-            }
-
             Arc::new(Texture::from_color(
                     device,
                     queue,
-                    [1.0, 1.0, 1.0, 1.0],
+                    [0.5, 0.5, 0.5, 1.0],
                     Some("dummy_fallback"),
                     false,
             ))
         }).clone()
     }
-
 }
