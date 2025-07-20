@@ -16,10 +16,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::RenderObject;
-use crate::Graphics;
 use crate::send_command;
 use crate::Camera;
-use crate::CommandFunction;
 use crate::Model3d;
 use crate::RenderBatch;
 use crate::RenderTag;
@@ -203,29 +201,6 @@ impl Render {
             .collect();
 
         send_command(RenderCommand { batches });
-
-        send_command(CommandFunction {
-            run: Box::new(move |game| {
-                let Ok(scene) = game.components.get_mut::<WorldScene>() else {
-                    return;
-                };
-
-                let Ok(graphics) = game.components.get_mut::<Graphics>() else {
-                    return;
-                };
-
-                let Some(camera_entity) = scene.active_camera else {
-                    return;
-                };
-
-                let final_transform = scene.get_camera_transform(camera_entity);
-
-                if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
-                    camera.update_view_proj(&final_transform, &graphics.projection);
-                    graphics.update(camera);
-                }
-            }),
-        });
     }
 }
 

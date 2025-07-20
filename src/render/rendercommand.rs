@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::Camera;
 use egui_wgpu::ScreenDescriptor;
 use crate::EguiRenderer;
 use crate::DrawModel;
@@ -62,6 +63,17 @@ impl Command for RenderCommand {
         let Ok(graphics) = game.components.get_mut::<Graphics>() else {
             return;
         };
+
+        let Some(camera_entity) = scene.active_camera else {
+            return;
+        };
+
+        let final_transform = scene.get_camera_transform(camera_entity);
+
+        if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
+            camera.update_view_proj(&final_transform, &graphics.projection);
+            graphics.update(camera);
+        }
 
         graphics.t_count = 0;
 
