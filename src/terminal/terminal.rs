@@ -123,9 +123,8 @@ impl Gui for TerminalGui {
             return;
         }
 
-        let logs = match game.get::<Logs>() {
-            Some(logs) => logs.all(),
-            None => return,
+        let Ok(logs) = game.get::<Logs>() else {
+            return;
         };
 
         if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
@@ -137,7 +136,7 @@ impl Gui for TerminalGui {
             let mut count = 0;
             let mut target = None;
 
-            for (kind, line) in logs.iter().rev() {
+            for (kind, line) in logs.all().iter().rev() {
                 if matches!(kind, LogKind::Input) {
                     if count == idx {
                         target = Some(line);
@@ -161,7 +160,7 @@ impl Gui for TerminalGui {
                     let mut count = 0;
                     let mut target = None;
 
-                    for (kind, line) in logs.iter().rev() {
+                    for (kind, line) in logs.all().iter().rev() {
                         if matches!(kind, LogKind::Input) {
                             if count == new_index {
                                 target = Some(line);
@@ -196,7 +195,7 @@ impl Gui for TerminalGui {
                             .stick_to_bottom(true)
                             .max_height(250.0)
                             .show(ui, |ui| {
-                                for (kind, line) in logs {
+                                for (kind, line) in logs.all() {
                                     ui.label(
                                         RichText::new(line)
                                         .monospace()

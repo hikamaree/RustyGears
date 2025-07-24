@@ -50,11 +50,11 @@ impl Gui for EngineStats {
             return;
         }
 
-        let Some(time) = game.get::<Time>() else {
+        let Ok(time) = game.get::<Time>() else {
             return;
         };
 
-        let Some(graphics) = game.get::<Graphics>() else {
+        let Ok(graphics) = game.get::<Graphics>() else {
             return;
         };
 

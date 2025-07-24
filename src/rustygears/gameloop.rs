@@ -38,11 +38,7 @@ impl ApplicationHandler for Game {
             return;
         };
 
-        let Ok(input) = self.components.get_mut::<Input>() else {
-            return;
-        };
-
-        let Ok(gui) = self.components.get_mut::<EguiRenderer>() else {
+        let Ok(mut gui) = self.components.get_mut::<EguiRenderer>() else {
             return;
         };
 
@@ -51,6 +47,9 @@ impl ApplicationHandler for Game {
         }
 
         gui.handle_input(&graphics.window, &event);
+
+        drop(graphics);
+        drop(gui);
 
         match event {
             WindowEvent::CloseRequested => {
@@ -61,11 +60,11 @@ impl ApplicationHandler for Game {
             WindowEvent::RedrawRequested => {
                 self.dispatch_event(GearEvent::Update());
 
-                if let Ok(time) = self.components.get_mut::<Time>() {
+                if let Ok(mut time) = self.components.get_mut::<Time>() {
                     time.update();
                 };
 
-                if let Ok(input) = self.components.get_mut::<Input>() {
+                if let Ok(mut input) = self.components.get_mut::<Input>() {
                     input.reset_mouse_delta();
                 };
 
@@ -75,9 +74,18 @@ impl ApplicationHandler for Game {
             }
 
             WindowEvent::KeyboardInput { event: KeyEvent { physical_key: PhysicalKey::Code(key), state, .. }, .. } => {
+                let Ok(gui) = self.components.get_mut::<EguiRenderer>() else {
+                    return;
+                };
+
                 if gui.context.wants_keyboard_input() {
                     return;
                 }
+
+                let Ok(mut input) = self.components.get_mut::<Input>() else {
+                    return;
+                };
+
                 match state {
                     winit::event::ElementState::Pressed => input.press_key(key),
                     winit::event::ElementState::Released => input.release_key(&key),
@@ -89,13 +97,11 @@ impl ApplicationHandler for Game {
     }
 
     fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: DeviceId, event: DeviceEvent) {
-        let Ok(input) = self.components.get_mut::<Input>() else {
-            return;
-        };
-
         match event {
             winit::event::DeviceEvent::MouseMotion { delta } => {
-                input.update_mouse_delta(delta.0, delta.1);
+                if let Ok(mut input) = self.components.get_mut::<Input>() {
+                    input.update_mouse_delta(delta.0, delta.1);
+                };
             }
 
             _ => {}

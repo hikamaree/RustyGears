@@ -411,7 +411,7 @@ pub struct SetResolution {
 
 impl crate::Command for SetResolution {
     fn apply(self: Box<Self>, game: &mut crate::Game) {
-        if let Ok(graphics) = game.components.get_mut::<Graphics>() {
+        if let Ok(mut graphics) = game.components.get_mut::<Graphics>() {
             graphics.set_resolution(self.resolution);
         }
     }

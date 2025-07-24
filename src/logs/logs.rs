@@ -113,7 +113,7 @@ pub struct LogCommand {
 
 impl Command for LogCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
-        if let Ok(logs) = game.components.get_mut::<Logs>() {
+        if let Ok(mut logs) = game.components.get_mut::<Logs>() {
             logs.log(self.kind, self.msg);
         }
     }

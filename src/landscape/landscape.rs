@@ -167,7 +167,7 @@ impl Landscape {
             radius: max_radius,
         };
 
-        let Some(graphics) = game.get::<crate::Graphics>() else {
+        let Ok(graphics) = game.get::<crate::Graphics>() else {
             return Err("Failed to get Graphics component".to_string());
         };
 

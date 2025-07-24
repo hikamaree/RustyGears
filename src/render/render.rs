@@ -16,7 +16,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::RenderObject;
-use crate::send_command;
 use crate::Camera;
 use crate::Model3d;
 use crate::RenderBatch;
@@ -80,7 +79,7 @@ impl Render {
     /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
-        let Some(scene) = game.get::<WorldScene>() else {
+        let Ok(scene) = game.get::<WorldScene>() else {
             return;
         };
 
@@ -101,6 +100,9 @@ impl Render {
             .query2::<RenderObject, Transform>()
             .into_par_iter()
             .map(|(_ent, render_obj, transform)| {
+                if render_obj.lods.len() == 0 {
+                    return (vec![], vec![]);
+                }
                 let dist = (camera_transform.position - transform.position).magnitude();
                 let lod_index = match dist {
                     d if d < 100.0 => 0,
@@ -114,6 +116,7 @@ impl Render {
                 let Some(lod_model) = scene.get_model3d(&model3d) else {
                     return (vec![], vec![]);
                 };
+
                 let raw = transform.raw();
                 let model_mat = Matrix4::from(raw.model);
 
@@ -200,7 +203,7 @@ impl Render {
             .chain(transparent_render_data)
             .collect();
 
-        send_command(RenderCommand { batches });
+        crate::send_command(RenderCommand { batches });
     }
 }
 

@@ -34,10 +34,9 @@ struct MyGame {
 }
 
 impl MyGame {
-    fn new(game: &mut Game) -> Self {
-        let scene = match game.components.get_mut::<WorldScene>() {
-            Ok(scene) => scene,
-            Err(_) => todo!(),
+    fn new(game: &mut Game) -> Result<Self, String> {
+        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+            return Err("Filed to get scene".to_string());
         };
 
         let transform = Transform {
@@ -70,17 +69,23 @@ impl MyGame {
                 })
             }).build();
 
-        Self {
+        Ok(Self {
             truck,
             h: 0.0,
             camera1,
             camera2,
             block: None,
-        }
+        })
     }
 
-    async fn mouse_motion(&mut self, dx: f64, dy: f64, game: &GameView) {
-        let Some(scene) = game.get::<WorldScene>() else {
+    async fn mouse_motion(&mut self, game: &GameView) {
+        let Ok(input) = game.components.get::<Input>() else {
+            return;
+        };
+
+        let mm = input.mouse_delta();
+
+        let Ok(scene) = game.components.get::<WorldScene>() else {
             return;
         };
 
@@ -91,12 +96,12 @@ impl MyGame {
         let sensitivity = 0.002;
 
         if active_camera == self.camera1 {
-            let delta_yaw = Rad(-dx as f32 * sensitivity);
-            let delta_pitch = Rad(-dy as f32 * sensitivity);
+            let delta_yaw = Rad(-mm.dx as f32 * sensitivity);
+            let delta_pitch = Rad(-mm.dy as f32 * sensitivity);
 
             update_freefly_rotation!(self.camera1, delta_yaw, delta_pitch);
         } else if active_camera == self.camera2 {
-            let delta_yaw = Rad(-dx as f32 * sensitivity);
+            let delta_yaw = Rad(-mm.dx as f32 * sensitivity);
             let rot = Quaternion::from_angle_y(delta_yaw);
 
             let cam_handle = match scene.world.get::<CameraControl>(self.camera2) {
@@ -133,12 +138,16 @@ impl MyGame {
     }
 
 
-    async fn keyboard_input(&mut self, input: &Input, game: &GameView) {
-        let Some(scene) = game.get::<WorldScene>() else {
+    async fn keyboard_input(&mut self, game: &GameView) {
+        let Ok(scene) = game.components.get::<WorldScene>() else {
             return;
         };
 
-        let Some(time) = game.get::<Time>() else {
+        let Ok(input) = game.components.get::<Input>() else {
+            return;
+        };
+
+        let Ok(time) = game.components.get::<Time>() else {
             return;
         };
 
@@ -249,7 +258,7 @@ impl Gear for MyGame {
         };
 
         const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 64;
+        const NUM_INSTANCES_PER_ROW: usize = 1;
 
         let positions = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -330,7 +339,6 @@ impl Gear for MyGame {
             return;
         };
 
-
         let Some(landscape_model3d) = add_model3d!("landscape", landscape_mesh) else {
             log!(LogKind::Error, "failed to make model3d for landscape");
             return;
@@ -342,25 +350,19 @@ impl Gear for MyGame {
     }
 
     async fn update(&mut self, game: GameView) {
-        let Some(input) = game.get::<Input>() else {
-            return;
-        };
-
-        let mm = input.mouse_delta();
-
-        self.mouse_motion(mm.dx, mm.dy, &game).await;
-
-        self.keyboard_input(input, &game).await;
+        self.mouse_motion(&game).await;
+        self.keyboard_input(&game).await;
     }
 }
 
 pub fn main() {
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::default());
-        let mygame = MyGame::new(game);
-        game.add_gear("mygame".into(), mygame);
+        if let Ok(mygame) = MyGame::new(game) {
+            game.add_gear("mygame".into(), mygame);
+        }
     }).setup(|game| {
-        let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
             return;
         };
         scene.add_gui(EngineStats::new());
@@ -376,9 +378,9 @@ mod tests {
     fn test_scene_access_is_safe() {
         let mut game = Game::new()
             .setup(|game| {
-                let mygame = MyGame::new(game);
-                game.add_gear("mygame".into(), mygame);
-
+                if let Ok(mygame) = MyGame::new(game) {
+                    game.add_gear("mygame".into(), mygame);
+                }
             }).setup(|game| {
                 if let Err(err) = game.components.with::<WorldScene, _>(|scene| {
                     scene.add_gui(EngineStats::new());

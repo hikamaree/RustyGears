@@ -237,7 +237,7 @@ impl ModifyCameraHandle {
 impl Command for ModifyCameraHandle {
     fn apply(self: Box<Self>, game: &mut Game) {
         let handler_ptr = {
-            let Ok(scene) = game.components.get_mut::<WorldScene>() else {
+            let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
                 return;
             };
 

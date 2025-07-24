@@ -101,9 +101,8 @@ impl Model {
     /// let model = load_model(Path::new("assets/model.obj"), &device, &queue, &material_layout).await;
     /// ```
     pub async fn from_obj(path: &str, game: &GameView) -> Result<Model, String> {
-        let graphics = match game.get::<Graphics>() {
-            Some(graphics) => graphics,
-            None => return Err("Graphics is not initialized".to_string()),
+        let Ok(graphics) = game.get::<Graphics>() else {
+            return Err("Graphics is not initialized".to_string());
         };
 
         let layout = match graphics.bind_group_layouts.get(&crate::BindGroupLayoutKey::Texture) {

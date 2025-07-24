@@ -15,160 +15,111 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
-use std::cell::UnsafeCell;
-use std::any::Any;
-use std::any::TypeId;
-use std::sync::Arc;
+use std::ops::{Deref, DerefMut};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-/// A type-erased container for a component, stored behind `Arc<UnsafeCell<...>>` to allow
-/// interior mutability without requiring `&mut self` access to `ComponentMap`.
-///
-/// Each `BoxedComponent` is expected to contain a unique component type,
-/// stored as a concrete instance of `T: Any + Send + Sync`.
-type BoxedComponent = Arc<UnsafeCell<dyn Any + Send + Sync>>;
+type BoxedComponent = Arc<RwLock<Box<dyn Any + Send + Sync>>>;
 
-/// A central registry for globally accessible components in the game engine.
-///
-/// `ComponentMap` allows storing and retrieving type-unique components in a type-safe manner,
-/// using runtime type IDs as keys. It enables both immutable and mutable access to components,
-/// and supports temporary scoped mutable access via a closure.
-///
-/// # Safety
-/// Internally uses `UnsafeCell` for interior mutability and performs `Any` type casting via `unsafe`
-/// blocks. All usage assumes the user ensures no aliasing of mutable references.
-///
-/// # Example
-/// ```rust
-/// game.components.insert(Time::new());
-///
-/// game.components.with::<Time, _>(|time| {
-///     time.update();
-/// });
-/// ```
+#[derive(Clone)]
 pub struct ComponentMap {
     components: HashMap<TypeId, BoxedComponent>,
 }
 
 impl ComponentMap {
-    /// Creates an empty `ComponentMap` with no registered components.
-    ///
-    /// # Returns
-    /// A new `ComponentMap` instance.
     pub fn new() -> Self {
         Self {
             components: HashMap::new(),
         }
     }
 
-    /// Inserts a new component of type `T` into the map, replacing any existing component of the same type.
-    ///
-    /// Components are stored under their `TypeId`, and only one instance of a given type can exist in the map.
-    ///
-    /// # Arguments
-    /// * `value` - A value of type `T` implementing `Send + Sync + 'static`.
     pub fn insert<T: 'static + Send + Sync>(&mut self, value: T) {
         let type_id = TypeId::of::<T>();
-        let component = Arc::new(UnsafeCell::new(value)) as BoxedComponent;
+        let component = Arc::new(RwLock::new(Box::new(value) as Box<dyn Any + Send + Sync>));
         self.components.insert(type_id, component);
     }
 
-    /// Returns an immutable reference to the component of type `T`, if it exists.
-    ///
-    /// # Errors
-    /// Returns a `String` error if the component is not found or has the wrong type.
-    pub fn get<T: 'static + Send + Sync>(&self) -> Result<&T, String> {
+    pub fn get<T: 'static + Send + Sync>(&self) -> Result<ReadGuardWrapper<T>, String> {
         let type_id = TypeId::of::<T>();
-
         let arc = self.components.get(&type_id)
-            .ok_or_else(|| format!("Component of type {} not found", std::any::type_name::<T>()))?;
+            .ok_or_else(|| format!("Component {} not found", std::any::type_name::<T>()))?;
+        
+        let guard = arc.read()
+            .map_err(|_| "Component is poisoned".to_string())?;
 
-        let raw = arc.get();
-
-        unsafe {
-            (&*raw).downcast_ref::<T>()
-                .ok_or_else(|| format!("Component type mismatch for {}", std::any::type_name::<T>()))
-        }
+        Ok(ReadGuardWrapper {
+            guard,
+            _marker: std::marker::PhantomData,
+        })
     }
 
-    /// Returns a mutable reference to the component of type `T`, if it exists.
-    ///
-    /// # Safety
-    /// This method returns a `&mut T` from behind an `UnsafeCell`. The caller must ensure
-    /// that no other mutable or immutable references to the same component exist at the same time.
-    ///
-    /// # Errors
-    /// Returns a `String` error if the component is not found or has the wrong type.
-    pub fn get_mut<T: 'static + Send + Sync>(&self) -> Result<&mut T, String> {
+    pub fn get_mut<T: 'static + Send + Sync>(&self) -> Result<WriteGuardWrapper<T>, String> {
         let type_id = TypeId::of::<T>();
-
         let arc = self.components.get(&type_id)
-            .ok_or_else(|| format!("Component of type {} not found", std::any::type_name::<T>()))?;
+            .ok_or_else(|| format!("Component {} not found", std::any::type_name::<T>()))?;
+        
+        let guard = arc.write()
+            .map_err(|_| "Component is poisoned".to_string())?;
 
-        let raw = arc.get();
-
-        unsafe {
-            (&mut *raw).downcast_mut::<T>()
-                .ok_or_else(|| format!("Component type mismatch for {}", std::any::type_name::<T>()))
-        }
+        Ok(WriteGuardWrapper {
+            guard,
+            _marker: std::marker::PhantomData,
+        })
     }
 
-    /// Returns a view of all registered components as a map from `TypeId` to static references.
-    ///
-    /// # Safety
-    /// The returned references are cast as `'static`, but they rely on the assumption that
-    /// the underlying components outlive all uses of this function's result.
-    pub fn get_view(&self) -> HashMap<TypeId, &'static (dyn Any + Send + Sync + 'static)> {
-        let mut view = HashMap::new();
-
-        for (type_id, arc_cell_any) in &self.components {
-            let ptr = arc_cell_any.get();
-
-            let reference: &'static (dyn Any + Send + Sync) = unsafe {
-                &*ptr
-            };
-
-            view.insert(*type_id, reference);
-        }
-
-        view
-    }
-
-    /// Temporarily borrows a component mutably for the duration of the provided closure.
-    ///
-    /// This method avoids aliasing problems by confining the `&mut T` borrow to the closure scope,
-    /// allowing safe usage even when other parts of the program also access `ComponentMap`.
-    ///
-    /// # Arguments
-    /// * `f` - A closure that receives a mutable reference to the component of type `T`.
-    ///
-    /// # Returns
-    /// Returns the result of the closure, or a `String` error if the component is missing or mismatched.
-    ///
-    /// # Example
-    /// ```rust
-    /// game.components.with::<Time, f32>(|time| {
-    ///     time.delta_time()
-    /// })?;
-    /// ```
     pub fn with<T: 'static + Send + Sync, R>(
         &self,
         f: impl FnOnce(&mut T) -> R,
     ) -> Result<R, String> {
-        let type_id = TypeId::of::<T>();
+        let mut guard = self.get_mut::<T>()?;
+        Ok(f(&mut *guard))
+    }
+}
 
-        let arc = self.components
-            .get(&type_id)
-            .ok_or_else(|| format!("Component {} not found", std::any::type_name::<T>()))?;
+// Send + Sync wrapper for read access
+pub struct ReadGuardWrapper<'a, T> {
+    guard: RwLockReadGuard<'a, Box<dyn Any + Send + Sync>>,
+    _marker: std::marker::PhantomData<T>,
+}
 
-        let cell = arc.get();
+// SAFETY: The guard is Send because:
+// 1. The Box<dyn Any + Send + Sync> is Send (since its contents are Send)
+// 2. We're only giving access to the T which is Send
+unsafe impl<'a, T: Send> Send for ReadGuardWrapper<'a, T> {}
 
-        let ptr = unsafe { &mut *cell };
+impl<'a, T: 'static> Deref for ReadGuardWrapper<'a, T> {
+    type Target = T;
 
-        let casted = ptr
-            .downcast_mut::<T>()
-            .ok_or_else(|| format!("Type mismatch for {}", std::any::type_name::<T>()))?;
+    fn deref(&self) -> &T {
+        self.guard.downcast_ref::<T>()
+            .expect("TypeId matched but downcast failed")
+    }
+}
 
-        Ok(f(casted))
+// Send + Sync wrapper for write access
+pub struct WriteGuardWrapper<'a, T> {
+    guard: RwLockWriteGuard<'a, Box<dyn Any + Send + Sync>>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+// SAFETY: The guard is Send because:
+// 1. The Box<dyn Any + Send + Sync> is Send (since its contents are Send)
+// 2. We're only giving access to the T which is Send
+unsafe impl<'a, T: Send> Send for WriteGuardWrapper<'a, T> {}
+
+impl<'a, T: 'static> Deref for WriteGuardWrapper<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.guard.downcast_ref::<T>()
+            .expect("TypeId matched but downcast failed")
+    }
+}
+
+impl<'a, T: 'static> DerefMut for WriteGuardWrapper<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.guard.downcast_mut::<T>()
+            .expect("TypeId matched but downcast failed")
     }
 }

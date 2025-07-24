@@ -42,7 +42,7 @@ pub fn default_terminal_commands() -> HashMap<String, Box<TerminalCommandFn>> {
         Box::new(|_args: &[&str]| {
             crate::send_command(CommandFunction {
                 run: Box::new(move |game: &mut Game| {
-                    let Ok(scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
                         return;
                     };
 
@@ -80,7 +80,7 @@ pub fn default_terminal_commands() -> HashMap<String, Box<TerminalCommandFn>> {
 
             crate::send_command( crate::CommandFunction {
                 run: Box::new(move |game: &mut Game| {
-                    let Ok(scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
                         return;
                     };
 

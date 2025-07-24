@@ -53,14 +53,9 @@ pub struct RenderCommand {
     pub batches: Vec<RenderBatch>,
 }
 
-
 impl Command for RenderCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let Ok(scene) = game.components.get_mut::<WorldScene>() else {
-            return;
-        };
-
-        let Ok(graphics) = game.components.get_mut::<Graphics>() else {
+        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
             return;
         };
 
@@ -70,12 +65,18 @@ impl Command for RenderCommand {
 
         let final_transform = scene.get_camera_transform(camera_entity);
 
-        if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
-            camera.update_view_proj(&final_transform, &graphics.projection);
-            graphics.update(camera);
-        }
+        let _ = game.components.with::<Graphics, _>(|graphics| {
+            if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
+                camera.update_view_proj(&final_transform, &graphics.projection);
+                graphics.update(camera);
+            }
 
-        graphics.t_count = 0;
+            graphics.t_count = 0;
+        });
+
+        let Ok(graphics) = game.components.get::<Graphics>() else {
+            return;
+        };
 
         let output = match graphics.surface.get_current_texture() {
             Ok(frame) => frame,
@@ -91,75 +92,85 @@ impl Command for RenderCommand {
             label: Some("Render Encoder"),
         });
 
-        if let (Some(camera_bg), Some(light_bg)) = (
-            graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera),
-            graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light)
-        ) {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Main Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &graphics.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
-                    stencil_ops: None,
-                }),
-                occlusion_query_set: None,
-                timestamp_writes: None,
-            });
-
-            for batch in &self.batches {
-                if let Some(pipeline) = graphics.pipelines.get(&batch.tag) {
-                    render_pass.set_pipeline(pipeline);
-
-                    for model_data in &batch.prepared_models {
-                        let key = format!("{:?}:lod{}:mesh{}", model_data.model3d, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
-                        let buffer = graphics.buffers.entry(key)
-                            .and_modify(|b| {
-                                b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
-                                b.next();
-                                b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
-                            }).or_insert_with(|| {
-                                Buffer::new(
-                                    &graphics.device,
-                                    model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
-                                    wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                                    BufferStrategy::Triple,
-                                    "majmun",
-                                )
-                            });
-
-                        render_pass.set_vertex_buffer(1, buffer.current().slice(..));
-
-                        if let Some(render_object) = scene.get_model3d(&model_data.model3d) {
-                            graphics.t_count += render_pass.draw_model_instanced(
-                                &render_object,
-                                camera_bg,
-                                light_bg,
-                                &model_data.mesh_ranges,
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
         let screen_descriptor = ScreenDescriptor {
             size_in_pixels: [graphics.config.width, graphics.config.height],
             pixels_per_point: graphics.window.scale_factor() as f32,
         };
 
-        let gameview = GameView {
-            components: game.components.get_view()
+        drop(graphics);
+
+        let _ = game.components.with::<Graphics, _>(|graphics| {
+            let camera_bgo = graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera).clone();
+            let light_bgo = graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light).clone();
+
+            if let (Some(camera_bg), Some(light_bg)) = (
+                camera_bgo,
+                light_bgo
+            ) {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Main Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &graphics.depth_texture.view,
+                        depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
+                        stencil_ops: None,
+                    }),
+                    occlusion_query_set: None,
+                    timestamp_writes: None,
+                });
+
+                for batch in &self.batches {
+                    if let Some(pipeline) = graphics.pipelines.get(&batch.tag) {
+                        render_pass.set_pipeline(pipeline);
+
+                        for model_data in &batch.prepared_models {
+                            let key = format!("{:?}:lod{}:mesh{}", model_data.model3d, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
+                            let buffer = graphics.buffers.entry(key)
+                                .and_modify(|b| {
+                                    b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
+                                    b.next();
+                                    b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
+                                }).or_insert_with(|| {
+                                    Buffer::new(
+                                        &graphics.device,
+                                        model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
+                                        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                                        BufferStrategy::Triple,
+                                        "majmun",
+                                    )
+                                });
+                            render_pass.set_vertex_buffer(1, buffer.current().slice(..));
+
+                            if let Some(render_object) = scene.models3d.get(&model_data.model3d) {
+                                graphics.t_count += render_pass.draw_model_instanced(
+                                    render_object,
+                                    camera_bg,
+                                    light_bg,
+                                    &model_data.mesh_ranges,
+                                );
+                            }
+
+
+                        }
+                    }
+                }
+            }
+        });
+
+        let Ok(graphics) = game.components.get::<Graphics>() else {
+            return;
         };
 
-        if let Ok(gui) = game.components.get_mut::<EguiRenderer>() {
+        let gameview = GameView::new(game.components.clone());
+
+        let _ = game.components.with::<EguiRenderer, _>(|gui| {
             gui.draw(
                 &graphics.device,
                 &graphics.queue,
@@ -169,8 +180,8 @@ impl Command for RenderCommand {
                 &mut scene.render_gui,
                 &gameview,
             );
-        };
-        
+        });
+
         graphics.queue.submit(Some(encoder.finish()));
         output.present();
     }

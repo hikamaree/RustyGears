@@ -45,7 +45,7 @@ impl Command for CommandFunction {
 macro_rules! spawn_entity {
     ( $( $comp:expr ),* $(,)? ) => {{
         $crate::send_command_with_result(move |game| {
-            let scene = match game.components.get_mut::<$crate::WorldScene>() {
+            let mut scene = match game.components.get_mut::<$crate::WorldScene>() {
                 Ok(scene) => scene,
                 Err(_) => todo!(),
             };
@@ -74,7 +74,7 @@ macro_rules! add_components {
         let entity = $entity;
         $crate::send_command($crate::CommandFunction {
             run: Box::new(move |game| {
-                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
                 $(
                     scene.world.insert(entity, $comp);
                 )*
@@ -91,7 +91,9 @@ macro_rules! update_entity_position {
         let delta = $delta;
         $crate::send_command($crate::CommandFunction {
             run: Box::new(move |game| {
-                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else {
+                    return;
+                };
                 if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
                     t.position += delta;
                 }
@@ -123,7 +125,7 @@ macro_rules! set_default_camera {
         let camera = $camera;
         $crate::send_command($crate::CommandFunction {
             run: Box::new(move |game| {
-                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
                 scene.set_active_camera(camera);
             }),
         });
@@ -169,9 +171,8 @@ macro_rules! set_instance_transform {
 macro_rules! add_model3d {
     ( $name:expr, $object:expr ) => {{
         match $crate::send_command_with_result(move |game| {
-            let scene = match game.components.get_mut::<$crate::WorldScene>() {
-                Ok(scene) => scene,
-                Err(_) => return Err("No WorldScene registered".to_string()),
+            let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else {
+                return Err("No WorldScene registered".to_string());
             };
 
             let model = $crate::Model3d {

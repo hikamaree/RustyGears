@@ -84,6 +84,21 @@ impl Game {
         }
     }
 
+    /// Queues a setup function to be called later during initialization.
+    ///
+    /// # Arguments
+    /// * `setupfn` - A closure that takes a mutable reference to the game instance
+    ///   and performs any desired setup logic (e.g. spawning models, adding systems).
+    ///
+    /// The setup functions are deferred and can be executed later in a controlled manner.
+    ///
+    /// # Returns
+    /// A new `Game` instance with the setup function added to its queue.
+    pub fn setup<F: FnOnce(&mut Game) + Send + 'static>(mut self, setupfn: F) -> Self { 
+        self.setupfns.push_back(Box::new(setupfn));
+        self
+    }
+
     /// Starts the main game loop using the event system.
     ///
     /// Creates a new `EventLoop` and begins running the application,
@@ -112,18 +127,24 @@ impl Game {
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
     pub fn add_gear<T: Gear + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
-        let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
-        self.gear_channels.insert(id.clone(), gear_sender.clone());
+        // let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
+        // self.gear_channels.insert(id.clone(), gear_sender.clone());
 
-        let gameview = GameView {
-            components: self.components.get_view(),
-        };
+        let gameview = GameView::new(self.components.clone());
 
         let runtime = self.runtime.clone();
 
         std::thread::spawn(move || {
             runtime.block_on(async move {
                 gear.setup(&gameview).await;
+                crate::log!(crate::LogKind::Info, "Gear {} is ready", id);
+
+                let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
+                crate::send_command(GearSetupFinished {
+                    id,
+                    gear_channel: gear_sender,
+                });
+
                 while let Ok(msg) = gear_receiver.recv() {
                     match msg.gear_event {
                         GearEvent::Update() => {
@@ -140,21 +161,6 @@ impl Game {
             })
         });
 
-        self
-    }
-
-    /// Queues a setup function to be called later during initialization.
-    ///
-    /// # Arguments
-    /// * `setupfn` - A closure that takes a mutable reference to the game instance
-    ///   and performs any desired setup logic (e.g. spawning models, adding systems).
-    ///
-    /// The setup functions are deferred and can be executed later in a controlled manner.
-    ///
-    /// # Returns
-    /// A new `Game` instance with the setup function added to its queue.
-    pub fn setup<F: FnOnce(&mut Game) + Send + 'static>(mut self, setupfn: F) -> Self { 
-        self.setupfns.push_back(Box::new(setupfn));
         self
     }
 
@@ -189,30 +195,40 @@ impl Game {
     /// game.dispatch_event(GearEvent::Update());
     /// ```
     pub fn dispatch_event(&mut self, event: GearEvent) {
-        let engine = self.components.get_view();
-
         let mut dead_gears = Vec::new();
+
+        let mut pending_gear_updates = 0;
 
         for (id, sender) in &self.gear_channels {
             let gear_event = event.clone();
 
             let result = sender.send(GearMessage {
                 gear_event,
-                game: GameView {
-                    components: engine.clone(),
-                },
+                game: GameView::new(self.components.clone())
             });
 
             if let Err(_err) = result {
                 dead_gears.push(id.clone());
+            } else {
+                pending_gear_updates += 1;
             }
         }
 
         for id in dead_gears {
             self.gear_channels.remove(&id);
+            if self.gear_channels.is_empty() {
+                std::process::exit(0);
+            }
         }
 
-        let mut pending_gear_updates = self.gear_channels.len();
+        // let mut cmds: VecDeque<Box<dyn Command>> = VecDeque::new();
+
+        while self.gear_channels.len() == 0 {
+            if let Ok(cmd) = self.command_receiver.recv() {
+                cmd.apply(self);
+                // cmds.push_back(cmd);
+            }
+        }
 
         while pending_gear_updates > 0 {
             if let Ok(cmd) = self.command_receiver.recv() {
@@ -220,8 +236,24 @@ impl Game {
                     pending_gear_updates -= 1;
                 } else {
                     cmd.apply(self);
+                    // cmds.push_back(cmd);
                 }
             }
         }
+
+        // for cmd in cmds {
+        //     cmd.apply(self);
+        // }
+    }
+}
+
+pub struct GearSetupFinished {
+    pub id: String,
+    pub gear_channel: Sender<GearMessage>,
+}
+
+impl Command for GearSetupFinished {
+    fn apply(self: Box<Self>, game: &mut Game) {
+        game.gear_channels.insert(self.id.clone(), self.gear_channel);
     }
 }
