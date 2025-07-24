@@ -53,12 +53,12 @@ impl ApplicationHandler for Game {
 
         match event {
             WindowEvent::CloseRequested => {
-                self.dispatch_event(GearEvent::Exit());
+                self.dispatch_event(GearEvent::Exit);
                 event_loop.exit();
             }
 
             WindowEvent::RedrawRequested => {
-                self.dispatch_event(GearEvent::Update());
+                self.dispatch_event(GearEvent::Update);
 
                 if let Ok(mut time) = self.components.get_mut::<Time>() {
                     time.update();

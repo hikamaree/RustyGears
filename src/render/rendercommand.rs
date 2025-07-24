@@ -15,7 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Camera;
 use egui_wgpu::ScreenDescriptor;
 use crate::EguiRenderer;
 use crate::DrawModel;
@@ -55,24 +54,9 @@ pub struct RenderCommand {
 
 impl Command for RenderCommand {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+        let Ok(scene) = game.components.get::<WorldScene>() else {
             return;
         };
-
-        let Some(camera_entity) = scene.active_camera else {
-            return;
-        };
-
-        let final_transform = scene.get_camera_transform(camera_entity);
-
-        let _ = game.components.with::<Graphics, _>(|graphics| {
-            if let Some(camera) = scene.world.get_mut::<Camera>(camera_entity) {
-                camera.update_view_proj(&final_transform, &graphics.projection);
-                graphics.update(camera);
-            }
-
-            graphics.t_count = 0;
-        });
 
         let Ok(graphics) = game.components.get::<Graphics>() else {
             return;
@@ -81,7 +65,7 @@ impl Command for RenderCommand {
         let output = match graphics.surface.get_current_texture() {
             Ok(frame) => frame,
             Err(e) => {
-                crate::log!(crate::LogKind::Error, "Failed to get current texture: {e:?}");
+                crate::log!(crate::LogKind::Error, "Failed to get surface texture: {e:?}");
                 return;
             }
         };
@@ -92,20 +76,14 @@ impl Command for RenderCommand {
             label: Some("Render Encoder"),
         });
 
-        let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [graphics.config.width, graphics.config.height],
-            pixels_per_point: graphics.window.scale_factor() as f32,
-        };
-
         drop(graphics);
 
         let _ = game.components.with::<Graphics, _>(|graphics| {
-            let camera_bgo = graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera).clone();
-            let light_bgo = graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light).clone();
+            graphics.t_count = 0;
 
             if let (Some(camera_bg), Some(light_bg)) = (
-                camera_bgo,
-                light_bgo
+                graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera),
+                graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light)
             ) {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Main Render Pass"),
@@ -156,19 +134,28 @@ impl Command for RenderCommand {
                                     &model_data.mesh_ranges,
                                 );
                             }
-
-
                         }
                     }
                 }
             }
         });
 
+        drop(scene);
+
+        let gameview = GameView::new(game.components.clone());
+
         let Ok(graphics) = game.components.get::<Graphics>() else {
             return;
         };
 
-        let gameview = GameView::new(game.components.clone());
+        let screen_descriptor = ScreenDescriptor {
+            size_in_pixels: [graphics.config.width, graphics.config.height],
+            pixels_per_point: graphics.window.scale_factor() as f32,
+        };
+
+        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+            return;
+        };
 
         let _ = game.components.with::<EguiRenderer, _>(|gui| {
             gui.draw(

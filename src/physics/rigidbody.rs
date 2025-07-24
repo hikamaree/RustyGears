@@ -40,7 +40,7 @@ impl RigidBody {
         Self {
             velocity: Vector3::zero(),
             forces: Vector3::zero(),
-            mass: f32::INFINITY, // I don't know physics, maybe should be 0.0
+            mass: f32::INFINITY,
             is_static: true,
         }
     }

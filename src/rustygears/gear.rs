@@ -90,19 +90,18 @@ pub trait Gear: Any + Send + Sync {
 
 /// Represents different types of events that can occur in the system.
 /// Each variant corresponds to a specific action, such as updating, rendering, or handling user input.
-
 #[derive(Debug, Clone)]
+#[derive(PartialEq)]
 pub enum GearEvent {
-
     /// Dispatched when an update cycle occurs (e.g., physics or logic update).
     ///
     /// ### Example Usage
     /// ```rust
-    /// if let GearEvent::Update() = event {
+    /// if let GearEvent::Update = event {
     ///     println!("Updating...");
     /// }
     /// ```
-    Update(),
+    Update,
 
     /// Signals that the gear thread should shut down gracefully.
     ///
@@ -111,11 +110,11 @@ pub enum GearEvent {
     ///
     /// ### Example Usage
     /// ```rust
-    /// if let GearEvent::Exit() = event {
+    /// if let GearEvent::Exit = event {
     ///     println!("Shutting down gear...");
     /// }
     /// ```
-    Exit(),
+    Exit,
 }
 
 /// Message sent to a gear thread containing an event and a view of the game state.
@@ -137,10 +136,4 @@ pub enum GearEvent {
 pub struct GearMessage {
     pub gear_event: GearEvent,
     pub game: GameView,
-}
-
-pub struct UpdateDoneCommand;
-
-impl crate::Command for UpdateDoneCommand {
-    fn apply(self: Box<Self>, _: &mut Game) {}
 }

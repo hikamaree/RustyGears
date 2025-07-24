@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::CommandFunction;
 use crate::RenderObject;
 use crate::Camera;
 use crate::Model3d;
@@ -204,6 +205,26 @@ impl Render {
             .collect();
 
         crate::send_command(RenderCommand { batches });
+        crate::send_command(CommandFunction {
+            run: Box::new(move |game: &mut crate::Game| {
+                let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+                    return;
+                };
+
+                let Some(camera_entity) = scene.active_camera else {
+                    return;
+                };
+
+                let final_transform = scene.get_camera_transform(camera_entity);
+
+                let _ = game.components.with::<crate::Graphics, _>(|graphics| {
+                    if let Some(camera) = scene.world.get_mut::<crate::Camera>(camera_entity) {
+                        camera.update_view_proj(&final_transform, &graphics.projection);
+                        graphics.update(camera);
+                    }
+                });
+            }),
+        });
     }
 }
 

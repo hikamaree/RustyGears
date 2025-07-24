@@ -79,13 +79,13 @@ impl MyGame {
     }
 
     async fn mouse_motion(&mut self, game: &GameView) {
-        let Ok(input) = game.components.get::<Input>() else {
+        let Ok(input) = game.get::<Input>() else {
             return;
         };
 
         let mm = input.mouse_delta();
 
-        let Ok(scene) = game.components.get::<WorldScene>() else {
+        let Ok(scene) = game.get::<WorldScene>() else {
             return;
         };
 
@@ -139,15 +139,15 @@ impl MyGame {
 
 
     async fn keyboard_input(&mut self, game: &GameView) {
-        let Ok(scene) = game.components.get::<WorldScene>() else {
+        let Ok(scene) = game.get::<WorldScene>() else {
             return;
         };
 
-        let Ok(input) = game.components.get::<Input>() else {
+        let Ok(input) = game.get::<Input>() else {
             return;
         };
 
-        let Ok(time) = game.components.get::<Time>() else {
+        let Ok(time) = game.get::<Time>() else {
             return;
         };
 
@@ -258,7 +258,7 @@ impl Gear for MyGame {
         };
 
         const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 1;
+        const NUM_INSTANCES_PER_ROW: usize = 64;
 
         let positions = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {

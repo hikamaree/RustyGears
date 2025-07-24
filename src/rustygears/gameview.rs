@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::ReadGuardWrapper;
+use super::ReadGuardWrapper;
 use super::ComponentMap;
 
 /// A read-only view of the current game state, provided to [`Gear`]s when handling events.

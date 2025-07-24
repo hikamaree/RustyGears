@@ -105,7 +105,6 @@ pub fn intersect_aabb_aabb(a: &Aabb, ta: &Matrix4<f32>, b: &Aabb, tb: &Matrix4<f
         return None;
     }
 
-    // Osa minimalne penetracije → pravimo normalu
     let (axis, _) = [
         (Vector3::unit_x() * delta.x.signum(), overlap_x),
         (Vector3::unit_y() * delta.y.signum(), overlap_y),

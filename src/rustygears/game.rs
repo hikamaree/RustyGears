@@ -127,9 +127,6 @@ impl Game {
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
     pub fn add_gear<T: Gear + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
-        // let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
-        // self.gear_channels.insert(id.clone(), gear_sender.clone());
-
         let gameview = GameView::new(self.components.clone());
 
         let runtime = self.runtime.clone();
@@ -147,13 +144,13 @@ impl Game {
 
                 while let Ok(msg) = gear_receiver.recv() {
                     match msg.gear_event {
-                        GearEvent::Update() => {
+                        GearEvent::Update => {
                             gear.update(msg.game).await;
-                            crate::send_command(super::UpdateDoneCommand);
+                            crate::send_command(UpdateDoneCommand);
                         },
-                        GearEvent::Exit() => {
+                        GearEvent::Exit => {
                             gear.exit(msg.game).await;
-                            crate::send_command(super::UpdateDoneCommand);
+                            crate::send_command(UpdateDoneCommand);
                             break;
                         }
                     }
@@ -192,7 +189,7 @@ impl Game {
     /// # Example
     ///
     /// ```rust
-    /// game.dispatch_event(GearEvent::Update());
+    /// game.dispatch_event(GearEvent::Update);
     /// ```
     pub fn dispatch_event(&mut self, event: GearEvent) {
         let mut dead_gears = Vec::new();
@@ -216,38 +213,31 @@ impl Game {
 
         for id in dead_gears {
             self.gear_channels.remove(&id);
-            if self.gear_channels.is_empty() {
-                std::process::exit(0);
-            }
         }
-
-        // let mut cmds: VecDeque<Box<dyn Command>> = VecDeque::new();
 
         while self.gear_channels.len() == 0 {
             if let Ok(cmd) = self.command_receiver.recv() {
                 cmd.apply(self);
-                // cmds.push_back(cmd);
             }
         }
 
         while pending_gear_updates > 0 {
             if let Ok(cmd) = self.command_receiver.recv() {
-                if (&*cmd as &dyn std::any::Any).downcast_ref::<crate::UpdateDoneCommand>().is_some() {
+                if (&*cmd as &dyn std::any::Any).downcast_ref::<UpdateDoneCommand>().is_some() {
                     pending_gear_updates -= 1;
                 } else {
                     cmd.apply(self);
-                    // cmds.push_back(cmd);
                 }
             }
         }
 
-        // for cmd in cmds {
-        //     cmd.apply(self);
-        // }
+        if event == GearEvent::Exit {
+            std::process::exit(0);
+        }
     }
 }
 
-pub struct GearSetupFinished {
+struct GearSetupFinished {
     pub id: String,
     pub gear_channel: Sender<GearMessage>,
 }
@@ -256,4 +246,10 @@ impl Command for GearSetupFinished {
     fn apply(self: Box<Self>, game: &mut Game) {
         game.gear_channels.insert(self.id.clone(), self.gear_channel);
     }
+}
+
+struct UpdateDoneCommand;
+
+impl crate::Command for UpdateDoneCommand {
+    fn apply(self: Box<Self>, _: &mut Game) {}
 }
