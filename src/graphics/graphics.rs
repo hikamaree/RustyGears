@@ -332,7 +332,7 @@ impl Graphics {
         let light_uniform = LightUniform {
             position: [0.0, 100.0, -20.0],
             _padding: 0,
-            color: [1.0, 1.0, 1.0],
+            color: [0.0, 0.0, 0.0],
             _padding2: 0,
         };
 

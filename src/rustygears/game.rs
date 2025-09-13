@@ -221,14 +221,20 @@ impl Game {
             }
         }
 
+        let mut commands: Vec<Box<dyn Command>> = vec![];
+
         while pending_gear_updates > 0 {
             if let Ok(cmd) = self.command_receiver.recv() {
                 if (&*cmd as &dyn std::any::Any).downcast_ref::<UpdateDoneCommand>().is_some() {
                     pending_gear_updates -= 1;
                 } else {
-                    cmd.apply(self);
+                    commands.push(cmd);
                 }
             }
+        }
+
+        for cmd in commands {
+            cmd.apply(self);
         }
 
         if event == GearEvent::Exit {

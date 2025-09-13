@@ -17,7 +17,6 @@
 
 use crate::GameView;
 use std::any::Any;
-use crate::Game;
 
 /// # Gear Trait and GearEvent Enum
 ///

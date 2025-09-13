@@ -15,23 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-/// A uniform representing a single light in world space.
-///
-/// This structure is intended to be uploaded to the GPU as a uniform buffer
-/// and should be tightly packed. Padding fields are included to ensure proper
-/// 16-byte alignment required by `wgpu` and most GPU drivers.
-///
-/// # Layout (std140-compatible):
-/// - `position`: The world-space position of the light (vec3)  
-/// - `_padding`: Padding to align `position` to 16 bytes  
-/// - `color`: The RGB color of the light (vec3)  
-/// - `_padding2`: Padding to align `color` to 16 bytes
-///
-/// # Fields
-/// - `position`: 3D position of the light in world coordinates.
-/// - `_padding`: Required padding to satisfy 16-byte alignment for uniform buffers.
-/// - `color`: RGB color of the light.
-/// - `_padding2`: Required padding after `color` to ensure alignment.
+use cgmath::InnerSpace;
+use crate::Transform;
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct LightUniform {
@@ -39,4 +25,99 @@ pub struct LightUniform {
     pub _padding: u32,
     pub color: [f32; 3],
     pub _padding2: u32,
+}
+
+pub trait Light {
+    fn to_gpu(&self, transform: &Transform) -> GpuLight;
+}
+
+#[repr(u32)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum GpuLightType {
+    Point = 0,
+    Directional = 1,
+    Spot = 2,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuLight {
+    pub position: [f32; 3],
+    pub radius: f32,
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub direction: [f32; 3],
+    pub light_type: u32,
+    pub spot_angles: [f32; 2],
+    pub _padding: [u32; 2],
+}
+
+#[derive(Clone, Copy)]
+pub struct PointLight {
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub radius: f32,
+}
+
+#[derive(Clone, Copy)]
+pub struct DirectionalLight {
+    pub color: [f32; 3],
+    pub intensity: f32,
+}
+
+#[derive(Clone, Copy)]
+pub struct SpotLight {
+    pub color: [f32; 3],
+    pub intensity: f32,
+    pub radius: f32,
+    pub inner_angle: f32,
+    pub outer_angle: f32,
+}
+
+impl Light for PointLight {
+    fn to_gpu(&self, transform: &Transform) -> GpuLight {
+        GpuLight {
+            position: transform.position.into(),
+            radius: self.radius,
+            color: self.color,
+            intensity: self.intensity,
+            direction: [0.0; 3],
+            light_type: GpuLightType::Point as u32,
+            spot_angles: [0.0, 0.0],
+            _padding: [0; 2],
+        }
+    }
+}
+
+impl Light for DirectionalLight {
+    fn to_gpu(&self, transform: &Transform) -> GpuLight {
+        GpuLight {
+            position: [0.0; 3],
+            radius: 0.0,
+            color: self.color,
+            intensity: self.intensity,
+            direction: (-transform.forward()).normalize().into(),
+            light_type: GpuLightType::Directional as u32,
+            spot_angles: [0.0, 0.0],
+            _padding: [0; 2],
+        }
+    }
+}
+
+impl Light for SpotLight {
+    fn to_gpu(&self, transform: &Transform) -> GpuLight {
+        GpuLight {
+            position: transform.position.into(),
+            radius: self.radius,
+            color: self.color,
+            intensity: self.intensity,
+            direction: (-transform.forward()).normalize().into(),
+            light_type: GpuLightType::Spot as u32,
+            spot_angles: [
+                self.inner_angle.cos(),
+                self.outer_angle.cos(),
+            ],
+            _padding: [0; 2],
+        }
+    }
 }

@@ -390,7 +390,7 @@ mod tests {
             });
 
         for _ in 0..10 {
-            game.dispatch_event(GearEvent::Update());
+            game.dispatch_event(aearEvent::Update());
         }
     }
 }
