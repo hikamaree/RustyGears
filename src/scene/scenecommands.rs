@@ -44,18 +44,16 @@ impl Command for CommandFunction {
 #[macro_export]
 macro_rules! spawn_entity {
     ( $( $comp:expr ),* $(,)? ) => {{
-        $crate::send_command_with_result(move |game| {
-            let mut scene = match game.components.get_mut::<$crate::WorldScene>() {
-                Ok(scene) => scene,
-                Err(_) => todo!(),
-            };
-
-            let mut builder = scene.spawn();
-            $(
-                builder = builder.with($comp);
-            )*
-            builder.build()
-        })
+        let entity = $crate::Entity::new();
+        $crate::send_command($crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
+                $(
+                    scene.world.insert(entity, $comp);
+                )*
+            }),
+        });
+        entity
     }};
 }
 

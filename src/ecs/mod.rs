@@ -23,4 +23,4 @@ mod entity;
 pub use command::*;
 pub use world::*;
 pub use scene::*;
-pub(crate) use entity::*;
+pub use entity::*;

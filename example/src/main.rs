@@ -213,9 +213,8 @@ impl MyGame {
             };
 
             if let Some(block) = self.block.clone() {
-                if let Some(x) = spawn_entity!(transform).await {
-                    add_components!(x, block);
-                }
+                let x = spawn_entity!(transform);
+                add_components!(x, block);
             }
         }
     }
@@ -280,7 +279,7 @@ impl Gear for MyGame {
                 lods: vec![miku_lod0.clone(), miku_lod1.clone(), miku_lod2.clone()],
             };
 
-            spawn_entity!(miku.clone(), transform).await;
+            spawn_entity!(miku.clone(), transform);
         }
 
         // random scene //
@@ -292,7 +291,7 @@ impl Gear for MyGame {
         };
 
         if let Some(scene1) = load_obj_model!("scene1/scene1.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene1] }, transform).await;
+            spawn_entity!(RenderObject{ lods: vec![scene1] }, transform);
         };
 
         let transform = Transform { 
@@ -302,7 +301,7 @@ impl Gear for MyGame {
         };
 
         if let Some(scene2) = load_obj_model!("scene2/scene2.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene2] }, transform).await;
+            spawn_entity!( RenderObject{ lods: vec![scene2] }, transform);
         };
 
         let transform = Transform { 
@@ -312,7 +311,7 @@ impl Gear for MyGame {
         };
 
         if let Some(scene3) = load_obj_model!("scene3/scene3.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene3] }, transform).await;
+            spawn_entity!( RenderObject{ lods: vec![scene3] }, transform);
         };
 
         let transform = Transform { 
@@ -322,7 +321,7 @@ impl Gear for MyGame {
         };
 
         if let Some(scene4) = load_obj_model!("scene4/scene4.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene4] }, transform).await;
+            spawn_entity!( RenderObject{ lods: vec![scene4] }, transform);
         };
 
         //landscape//
@@ -344,7 +343,7 @@ impl Gear for MyGame {
             return;
         };
 
-        let entity = spawn_entity!(RenderObject{lods: vec![landscape_model3d]}, landscape, Transform::identity()).await;
+        let entity = spawn_entity!(RenderObject{lods: vec![landscape_model3d]}, landscape, Transform::identity());
 
         log!(LogKind::Info, "landscape loaded as {:?}", entity);
     }
@@ -390,7 +389,7 @@ mod tests {
             });
 
         for _ in 0..10 {
-            game.dispatch_event(aearEvent::Update());
+            game.dispatch_event(GearEvent::Update);
         }
     }
 }

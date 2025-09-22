@@ -15,13 +15,43 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::Entity;
+// use crate::Entity;
 use crate::Component;
 use crate::World;
 
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+
+static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// Represents a unique entity within the ECS world.
+///
+/// Each entity is identified by a unique `u32` ID. Entities themselves do not store any data;
+/// all meaningful data is stored in components associated with the entity through the `World`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Entity {
+    id: u64
+}
+
+impl Entity {
+    pub fn new() -> Self {
+        Self {
+            id: ID_COUNTER.fetch_add(1, Ordering::Relaxed),
+        }
+    }
+
+    pub fn get(id: u64) -> Entity {
+        Self { id }
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+}
+
 pub struct EntityBuilder<'a> {
-    pub(crate) world: &'a mut World,
-    pub(crate) entity: Entity,
+    pub world: &'a mut World,
+    pub entity: Entity,
 }
 
 impl<'a> EntityBuilder<'a> {

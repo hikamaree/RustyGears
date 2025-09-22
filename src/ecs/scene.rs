@@ -83,7 +83,7 @@ impl WorldScene {
     /// # Returns
     /// - `EntityBuilder` for chaining component insertions.
     pub fn spawn(&mut self) -> EntityBuilder<'_> {
-        let entity = self.world.spawn();
+        let entity = Entity::new();
         EntityBuilder {
             world: &mut self.world,
             entity,

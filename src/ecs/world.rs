@@ -17,15 +17,9 @@
 
 use std::collections::HashMap;
 
+use crate::Entity;
 use std::any::TypeId;
 use std::any::Any;
-
-/// Represents a unique entity within the ECS world.
-///
-/// Each entity is identified by a unique `u32` ID. Entities themselves do not store any data;
-/// all meaningful data is stored in components associated with the entity through the `World`.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct Entity(u32);
 
 /// Marker trait for all types that can be used as components in the ECS.
 ///
@@ -88,7 +82,7 @@ impl ComponentStorage {
 
 /// Represents an Entity-Component-System (ECS) world.
 ///
-/// The `World` manages entity identifiers and component storage. Each component type
+/// The `World` manages entity.id()entifiers and component storage. Each component type
 /// is stored in a type-erased vector that maps entity IDs to component instances.
 ///
 /// This ECS implementation supports:
@@ -97,7 +91,6 @@ impl ComponentStorage {
 /// - Querying entities with 1 to 4 component types
 #[derive(Default)]
 pub struct World {
-    next_id: u32,
     storage: ComponentStorage,
     capacity: usize,
 }
@@ -109,7 +102,6 @@ impl World {
     /// A new, empty `World`.
     pub fn new() -> Self {
         Self {
-            next_id: 0,
             storage: ComponentStorage::new(),
             capacity: 64,
         }
@@ -122,9 +114,7 @@ impl World {
     /// # Returns
     /// A new `Entity`.
     pub fn spawn(&mut self) -> Entity {
-        let id = self.next_id;
-        self.next_id += 1;
-        Entity(id)
+        Entity::new()
     }
 
     /// Inserts a component for a specific entity.
@@ -143,11 +133,11 @@ impl World {
             return;
         };
 
-        if entity.0 as usize >= vec.len() {
-            vec.resize_with(entity.0 as usize + 1, || None);
+        if entity.id() as usize >= vec.len() {
+            vec.resize_with(entity.id() as usize + 1, || None);
         }
 
-        vec[entity.0 as usize] = Some(component);
+        vec[entity.id() as usize] = Some(component);
     }
 
     /// Retrieves an immutable reference to a component for the given entity.
@@ -157,7 +147,7 @@ impl World {
     /// - `None` otherwise.
     pub fn get<T: Component>(&self, entity: Entity) -> Option<&T> {
         self.storage.get_slice::<T>()
-            .and_then(|vec| vec.get(entity.0 as usize).and_then(|opt| opt.as_ref()))
+            .and_then(|vec| vec.get(entity.id() as usize).and_then(|opt| opt.as_ref()))
     }
 
     /// Retrieves a mutable reference to a component for the given entity.
@@ -167,7 +157,7 @@ impl World {
     /// - `None` otherwise.
     pub fn get_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
         self.storage.get_slice_mut::<T>()
-            .and_then(|vec| vec.get_mut(entity.0 as usize).and_then(|opt| opt.as_mut()))
+            .and_then(|vec| vec.get_mut(entity.id() as usize).and_then(|opt| opt.as_mut()))
     }
 
     /// Removes a component of a specific type from an entity.
@@ -176,7 +166,7 @@ impl World {
     /// - `entity`: The entity ID.
     pub fn remove<T: Component>(&mut self, entity: Entity) {
         if let Some(vec) = self.storage.get_slice_mut::<T>() {
-            if let Some(slot) = vec.get_mut(entity.0 as usize) {
+            if let Some(slot) = vec.get_mut(entity.id() as usize) {
                 *slot = None;
             }
         }
@@ -197,7 +187,7 @@ impl World {
     pub fn query1<'a, T: Component>(&'a self) -> Vec<(Entity, &'a T)> {
         match self.storage.get_slice::<T>() {
             Some(slice) => slice.iter().enumerate()
-                .filter_map(|(i, opt)| opt.as_ref().map(|c| (Entity(i as u32), c)))
+                .filter_map(|(i, opt)| opt.as_ref().map(|c| (Entity::get(i as u64), c)))
                 .collect(),
             None => vec![],
         }
@@ -222,7 +212,7 @@ impl World {
         let mut result = Vec::new();
         for i in 0..len {
             if let (Some(a), Some(b)) = (&slice_a[i], &slice_b[i]) {
-                result.push((Entity(i as u32), a, b));
+                result.push((Entity::get(i as u64), a, b));
             }
         }
 
@@ -244,7 +234,7 @@ impl World {
                 let mut result = Vec::new();
                 for i in 0..len {
                     if let (Some(aa), Some(bb), Some(cc)) = (&a[i], &b[i], &c[i]) {
-                        result.push((Entity(i as u32), aa, bb, cc));
+                        result.push((Entity::get(i as u64), aa, bb, cc));
                     }
                 }
                 result
@@ -270,7 +260,7 @@ impl World {
                 let mut result = Vec::new();
                 for i in 0..len {
                     if let (Some(aa), Some(bb), Some(cc), Some(dd)) = (&a[i], &b[i], &c[i], &d[i]) {
-                        result.push((Entity(i as u32), aa, bb, cc, dd));
+                        result.push((Entity::get(i as u64), aa, bb, cc, dd));
                     }
                 }
                 result
