@@ -81,14 +81,17 @@ impl Render {
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
         let Ok(scene) = game.get::<WorldScene>() else {
+            crate::send_command(RenderCommand { batches: vec![] });
             return;
         };
 
         let Some(camera_entity) = scene.active_camera else {
+            crate::send_command(RenderCommand { batches: vec![] });
             return;
         };
 
         let Some(camera) = scene.world.get::<Camera>(camera_entity) else {
+            crate::send_command(RenderCommand { batches: vec![] });
             return;
         };
 
@@ -211,15 +214,9 @@ impl Render {
                     return;
                 };
 
-                let Some(camera_entity) = scene.active_camera else {
-                    return;
-                };
-
-                let final_transform = scene.get_camera_transform(camera_entity);
-
                 let _ = game.components.with::<crate::Graphics, _>(|graphics| {
                     if let Some(camera) = scene.world.get_mut::<crate::Camera>(camera_entity) {
-                        camera.update_view_proj(&final_transform, &graphics.projection);
+                        camera.update_view_proj(&camera_transform, &graphics.projection);
                         graphics.update(camera);
                     }
                 });

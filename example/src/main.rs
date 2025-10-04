@@ -34,46 +34,12 @@ struct MyGame {
 }
 
 impl MyGame {
-    fn new(game: &mut Game) -> Result<Self, String> {
-        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
-            return Err("Filed to get scene".to_string());
-        };
-
-        let transform = Transform {
-            position: vec3(0.0, 0.0, 0.0),
-            rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0) 
-        };
-
-        let truck = scene.spawn()
-            .with(transform)
-            .build();
-
-        let camera1 = scene.spawn()
-            .with(Camera::new())
-            .with(Transform::identity())
-            .with(CameraControl {
-                handler: Box::new(FreeFlyCamera::new()),
-            })
-            .build();
-
-        scene.set_active_camera(camera1);
-
-        let camera2 = scene.spawn()
-            .with(Camera::new())
-            .with(CameraControl {
-                handler: Box::new(CameraFollow{
-                    target: truck,
-                    position_offset: vec3(0.0, 20.0, -60.0),
-                    rotation_offset: Quaternion::one()
-                })
-            }).build();
-
+    fn new() -> Result<Self, String> {
         Ok(Self {
-            truck,
+            truck: Entity::new(),
             h: 0.0,
-            camera1,
-            camera2,
+            camera1: Entity::new(),
+            camera2: Entity::new(),
             block: None,
         })
     }
@@ -166,6 +132,10 @@ impl MyGame {
         let forward = cam_handle.forward();
         let right = cam_handle.right();
 
+        if input.is_key_pressed(KeyCode::KeyX) {
+            load_obj_model("scene1/scene1.obj", game);
+        }
+
         if input.is_key_pressed(KeyCode::KeyC) {
             let Some(active_camera) = scene.active_camera else {
                 return;
@@ -222,39 +192,50 @@ impl MyGame {
 
 impl Gear for MyGame {
     async fn setup(&mut self, game: &GameView) {
-        if let Some(block) = load_obj_model!("truck/semi.obj", game) {
-            self.block = Some(RenderObject {
-                lods: vec![block]
-            });
+        
+        let transform = Transform {
+            position: vec3(0.0, 0.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0) 
         };
 
-        let Some(truck_lod0) = load_obj_model!("truck/semi.obj", game) else {
-            return;
-        };
+        let truck = spawn_entity!(transform);
 
-        let Some(truck_lod1) = load_obj_model!("truck/semi_lod1.obj", game) else {
-            return;
-        };
+        let camera1 = spawn_entity!(Camera::new(), Transform::identity(), CameraControl { handler: Box::new(FreeFlyCamera::new()) });
+        set_default_camera!(camera1);
+        self.camera1 = camera1;
 
-        let Some(truck_lod2) = load_obj_model!("truck/semi_lod2.obj", game) else {
-            return;
-        };
+        let camera2 = spawn_entity!(Camera::new(), CameraControl { handler: Box::new(CameraFollow{
+                    target: truck,
+                    position_offset: vec3(0.0, 20.0, -60.0),
+                    rotation_offset: Quaternion::one()
+            })
+        });
+        self.camera2 = camera2;
+        self.truck = truck;
+
+        // Kick off asynchronous model loading in the background. These return Model3d handles
+        // immediately so the setup doesn't block while files are parsed and GPU buffers created.
+        let block = load_obj_model("truck/semi.obj", game);
+        self.block = Some(RenderObject {
+            lods: vec![block]
+        });
+
+        let truck_lod0 = load_obj_model("truck/semi.obj", game);
+
+        let truck_lod1 = load_obj_model("truck/semi_lod1.obj", game);
+
+        let truck_lod2 = load_obj_model("truck/semi_lod2.obj", game);
 
         add_components!(self.truck, RenderObject {lods: vec![truck_lod0, truck_lod1, truck_lod2]});
 
         // miku //
 
-        let Some(miku_lod0) = load_obj_model!("miku/miku.obj", game) else {
-            return;
-        };
+    let miku_lod0 = load_obj_model("miku/miku.obj", game);
 
-        let Some(miku_lod1) = load_obj_model!("miku/miku_lod1.obj", game) else {
-            return;
-        };
+    let miku_lod1 = load_obj_model("miku/miku_lod1.obj", game);
 
-        let Some(miku_lod2) = load_obj_model!("miku/miku_lod2.obj", game) else {
-            return;
-        };
+    let miku_lod2 = load_obj_model("miku/miku_lod2.obj", game);
 
         const SPACE_BETWEEN: f32 = 15.0;
         const NUM_INSTANCES_PER_ROW: usize = 64;
@@ -284,47 +265,28 @@ impl Gear for MyGame {
 
         // random scene //
 
-        let transform = Transform {
-            position: vec3(0.0, 0.0, 0.0),
-            rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0)
-        };
-
-        if let Some(scene1) = load_obj_model!("scene1/scene1.obj", game) {
-            spawn_entity!(RenderObject{ lods: vec![scene1] }, transform);
-        };
-
-        let transform = Transform { 
-            position: vec3(40.0, 0.0, 0.0),
-            rotation: Quaternion::one(),
-            scale: vec3(0.5, 0.5, 0.5)
-        };
-
-        if let Some(scene2) = load_obj_model!("scene2/scene2.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene2] }, transform);
-        };
-
         let transform = Transform { 
             position: vec3(0.0, 0.0, 40.0),
             rotation: Quaternion::one(),
             scale: vec3(7.0, 7.0, 7.0)
         };
 
-        if let Some(scene3) = load_obj_model!("scene3/scene3.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene3] }, transform);
+    let scene3 = load_obj_model("scene3/scene3.obj", game);
+        spawn_entity!( RenderObject{ lods: vec![scene3] }, transform);
+
+        let transform = Transform {
+            position: vec3(0.0, 0.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(1.0, 1.0, 1.0)
         };
 
-        let transform = Transform { 
-            position: vec3(25.0, 0.0, 20.0),
-            rotation: Quaternion::from_axis_angle(Vector3::unit_y(), Rad(std::f32::consts::PI)),
-            scale: vec3(0.3, 0.3, 0.3)
-        };
+    let scene1 = load_obj_model("scene1/scene1.obj", game);
+        let s1e = spawn_entity!(RenderObject{ lods: vec![scene1] }, transform);
 
-        if let Some(scene4) = load_obj_model!("scene4/scene4.obj", game) {
-            spawn_entity!( RenderObject{ lods: vec![scene4] }, transform);
-        };
+        log!(LogKind::Info, "scene1 entity = {:?}", s1e);
 
         //landscape//
+
 
         log!(LogKind::Info, "loading landscape");
 
@@ -338,10 +300,7 @@ impl Gear for MyGame {
             return;
         };
 
-        let Some(landscape_model3d) = add_model3d!("landscape", landscape_mesh) else {
-            log!(LogKind::Error, "failed to make model3d for landscape");
-            return;
-        };
+        let landscape_model3d = add_model3d("landscape", landscape_mesh);
 
         let entity = spawn_entity!(RenderObject{lods: vec![landscape_model3d]}, landscape, Transform::identity());
 
@@ -354,18 +313,19 @@ impl Gear for MyGame {
     }
 }
 
-pub fn main() {
+#[tokio::main]
+pub async fn main() {
     Game::new().setup(|game| {
         game.add_gear("render".into(), Render::default());
-        if let Ok(mygame) = MyGame::new(game) {
-            game.add_gear("mygame".into(), mygame);
-        }
-    }).setup(|game| {
         let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
             return;
         };
         scene.add_gui(EngineStats::new());
         scene.add_gui(TerminalGui::new(default_terminal_commands()));
+    }).setup(|game| {
+        if let Ok(mygame) = MyGame::new() {
+            game.add_gear("mygame".into(), mygame);
+        }
     }).run();
 }
 
@@ -377,7 +337,7 @@ mod tests {
     fn test_scene_access_is_safe() {
         let mut game = Game::new()
             .setup(|game| {
-                if let Ok(mygame) = MyGame::new(game) {
+                if let Ok(mygame) = MyGame::new() {
                     game.add_gear("mygame".into(), mygame);
                 }
             }).setup(|game| {

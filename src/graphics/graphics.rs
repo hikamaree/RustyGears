@@ -65,7 +65,7 @@ pub struct Graphics {
 }
 
 impl Graphics {
-    pub(crate) async fn new(window: Arc<Window>) -> Result<Graphics, String> {
+    pub(crate) fn new(window: Arc<Window>) -> Result<Graphics, String> {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -76,27 +76,33 @@ impl Graphics {
         let surface = instance.create_surface(window.clone())
             .map_err(|e| format!("Failed to create surface: {e}"))?;
 
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
-                compatible_surface: Some(&surface),
-                force_fallback_adapter: false,
-            })
-        .await
-            .ok_or_else(|| "Failed to find a suitable GPU adapter.".to_string())?;
+        let (adapter, device, queue) = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                let adapter = instance
+                    .request_adapter(&wgpu::RequestAdapterOptions {
+                        power_preference: wgpu::PowerPreference::HighPerformance,
+                        compatible_surface: Some(&surface),
+                        force_fallback_adapter: false,
+                    })
+                .await
+                    .ok_or_else(|| "Failed to find a suitable GPU adapter.".to_string())?;
 
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    memory_hints: Default::default(),
-                },
-                None,
-            )
-            .await
-            .map_err(|e| format!("Failed to create device: {e}"))?;
+                let (device, queue) = adapter
+                    .request_device(
+                        &wgpu::DeviceDescriptor {
+                            label: None,
+                            required_features: wgpu::Features::empty(),
+                            required_limits: wgpu::Limits::default(),
+                            memory_hints: Default::default(),
+                        },
+                        None,
+                    )
+                    .await
+                    .map_err(|e| format!("Failed to create device: {e}"))?;
+
+                Ok::<_, String>((adapter, device, queue))
+            })
+        })?;
 
         let surface_caps = surface.get_capabilities(&adapter);
         let surface_format = surface_caps

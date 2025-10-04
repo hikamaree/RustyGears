@@ -40,7 +40,7 @@ use cgmath::Zero;
 /// # Fields
 /// - `lods`: A list of models sorted by LOD level, from high to low quality.
 ///           Each `Model` contains mesh data and GPU-ready geometry.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderObject {
     pub lods: Vec<Model3d>,
 }

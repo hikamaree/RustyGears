@@ -28,14 +28,11 @@ use crate::WorldScene;
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 use winit::event_loop::EventLoop;
 
 use crossbeam::channel::Receiver;
 use crossbeam::channel::Sender;
-
-use tokio::runtime::Runtime;
 
 /// Represents the core application state, managing rendering, scene data, time progression,
 /// and communication with worker threads ("gears").
@@ -53,7 +50,6 @@ pub struct Game {
     pub(crate) setupfns: VecDeque<Box<dyn FnOnce(&mut Game) + Send>>,
     pub(crate) gear_channels: HashMap<String, Sender<GearMessage>>,
     pub(crate) command_receiver: Receiver<Box<dyn Command>>,
-    pub runtime: Arc<Runtime>,
     pub components: ComponentMap,
 }
 
@@ -66,8 +62,6 @@ impl Game {
         let (command_sender, command_receiver) = crossbeam::channel::unbounded();
         crate::init_command_sender(command_sender);
 
-        let runtime: Arc<Runtime> = tokio::runtime::Runtime::new().expect("ERROR: Failed to create tokio runtime").into();
-
         let mut components = ComponentMap::new();
 
         components.insert(WorldScene::default());
@@ -79,7 +73,6 @@ impl Game {
             setupfns: VecDeque::new(),
             gear_channels: HashMap::new(),
             command_receiver,
-            runtime,
             components,
         }
     }
@@ -126,13 +119,11 @@ impl Game {
     ///
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
-    pub fn add_gear<T: Gear + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
+    pub fn add_gear<T: Gear + Send + Sync + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
         let gameview = GameView::new(self.components.clone());
-
-        let runtime = self.runtime.clone();
-
+        let handle = tokio::runtime::Handle::current();
         std::thread::spawn(move || {
-            runtime.block_on(async move {
+            handle.spawn(async move {
                 gear.setup(&gameview).await;
                 crate::log!(crate::LogKind::Info, "Gear {} is ready", id);
 
@@ -155,7 +146,7 @@ impl Game {
                         }
                     }
                 }
-            })
+            });
         });
 
         self
@@ -251,6 +242,7 @@ struct GearSetupFinished {
 impl Command for GearSetupFinished {
     fn apply(self: Box<Self>, game: &mut Game) {
         game.gear_channels.insert(self.id.clone(), self.gear_channel);
+        println!("added gear {}", self.id);
     }
 }
 

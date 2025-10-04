@@ -124,11 +124,7 @@ impl ApplicationHandler for Game {
 
         window.set_cursor_visible(false);
 
-        let Ok(rt) = tokio::runtime::Runtime::new() else {
-            return;
-        };
-
-        let Ok(graphics) = rt.block_on(Graphics::new(window.into())) else {
+        let Ok(graphics) = Graphics::new(window.into()) else {
             return;
         };
 

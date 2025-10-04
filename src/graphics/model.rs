@@ -100,18 +100,19 @@ impl Model {
     /// use std::path::Path;
     /// let model = load_model(Path::new("assets/model.obj"), &device, &queue, &material_layout).await;
     /// ```
-    pub async fn from_obj(path: &str, game: &GameView) -> Result<Model, String> {
+
+    pub fn from_obj(path: &str, game: &GameView) -> Result<Model, String> {
         let Ok(graphics) = game.get::<Graphics>() else {
             return Err("Graphics is not initialized".to_string());
         };
 
         let layout = match graphics.bind_group_layouts.get(&crate::BindGroupLayoutKey::Texture) {
-            Some(layout) => layout,
+            Some(layout) => layout.clone(),
             None => return Err("Texture bind group layout is not initialized".to_string()),
         };
 
-        let device = &graphics.device;
-        let queue = &graphics.queue;
+        let device = graphics.device.clone();
+        let queue = graphics.queue.clone();
 
         let path = Path::new("resources").join(path);
         let base_dir = match path.parent() {
@@ -143,7 +144,7 @@ impl Model {
 
         let mut materials = Vec::new();
 
-        async fn load_texture(base_dir: &Path, path: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Option<Texture> {
+        fn load_texture(base_dir: &Path, path: &str, is_normal_map: bool, device: &Device, queue: &Queue) -> Option<Texture> {
             let tex_path = base_dir.join(path);
             let tex_path_str = tex_path.to_string_lossy();
             let data = std::fs::read(&tex_path).ok()?;
@@ -152,25 +153,25 @@ impl Model {
 
         if obj_materials.is_empty() {
             materials.push(Material::new(
-                    device,
-                    queue,
+                    &device,
+                    &queue,
                     "default",
                     None,
                     None,
                     None,
                     1.0,
-                    layout,
+                    &layout,
             ).into());
         } else {
             for m in obj_materials {
                 let diffuse_texture = match &m.diffuse_texture {
                     Some(path) if !path.is_empty() => {
-                        load_texture(&base_dir, path, false, device, queue).await
+                        load_texture(&base_dir, path, false, &device, &queue)
                     }
                     _ => {
                         match &m.diffuse {
                             Some(color) => {
-                                Some(Texture::from_color(device, queue, [color[0], color[1], color[2], 1.0], Some("color"), false))
+                                Some(Texture::from_color(&device, &queue, [color[0], color[1], color[2], 1.0], Some("color"), false))
                             }
                             _ => {
                                 None
@@ -181,7 +182,7 @@ impl Model {
 
                 let normal_texture = match &m.normal_texture {
                     Some(path) if !path.is_empty() => {
-                        load_texture(&base_dir, path, true, device, queue).await
+                        load_texture(&base_dir, path, true, &device, &queue)
                     }
                     _ => {
                         None
@@ -195,10 +196,10 @@ impl Model {
                 };
 
                 let dissolve_texture = if dissolve < 1.0 {
-                    Some(Texture::from_color(device, queue, [1.0, 1.0, 1.0, dissolve], Some("alpha"), false))
+                    Some(Texture::from_color(&device, &queue, [1.0, 1.0, 1.0, dissolve], Some("alpha"), false))
                 } else if let Some(path) = &m.dissolve_texture {
                     if !path.is_empty() {
-                        load_texture(&base_dir, path, false, device, queue).await
+                        load_texture(&base_dir, path, false, &device, &queue)
                     } else {
                         None
                     }
@@ -207,14 +208,14 @@ impl Model {
                 };
 
                 materials.push(Material::new(
-                        device,
-                        queue,
+                        &device,
+                        &queue,
                         &m.name,
                         diffuse_texture,
                         normal_texture,
                         dissolve_texture,
                         dissolve,
-                        layout,
+                        &layout,
                 ).into());
             }
         }
@@ -373,7 +374,6 @@ impl Model {
             materials,
         })
     }
-
 }
 
 /// A trait for drawing models and meshes with instancing support.

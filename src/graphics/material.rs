@@ -191,4 +191,3 @@ impl Material {
         }).clone()
     }
 }
-

@@ -22,6 +22,7 @@ use super::ComponentMap;
 ///
 /// `GameView` allows gears to inspect parts of the game world such as other gears, graphics state, timing information,
 /// and the scene. It provides safe access without allowing direct mutation of the game.
+#[derive(Clone)]
 pub struct GameView {
     components: ComponentMap,
 }

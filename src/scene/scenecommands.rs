@@ -17,6 +17,10 @@
 
 use crate::Command;
 use crate::Game;
+use crate::GameView;
+use crate::Model;
+use crate::Model3d;
+use crate::WorldScene;
 
 /// A simple boxed function that mutably operates on the [`Game`] instance.
 ///
@@ -165,33 +169,24 @@ macro_rules! set_instance_transform {
 /// let tree_model = add_render_object!("tree", tree_render_object);
 /// commands.spawn().insert(tree_model);
 /// ```
-#[macro_export]
-macro_rules! add_model3d {
-    ( $name:expr, $object:expr ) => {{
-        match $crate::send_command_with_result(move |game| {
-            let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else {
-                return Err("No WorldScene registered".to_string());
+
+pub fn add_model3d(name: &str, object: Model) -> Model3d {
+    let model = Model3d {
+        path: name.to_string(),
+    };
+
+    let ret = model.clone();
+    
+    crate::send_command(crate::CommandFunction {
+        run: Box::new(move |game| {
+            let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+                return;
             };
+            scene.add_model3d(model.clone(), object);
+        }),
+    });
 
-            let model = $crate::Model3d {
-                path: $name.to_string(),
-            };
-
-            scene.add_model3d(model.clone(), $object);
-
-            Ok(model)
-        }).await {
-            Some(Ok(model)) => Some(model),
-            Some(Err(e)) => {
-                log!($crate::LogKind::Error, "Failed to insert render object: {}", e);
-                None
-            }
-            None => {
-                log!($crate::LogKind::Error, "send_command_with_result failed to execute");
-                None
-            }
-        }
-    }};
+    ret
 }
 
 /// Loads a `.obj` model and registers it in the scene’s render registry,
@@ -215,18 +210,30 @@ macro_rules! add_model3d {
 /// };
 /// ```
 ///
-#[macro_export]
-macro_rules! load_obj_model {
-    ( $path:expr, $game:expr ) => {{
-        let model_result = $crate::Model::from_obj($path, $game).await;
-        let model = match model_result {
-            Ok(m) => m,
-            Err(e) => {
-                log!($crate::LogKind::Error, "Failed to load model '{}': {}", $path, e);
-                Model::default()
-            }
-        };
+pub fn load_obj_model(path: &str, game: &GameView) -> Model3d {
+    let path_string = path.to_string();
+    let game_clone = game.clone();
 
-        $crate::add_model3d!($path, model)
-    }};
+    let model_handle = Model3d { path: path_string.clone() };
+    println!("Start background loading: {}", path_string);
+
+    let path_clone = path_string.clone();
+
+    // let handle = tokio::runtime::Handle::current();
+    std::thread::spawn(move || {
+        // handle.spawn(async move {
+            match Model::from_obj(&path_clone, &game_clone) {
+                Ok(model) => {
+                    add_model3d(&path_clone, model);
+                }
+                Err(e) => {
+                    crate::log!(crate::LogKind::Error, "Failed to load model '{}': {}", path_clone, e);
+                }
+            }
+            println!("Finished loading: {}", path_clone);
+        // });
+    });
+    println!("majmun zavrsio");
+
+    model_handle
 }
