@@ -58,18 +58,20 @@ impl ApplicationHandler for Game {
             }
 
             WindowEvent::RedrawRequested => {
-                self.dispatch_event(GearEvent::Update);
-
                 if let Ok(mut time) = self.components.get_mut::<Time>() {
                     time.update();
                 };
 
-                if let Ok(mut input) = self.components.get_mut::<Input>() {
-                    input.reset_mouse_delta();
-                };
+                self.dispatch_event(GearEvent::Update);
 
+        println!("stojaneeee");
                 if let Ok(graphics) = self.components.get_mut::<Graphics>() {
                     graphics.window.request_redraw();
+                };
+        println!("majmuneee");
+
+                if let Ok(mut input) = self.components.get_mut::<Input>() {
+                    input.reset_mouse_delta();
                 };
             }
 

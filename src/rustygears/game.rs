@@ -129,22 +129,23 @@ impl Game {
 
                 let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
                 crate::send_command(GearSetupFinished {
-                    id,
+                    id: id.clone(),
                     gear_channel: gear_sender,
                 });
 
                 while let Ok(msg) = gear_receiver.recv() {
+                    let start = std::time::Instant::now();
                     match msg.gear_event {
                         GearEvent::Update => {
                             gear.update(msg.game).await;
-                            crate::send_command(UpdateDoneCommand);
                         },
                         GearEvent::Exit => {
                             gear.exit(msg.game).await;
-                            crate::send_command(UpdateDoneCommand);
-                            break;
                         }
                     }
+                    let duration = start.elapsed().as_micros() as f32;
+                    crate::send_command(UpdateDoneCommand { id: id.clone(), duration } );
+                    if msg.gear_event == GearEvent::Exit { break; }
                 }
             });
         });
@@ -218,6 +219,7 @@ impl Game {
             if let Ok(cmd) = self.command_receiver.recv() {
                 if (&*cmd as &dyn std::any::Any).downcast_ref::<UpdateDoneCommand>().is_some() {
                     pending_gear_updates -= 1;
+                    cmd.apply(self);
                 } else {
                     commands.push(cmd);
                 }
@@ -246,8 +248,15 @@ impl Command for GearSetupFinished {
     }
 }
 
-struct UpdateDoneCommand;
+struct UpdateDoneCommand {
+    pub id: String,
+    pub duration: f32,
+}
 
 impl crate::Command for UpdateDoneCommand {
-    fn apply(self: Box<Self>, _: &mut Game) {}
+    fn apply(self: Box<Self>, game: &mut Game) {
+        if let Ok(mut time) = game.components.get_mut::<crate::Time>() {
+            time.set_gear_update_time(&self.id, self.duration);
+        }
+    }
 }

@@ -24,7 +24,7 @@ use super::ComponentMap;
 /// and the scene. It provides safe access without allowing direct mutation of the game.
 #[derive(Clone)]
 pub struct GameView {
-    components: ComponentMap,
+    pub(super) components: ComponentMap,
 }
 
 impl GameView {

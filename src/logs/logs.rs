@@ -134,6 +134,7 @@ impl Command for LogCommand {
 #[macro_export]
 macro_rules! log {
     ( $kind:expr, $($msg:tt)+ ) => {{
+        println!($($msg)+);
         $crate::send_command($crate::LogCommand {
             kind: $kind.clone(),
             msg: format!($($msg)+),

@@ -83,6 +83,15 @@ impl Gui for EngineStats {
                                 .monospace()
                                 .color(Color32::WHITE),
                             );
+                            ui.label(
+                                RichText::new(format!("Frametime: {}", time.frametime()))
+                                .monospace()
+                                .color(Color32::WHITE)
+                            );
+                            ui.label(RichText::new("Gear update times:").monospace().color(Color32::WHITE));
+                            for (gear, micros) in time.gear_update_times() {
+                                ui.label(RichText::new(format!("  {}: {:.0}", gear, micros)).monospace().color(Color32::WHITE));
+                            }
                         });
                     });
             });

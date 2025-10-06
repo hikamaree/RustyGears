@@ -15,23 +15,28 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::time::{Instant, Duration};
+use std::time::Duration;
+use std::time::Instant;
+
+use std::collections::HashMap;
 
 /// The `Time` struct is used for tracking time-related information in an application,
 /// such as the time between frames (delta time), total elapsed time,
 /// and frames per second (FPS).
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Time {
     last_update: Instant,
     total_time: Duration,
     fps_time: Duration,
     delta_time: f32,
+    frametime: f32,
     fps: f32,
     frame_count: u64,
     smoothed_delta_time: f32,
     delta_time_history: [f32; 10],
     history_index: usize,
+    gear_update_times: HashMap<String, f32>,
 }
 
 impl Time {
@@ -46,11 +51,13 @@ impl Time {
             total_time: Duration::new(0, 0),
             fps_time: Duration::new(0, 0),
             delta_time: 0.0,
+            frametime: 0.0,
             fps: 0.0,
             frame_count: 0,
             smoothed_delta_time: 0.0,
             delta_time_history: [0.0; 10],
             history_index: 0,
+            gear_update_times: HashMap::new(),
         }
     }
 
@@ -65,6 +72,7 @@ impl Time {
         let elapsed = now.duration_since(self.last_update);
         
         self.delta_time = elapsed.as_secs_f32();
+        self.frametime = elapsed.as_micros() as f32;
 
         self.delta_time_history[self.history_index] = self.delta_time;
         self.history_index = (self.history_index + 1) % self.delta_time_history.len();
@@ -93,6 +101,10 @@ impl Time {
         self.smoothed_delta_time
     }
 
+    pub fn frametime(&self) -> f32 {
+        self.frametime
+    }
+
     /// Returns the frames per second (FPS).
     /// 
     /// FPS is updated once per second and represents
@@ -109,5 +121,13 @@ impl Time {
 
     pub fn total_time(&self) -> f32 {
         self.total_time.as_secs_f32()
+    }
+
+    pub fn set_gear_update_time(&mut self, gear: &str, micros: f32) {
+        self.gear_update_times.insert(gear.to_string(), micros);
+    }
+
+    pub fn gear_update_times(&self) -> &std::collections::HashMap<String, f32> {
+        &self.gear_update_times
     }
 }

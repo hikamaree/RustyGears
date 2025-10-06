@@ -192,7 +192,7 @@ impl MyGame {
 
 impl Gear for MyGame {
     async fn setup(&mut self, game: &GameView) {
-        
+
         let transform = Transform {
             position: vec3(0.0, 0.0, 0.0),
             rotation: Quaternion::one(),
@@ -206,10 +206,10 @@ impl Gear for MyGame {
         self.camera1 = camera1;
 
         let camera2 = spawn_entity!(Camera::new(), CameraControl { handler: Box::new(CameraFollow{
-                    target: truck,
-                    position_offset: vec3(0.0, 20.0, -60.0),
-                    rotation_offset: Quaternion::one()
-            })
+            target: truck,
+            position_offset: vec3(0.0, 20.0, -60.0),
+            rotation_offset: Quaternion::one()
+        })
         });
         self.camera2 = camera2;
         self.truck = truck;
@@ -231,14 +231,14 @@ impl Gear for MyGame {
 
         // miku //
 
-    let miku_lod0 = load_obj_model("miku/miku.obj", game);
+        let miku_lod0 = load_obj_model("miku/miku.obj", game);
 
-    let miku_lod1 = load_obj_model("miku/miku_lod1.obj", game);
+        let miku_lod1 = load_obj_model("miku/miku_lod1.obj", game);
 
-    let miku_lod2 = load_obj_model("miku/miku_lod2.obj", game);
+        let miku_lod2 = load_obj_model("miku/miku_lod2.obj", game);
 
         const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 64;
+        const NUM_INSTANCES_PER_ROW: usize = 100;
 
         let positions = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -271,7 +271,7 @@ impl Gear for MyGame {
             scale: vec3(7.0, 7.0, 7.0)
         };
 
-    let scene3 = load_obj_model("scene3/scene3.obj", game);
+        let scene3 = load_obj_model("scene3/scene3.obj", game);
         spawn_entity!( RenderObject{ lods: vec![scene3] }, transform);
 
         let transform = Transform {
@@ -280,7 +280,7 @@ impl Gear for MyGame {
             scale: vec3(1.0, 1.0, 1.0)
         };
 
-    let scene1 = load_obj_model("scene1/scene1.obj", game);
+        let scene1 = load_obj_model("scene1/scene1.obj", game);
         let s1e = spawn_entity!(RenderObject{ lods: vec![scene1] }, transform);
 
         log!(LogKind::Info, "scene1 entity = {:?}", s1e);
