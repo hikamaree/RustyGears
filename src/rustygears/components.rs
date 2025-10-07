@@ -84,7 +84,7 @@ impl ComponentMap {
     ///
     /// # Errors
     /// Returns an error if the component is not found or the read lock is poisoned.
-    pub fn get<T: 'static + Send + Sync>(&self) -> Result<ReadGuardWrapper<T>, String> {
+    pub fn get<T: 'static + Send + Sync>(&'_ self) -> Result<ReadGuardWrapper<'_, T>, String> {
         let type_id = TypeId::of::<T>();
         let arc = self.components.get(&type_id)
             .ok_or_else(|| format!("Component {} not found", std::any::type_name::<T>()))?;
@@ -108,7 +108,7 @@ impl ComponentMap {
     ///
     /// # Errors
     /// Returns an error if the component is not found or the write lock is poisoned.
-    pub fn get_mut<T: 'static + Send + Sync>(&self) -> Result<WriteGuardWrapper<T>, String> {
+    pub fn get_mut<T: 'static + Send + Sync>(&'_ self) -> Result<WriteGuardWrapper<'_, T>, String> {
         let type_id = TypeId::of::<T>();
         let arc = self.components.get(&type_id)
             .ok_or_else(|| format!("Component {} not found", std::any::type_name::<T>()))?;

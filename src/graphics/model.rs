@@ -113,6 +113,7 @@ impl Model {
 
         let device = graphics.device.clone();
         let queue = graphics.queue.clone();
+        drop(graphics);
 
         let path = Path::new("resources").join(path);
         let base_dir = match path.parent() {

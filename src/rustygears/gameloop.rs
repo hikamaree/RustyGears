@@ -64,11 +64,9 @@ impl ApplicationHandler for Game {
 
                 self.dispatch_event(GearEvent::Update);
 
-        println!("stojaneeee");
-                if let Ok(graphics) = self.components.get_mut::<Graphics>() {
+                if let Ok(graphics) = self.components.get::<Graphics>() {
                     graphics.window.request_redraw();
                 };
-        println!("majmuneee");
 
                 if let Ok(mut input) = self.components.get_mut::<Input>() {
                     input.reset_mouse_delta();

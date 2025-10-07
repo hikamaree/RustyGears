@@ -36,10 +36,10 @@ struct MyGame {
 impl MyGame {
     fn new() -> Result<Self, String> {
         Ok(Self {
-            truck: Entity::new(),
+            truck: Entity::NULL,
             h: 0.0,
-            camera1: Entity::new(),
-            camera2: Entity::new(),
+            camera1: Entity::NULL,
+            camera2: Entity::NULL,
             block: None,
         })
     }
@@ -133,7 +133,7 @@ impl MyGame {
         let right = cam_handle.right();
 
         if input.is_key_pressed(KeyCode::KeyX) {
-            load_obj_model("scene1/scene1.obj", game);
+            game.load_obj_model("scene1/scene1.obj");
         }
 
         if input.is_key_pressed(KeyCode::KeyC) {
@@ -147,15 +147,15 @@ impl MyGame {
                 self.camera1
             };
 
-            set_default_camera!(camera);
+            game.set_default_camera(&camera);
         }
 
         if input.is_key_pressed(KeyCode::ArrowUp) {
-            update_entity_position!(self.truck, Vector3::new(0.0, 0.0, speed * dt));
+            game.update_entity_position(&self.truck, Vector3::new(0.0, 0.0, speed * dt));
         }
 
         if input.is_key_pressed(KeyCode::ArrowDown) {
-            update_entity_position!(self.truck, Vector3::new(0.0, 0.0, -speed * dt));
+                game.update_entity_position(&self.truck, Vector3::new(0.0, 0.0, -speed * dt));
         }
 
         if input.is_key_pressed(KeyCode::KeyW) {
@@ -183,8 +183,7 @@ impl MyGame {
             };
 
             if let Some(block) = self.block.clone() {
-                let x = spawn_entity!(transform);
-                add_components!(x, block);
+                game.spawn_entity((transform, block));
             }
         }
     }
@@ -199,46 +198,42 @@ impl Gear for MyGame {
             scale: vec3(1.0, 1.0, 1.0) 
         };
 
-        let truck = spawn_entity!(transform);
+        self.truck = Entity::new()
+            .insert(transform);
 
-        let camera1 = spawn_entity!(Camera::new(), Transform::identity(), CameraControl { handler: Box::new(FreeFlyCamera::new()) });
-        set_default_camera!(camera1);
-        self.camera1 = camera1;
+        self.camera1 = game.spawn_entity((Camera::new(), Transform::identity(), CameraControl { handler: Box::new(FreeFlyCamera::new()) }));
+        game.set_default_camera(&self.camera1);
 
-        let camera2 = spawn_entity!(Camera::new(), CameraControl { handler: Box::new(CameraFollow{
-            target: truck,
+        self.camera2 = game.spawn_entity((Camera::new(), CameraControl { handler: Box::new(CameraFollow{
+            target: self.truck,
             position_offset: vec3(0.0, 20.0, -60.0),
             rotation_offset: Quaternion::one()
         })
-        });
-        self.camera2 = camera2;
-        self.truck = truck;
+        }));
 
-        // Kick off asynchronous model loading in the background. These return Model3d handles
-        // immediately so the setup doesn't block while files are parsed and GPU buffers created.
-        let block = load_obj_model("truck/semi.obj", game);
+        let block = game.load_obj_model("truck/semi.obj");
         self.block = Some(RenderObject {
             lods: vec![block]
         });
 
-        let truck_lod0 = load_obj_model("truck/semi.obj", game);
+        let truck_lod0 = game.load_obj_model("truck/semi.obj");
 
-        let truck_lod1 = load_obj_model("truck/semi_lod1.obj", game);
+        let truck_lod1 = game.load_obj_model("truck/semi_lod1.obj");
 
-        let truck_lod2 = load_obj_model("truck/semi_lod2.obj", game);
-
-        add_components!(self.truck, RenderObject {lods: vec![truck_lod0, truck_lod1, truck_lod2]});
+        let truck_lod2 = game.load_obj_model("truck/semi_lod2.obj");
+        
+        self.truck.insert(RenderObject {lods: vec![truck_lod0, truck_lod1, truck_lod2]});
 
         // miku //
 
-        let miku_lod0 = load_obj_model("miku/miku.obj", game);
+        let miku_lod0 = game.load_obj_model("miku/miku.obj");
 
-        let miku_lod1 = load_obj_model("miku/miku_lod1.obj", game);
+        let miku_lod1 = game.load_obj_model("miku/miku_lod1.obj");
 
-        let miku_lod2 = load_obj_model("miku/miku_lod2.obj", game);
+        let miku_lod2 = game.load_obj_model("miku/miku_lod2.obj");
 
         const SPACE_BETWEEN: f32 = 15.0;
-        const NUM_INSTANCES_PER_ROW: usize = 100;
+        const NUM_INSTANCES_PER_ROW: usize = 50;
 
         let positions = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -260,7 +255,7 @@ impl Gear for MyGame {
                 lods: vec![miku_lod0.clone(), miku_lod1.clone(), miku_lod2.clone()],
             };
 
-            spawn_entity!(miku.clone(), transform);
+            game.spawn_entity((miku.clone(), transform));
         }
 
         // random scene //
@@ -271,8 +266,8 @@ impl Gear for MyGame {
             scale: vec3(7.0, 7.0, 7.0)
         };
 
-        let scene3 = load_obj_model("scene3/scene3.obj", game);
-        spawn_entity!( RenderObject{ lods: vec![scene3] }, transform);
+        let scene3 = game.load_obj_model("scene3/scene3.obj");
+        game.spawn_entity(( RenderObject{ lods: vec![scene3] }, transform ));
 
         let transform = Transform {
             position: vec3(0.0, 0.0, 0.0),
@@ -280,13 +275,12 @@ impl Gear for MyGame {
             scale: vec3(1.0, 1.0, 1.0)
         };
 
-        let scene1 = load_obj_model("scene1/scene1.obj", game);
-        let s1e = spawn_entity!(RenderObject{ lods: vec![scene1] }, transform);
+        let scene1 = game.load_obj_model("scene1/scene1.obj");
+        let s1e = game.spawn_entity((RenderObject{ lods: vec![scene1] }, transform));
 
         log!(LogKind::Info, "scene1 entity = {:?}", s1e);
 
         //landscape//
-
 
         log!(LogKind::Info, "loading landscape");
 
@@ -300,9 +294,12 @@ impl Gear for MyGame {
             return;
         };
 
-        let landscape_model3d = add_model3d("landscape", landscape_mesh);
+        let landscape_model3d = game.add_model3d("landscape", landscape_mesh);
 
-        let entity = spawn_entity!(RenderObject{lods: vec![landscape_model3d]}, landscape, Transform::identity());
+        let entity = Entity::new()
+            .insert(RenderObject{lods: vec![landscape_model3d]})
+            .insert(landscape)
+            .insert(Transform::identity());
 
         log!(LogKind::Info, "landscape loaded as {:?}", entity);
     }

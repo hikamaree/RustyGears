@@ -15,11 +15,16 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use cgmath::Quaternion;
+use cgmath::Vector3;
+
 use crate::Command;
+use crate::Entity;
 use crate::Game;
 use crate::GameView;
 use crate::Model;
 use crate::Model3d;
+use crate::Transform;
 use crate::WorldScene;
 
 /// A simple boxed function that mutably operates on the [`Game`] instance.
@@ -35,205 +40,256 @@ impl Command for CommandFunction {
     }
 }
 
-/// Spawns a new entity into the scene with the given components,
-/// and returns its entity ID synchronously.
-///
-/// # Example
-/// ```
-/// let entity = spawn_entity!(
-///     Transform::default(),
-///     Model3d { path: "tree".into() }
-/// );
-/// ```
-#[macro_export]
-macro_rules! spawn_entity {
-    ( $( $comp:expr ),* $(,)? ) => {{
-        let entity = $crate::Entity::new();
-        $crate::send_command($crate::CommandFunction {
-            run: Box::new(move |game| {
-                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                $(
-                    scene.world.insert(entity, $comp);
-                )*
-            }),
-        });
-        entity
-    }};
-}
+impl GameView {
+    /// Spawns a new entity with the given set of components.
+    ///
+    /// Creates a unique [`Entity`], schedules component insertion into the
+    /// active [`WorldScene`], and returns the created entity handle.
+    ///
+    /// The new entity and its components become available during the next update cycle.
+    ///
+    /// # Example
+    /// ```
+    /// let entity = game.spawn_entity((Transform::default(), Health { value: 100 }));
+    /// ```
+    pub fn spawn_entity(&self, components: impl ComponentsTuple) -> Entity {
+        let entity = crate::Entity::new();
+        let comps = components.into_vec();
 
-/// Adds one or more components to an existing entity.
-///
-/// This macro sends a command to the ECS world to attach additional components
-/// to the specified entity. Each component is inserted individually.
-///
-/// # Example
-/// ```
-/// insert_components!(entity, Transform::default(), MyComponent { ... });
-/// ```
-#[macro_export]
-macro_rules! add_components {
-    ( $entity:expr, $( $comp:expr ),* $(,)? ) => {{
-        let entity = $entity;
-        $crate::send_command($crate::CommandFunction {
+        crate::send_command(crate::CommandFunction {
             run: Box::new(move |game| {
-                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                $(
-                    scene.world.insert(entity, $comp);
-                )*
-            }),
-        });
-    }};
-}
-
-/// Adds a delta to the position of the given entity's [`Transform`] component.
-#[macro_export]
-macro_rules! update_entity_position {
-    ( $entity:expr, $delta:expr ) => {{
-        let entity = $entity;
-        let delta = $delta;
-        $crate::send_command($crate::CommandFunction {
-            run: Box::new(move |game| {
-                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else {
+                let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
                     return;
                 };
-                if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
-                    t.position += delta;
+                for comp in comps {
+                    comp.insert_into(&mut scene.world, entity);
                 }
             }),
         });
-    }};
-}
 
-/// Applies a quaternion delta to the rotation of the entity's [`Transform`] component.
-#[macro_export]
-macro_rules! update_entity_rotation {
-    ( $entity:expr, $delta:expr ) => {{
-        let entity = $entity;
-        let delta = $delta;
-        $crate::send_command($crate::CommandFunction {
+        entity
+    }
+
+    /// Adds one or more components to an existing entity.
+    ///
+    /// If a component of the same type already exists, it will be replaced.
+    ///
+    /// # Example
+    /// ```
+    /// game.add_components(&player, (Velocity { x: 1.0, y: 0.0 },));
+    /// ```
+    pub fn add_components(&self, entity: &Entity, components: impl ComponentsTuple) {
+        let entity = entity.clone();
+        let comps = components.into_vec();
+
+        crate::send_command(crate::CommandFunction {
             run: Box::new(move |game| {
-                if let Some(t) = game.scene().world.get_mut::<$crate::Transform>(entity) {
+                let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    return;
+                };
+                for comp in comps {
+                    comp.insert_into(&mut scene.world, entity);
+                }
+            }),
+        });
+    }
+
+    /// Sets the specified entity as the active camera in the current scene.
+    ///
+    /// # Example
+    /// ```
+    /// game.set_default_camera(&camera_entity);
+    /// ```
+    pub fn set_default_camera(&self, camera: &Entity) {
+        let camera = camera.clone();
+        crate::send_command(crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    return;
+                };
+                scene.set_active_camera(camera);
+            }),
+        });
+    }
+
+    /// Rotates an entity’s transform by the given quaternion delta.
+    ///
+    /// If the entity has a [`Transform`] component, its rotation is updated.
+    ///
+    /// # Example
+    /// ```
+    /// game.update_entity_rotation(&entity, Quaternion::from_axis_angle(Vector3::Y, 0.1));
+    /// ```
+    pub fn update_entity_rotation(&self, entity: &Entity, delta: Quaternion<f32>) {
+        let entity = entity.clone();
+        crate::send_command(crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    return;
+                };
+                if let Some(t) = scene.world.get_mut::<crate::Transform>(entity) {
                     t.rotation = delta * t.rotation;
                 }
             }),
         });
-    }};
-}
+    }
 
-/// Sets the given entity as the active camera in the scene.
-#[macro_export]
-macro_rules! set_default_camera {
-    ( $camera:expr ) => {{
-        let camera = $camera;
-        $crate::send_command($crate::CommandFunction {
+    /// Moves an entity by the given position offset.
+    ///
+    /// If the entity has a [`Transform`] component, its position is updated.
+    ///
+    /// # Example
+    /// ```
+    /// game.update_entity_position(&entity, Vector3::new(1.0, 0.0, 0.0));
+    /// ```
+    pub fn update_entity_position(&self, entity: &Entity, delta: Vector3<f32>) {
+        let entity = entity.clone();
+        crate::send_command(crate::CommandFunction {
             run: Box::new(move |game| {
-                let Ok(mut scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                scene.set_active_camera(camera);
+                let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    return;
+                };
+                if let Some(t) = scene.world.get_mut::<crate::Transform>(entity.clone()) {
+                    t.position += delta;
+                }
             }),
         });
-    }};
-}
+    }
 
-/// Sets or inserts a new transform for an entity in the scene.
-///
-/// If the entity already has a transform, it is overwritten. Otherwise, it is inserted.
-#[macro_export]
-macro_rules! set_instance_transform {
-    ( $entity:expr, $transform:expr ) => {{
-        let entity = $entity;
-        let transform = $transform;
-        $crate::send_command($crate::CommandFunction {
+    /// Sets the complete transform of an entity.
+    ///
+    /// If the entity has a [`Transform`] component, it will be replaced.
+    /// Otherwise, a new one is inserted.
+    ///
+    /// # Example
+    /// ```
+    /// game.set_entity_transform(&entity, &Transform::from_xyz(0.0, 5.0, 0.0));
+    /// ```
+    pub fn set_entity_transform(&self, entity: &Entity, transform: &Transform) {
+        let entity = entity.clone();
+        let transform = transform.clone();
+        crate::send_command(crate::CommandFunction {
             run: Box::new(move |game| {
-                let Ok(scene) = game.components.get_mut::<$crate::WorldScene>() else { return; };
-                if let Some(t) = scene.world.get_mut::<$crate::Transform>(entity) {
+                let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>() else {
+                    return;
+                };
+                if let Some(t) = scene.world.get_mut::<crate::Transform>(entity) {
                     *t = transform;
                 } else {
-                    game.scene().world.insert(entity, transform);
+                    scene.world.insert(entity, transform);
                 }
             }),
         });
-    }};
-}
+    }
 
-/// Adds a `RenderObject` to the current scene and returns its corresponding `Model3d` handle.
-///
-/// This macro registers a renderable object (with its LODs) into the scene’s
-/// `models3d` map and returns a `Model3d` that can be used for components like `Model3d`.
-///
-/// # Arguments
-/// - `$name`: A string literal or expression representing the model name (e.g. `"tree"`)
-/// - `$object`: An already constructed `RenderObject`
-///
-/// # Example
-/// ```
-/// let tree_model = add_render_object!("tree", tree_render_object);
-/// commands.spawn().insert(tree_model);
-/// ```
+    /// Adds a 3D model to the current scene and returns its corresponding handle.
+    ///
+    /// Registers a renderable object in the world’s render registry
+    /// and returns a [`Model3d`] handle that can be stored as a component.
+    ///
+    /// # Example
+    /// ```
+    /// let model = game.add_model3d("tree", tree_model);
+    /// entity.insert(model);
+    /// ```
+    pub fn add_model3d(&self, name: &str, object: Model) -> Model3d {
+        let model = Model3d {
+            path: name.to_string(),
+        };
 
-pub fn add_model3d(name: &str, object: Model) -> Model3d {
-    let model = Model3d {
-        path: name.to_string(),
-    };
+        let ret = model.clone();
 
-    let ret = model.clone();
-    
-    crate::send_command(crate::CommandFunction {
-        run: Box::new(move |game| {
-            let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
-                return;
-            };
-            scene.add_model3d(model.clone(), object);
-        }),
-    });
+        crate::send_command(crate::CommandFunction {
+            run: Box::new(move |game| {
+                let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+                    return;
+                };
+                scene.add_model3d(model.clone(), object);
+            }),
+        });
 
-    ret
-}
+        ret
+    }
 
-/// Loads a `.obj` model and registers it in the scene’s render registry,
-/// returning the corresponding `Model3d` handle.
-///
-/// This macro first loads the model using [`Model::from_obj`], then constructs a
-/// [`RenderObject`] from it, and finally calls [`add_model3d!`] to insert it into the ECS.
-///
-/// # Arguments
-/// - `$path`: Relative path to the `.obj` file (e.g., `"tree/tree.obj"`)
-/// - `$game`: A `&GameView` reference used for GPU access
-///
-/// # Returns
-/// - `Some(Model3d)` on success
-/// - `None` on error (with logging)
-///
-/// # Example
-/// ```
-/// let Some(model3d) = load_obj_model!("tree/tree.obj", game).await else {
-///     return;
-/// };
-/// ```
-///
-pub fn load_obj_model(path: &str, game: &GameView) -> Model3d {
-    let path_string = path.to_string();
-    let game_clone = game.clone();
+    /// Loads a `.obj` model from disk and registers it in the scene.
+    ///
+    /// The model is loaded on a background thread and automatically added
+    /// to the ECS render registry upon completion.
+    ///
+    /// Returns a [`Model3d`] handle immediately, which can be attached to entities.
+    ///
+    /// # Example
+    /// ```
+    /// let tree_model = game.load_obj_model("assets/tree.obj");
+    /// entity.insert(tree_model);
+    /// ```
+    pub fn load_obj_model(&self, path: &str) -> Model3d {
+        let path = path.to_string();
+        let game = self.clone();
 
-    let model_handle = Model3d { path: path_string.clone() };
-    println!("Start background loading: {}", path_string);
+        let model_handle = Model3d { path: path.clone() };
 
-    let path_clone = path_string.clone();
-
-    // let handle = tokio::runtime::Handle::current();
-    std::thread::spawn(move || {
-        // handle.spawn(async move {
-            match Model::from_obj(&path_clone, &game_clone) {
+        std::thread::spawn(move || {
+            match Model::from_obj(&path, &game) {
                 Ok(model) => {
-                    add_model3d(&path_clone, model);
+                    game.add_model3d(&path, model);
                 }
                 Err(e) => {
-                    crate::log!(crate::LogKind::Error, "Failed to load model '{}': {}", path_clone, e);
+                    crate::log!(crate::LogKind::Error, "Failed to load model '{}': {}", path, e);
                 }
             }
-            println!("Finished loading: {}", path_clone);
-        // });
-    });
-    println!("majmun zavrsio");
+            crate::log!(crate::LogKind::Info, "Finished loading: {}", path);
+        });
 
-    model_handle
+        model_handle
+    }
+}
+
+/// Represents a type-erased component insertion operation.
+///
+/// Used internally to insert heterogenous component tuples
+/// into the ECS world at runtime.
+pub trait ComponentInsert: Send + Sync {
+    fn insert_into(self: Box<Self>, world: &mut crate::World, entity: crate::Entity);
+}
+
+impl<T: crate::Component> ComponentInsert for T {
+    fn insert_into(self: Box<Self>, world: &mut crate::World, entity: crate::Entity) {
+        world.insert(entity, *self);
+    }
+}
+
+/// Represents a tuple of components that can be converted
+/// into a vector of boxed [`ComponentInsert`] trait objects.
+///
+/// This enables flexible syntax such as:
+/// ```
+/// game.spawn_entity((Transform::default(), Health { value: 100 }));
+/// ```
+pub trait ComponentsTuple {
+    fn into_vec(self) -> Vec<Box<dyn ComponentInsert>>;
+}
+
+impl<A: crate::Component> ComponentsTuple for (A,) {
+    fn into_vec(self) -> Vec<Box<dyn ComponentInsert>> {
+        vec![Box::new(self.0)]
+    }
+}
+
+impl<A: crate::Component, B: crate::Component> ComponentsTuple for (A, B) {
+    fn into_vec(self) -> Vec<Box<dyn ComponentInsert>> {
+        vec![Box::new(self.0), Box::new(self.1)]
+    }
+}
+
+impl<A: crate::Component, B: crate::Component, C: crate::Component> ComponentsTuple for (A, B, C) {
+    fn into_vec(self) -> Vec<Box<dyn ComponentInsert>> {
+        vec![Box::new(self.0), Box::new(self.1), Box::new(self.2)]
+    }
+}
+
+impl<A: crate::Component, B: crate::Component, C: crate::Component, D: crate::Component> ComponentsTuple for (A, B, C, D) {
+    fn into_vec(self) -> Vec<Box<dyn ComponentInsert>> {
+        vec![Box::new(self.0), Box::new(self.1), Box::new(self.2), Box::new(self.3)]
+    }
 }

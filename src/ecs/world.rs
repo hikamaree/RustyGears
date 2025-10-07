@@ -246,6 +246,7 @@ impl World {
     /// Queries all entities that have component types `A`, `B`, `C`, and `D`.
     ///
     /// # Returns
+    /// A vector of `(Entity, &A, &B, &C, &D)` for all matching entities.
     pub fn query4<'a, A: Component, B: Component, C: Component, D: Component>(
         &'a self,
     ) -> Vec<(Entity, &'a A, &'a B, &'a C, &'a D)> {

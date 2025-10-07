@@ -68,7 +68,11 @@ pub trait Gear: Any + Send + Sync {
     ///
     /// # Parameters
     /// - `game`: A read-only snapshot of the current game state.
-    fn update(&mut self, game: GameView) -> impl std::future::Future<Output = ()> + Send;
+    fn update(&mut self, game: GameView) -> impl std::future::Future<Output = ()> + Send {
+        async {
+            let _ = game;
+        }
+    }
 
     /// Called when the gear is being shut down or removed from the game.
     ///
