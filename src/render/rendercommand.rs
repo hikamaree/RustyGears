@@ -172,4 +172,8 @@ impl Command for RenderCommand {
         graphics.queue.submit(Some(encoder.finish()));
         output.present();
     }
+
+    fn priority(&self) -> crate::CommandPriority {
+        crate::CommandPriority::High
+    }
 }

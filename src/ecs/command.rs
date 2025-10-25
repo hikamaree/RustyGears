@@ -22,18 +22,86 @@ use crate::Game;
 
 use std::any::Any;
 
+/// Defines execution priority levels for [`Command`]s.
+///
+/// Commands are executed in order of their priority, from lowest to highest.
+/// This allows systems that depend on one another (e.g., physics before camera, camera before render)
+/// to control their update order.
+///
+/// # Variants
+/// - `Low`: Executed before all normal and high-priority commands.
+/// - `Normal`: Default priority for most commands.
+/// - `High`: Executed last; typically used for rendering or post-processing updates.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
+pub enum CommandPriority {
+    /// Executed before all normal and high-priority commands.
+    Low,
+    /// Default priority for most commands.
+    Normal,
+    /// Executed last; typically used for rendering or post-processing.
+    High,
+}
+
 /// A trait that represents a game command that can be executed on a [`Game`] instance.
 ///
-/// Implementors of this trait define logic to modify game state.
+/// Commands are units of work or messages that modify the game state in a controlled manner.
+/// They are typically queued by gameplay systems or threads (such as physics, input, or AI),
+/// then executed in a central update phase on the main thread.
+///
+/// Each command:
+/// - Is type-erased (`dyn Command`), so different command types can coexist in the same queue.
+/// - Is thread-safe (`Send + Sync`).
+/// - Has an execution [`priority`](Command::priority) used to control order of application.
+///
+/// # Example
+/// ```
+/// struct MoveEntity {
+///     entity: Entity,
+///     new_position: Vec3,
+/// }
+///
+/// impl Command for MoveEntity {
+///     fn apply(self: Box<Self>, game: &mut Game) {
+///         if let Some(transform) = game.world.get_mut::<Transform>(self.entity) {
+///             transform.position = self.new_position;
+///         }
+///     }
+///
+///     fn priority(&self) -> CommandPriority {
+///         CommandPriority::Low // Run before camera or rendering
+///     }
+/// }
+/// ```
+///
+/// # Usage
+/// Commands are usually pushed into a thread-safe queue:
+/// ```
+/// game.queue_command(Box::new(MoveEntity { entity, new_position }));
+/// ```
+///
+/// The main game loop can then drain and execute them in priority order:
+/// ```
+/// commands.sort_by_key(|c| c.priority());
+/// for cmd in commands {
+///     cmd.apply(&mut game);
+/// }
+/// ```
 pub trait Command: Any + Send + Sync + 'static {
-
-    /// Applies the command to the given game instance.
+    /// Applies this command to the given [`Game`] instance.
     ///
-    /// This method consumes the boxed command.
+    /// This method consumes the boxed command, ensuring one-time application.
     ///
     /// # Parameters
-    /// - `game`: A mutable reference to the [`Game`] instance to modify.
+    /// - `game`: The mutable reference to the active [`Game`] instance whose state will be modified.
     fn apply(self: Box<Self>, game: &mut Game);
+
+    /// Returns the execution priority of this command.
+    ///
+    /// The game loop uses this value to sort commands before applying them.
+    /// Default priority is [`CommandPriority::Normal`].
+    fn priority(&self) -> CommandPriority {
+        CommandPriority::Normal
+    }
 }
 
 /// Global command sender used for scheduling actions on the main game thread.

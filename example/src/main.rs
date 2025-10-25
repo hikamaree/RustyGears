@@ -16,12 +16,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use rusty_gears::math::InnerSpace;
+use rusty_gears::math::One;
+use rusty_gears::math::Quaternion;
+use rusty_gears::math::Rad;
 use rusty_gears::math::Rotation;
 use rusty_gears::math::Rotation3;
 use rusty_gears::math::Vector3;
-use rusty_gears::math::Rad;
-use rusty_gears::math::One;
-use rusty_gears::math::Quaternion;
 use rusty_gears::math::vec3;
 use rusty_gears::*;
 
@@ -65,17 +65,19 @@ impl MyGame {
             let delta_yaw = Rad(-mm.dx as f32 * sensitivity);
             let delta_pitch = Rad(-mm.dy as f32 * sensitivity);
 
-            update_freefly_rotation!(self.camera1, delta_yaw, delta_pitch);
+            FreeFlyCamera::update_rotation(self.camera1, delta_yaw, delta_pitch);
         } else if active_camera == self.camera2 {
             let delta_yaw = Rad(-mm.dx as f32 * sensitivity);
             let rot = Quaternion::from_angle_y(delta_yaw);
 
             let cam_handle = match scene.world.get::<CameraControl>(self.camera2) {
-                Some(controller) => match controller.handler.as_any().downcast_ref::<CameraFollow>() {
-                    Some(handle) => handle,
-                    None => return
-                },
-                None => return
+                Some(controller) => {
+                    match controller.handler.as_any().downcast_ref::<CameraFollow>() {
+                        Some(handle) => handle,
+                        None => return,
+                    }
+                }
+                None => return,
             };
 
             let Some(target_transform) = scene.world.get::<Transform>(cam_handle.target) else {
@@ -95,14 +97,13 @@ impl MyGame {
 
             let flat_forward = flat_forward.normalize();
             let new_rotation_offset = Quaternion::from_angle_y(
-                -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2),
+                -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2)
             );
 
-            set_camerafollow_position_offset!(self.camera2, new_position_offset);
-            set_camerafollow_rotation_offset!(self.camera2, new_rotation_offset);
+            CameraFollow::set_position_offset(self.camera2, new_position_offset);
+            CameraFollow::set_rotation_offset(self.camera2, new_rotation_offset);
         }
     }
-
 
     async fn keyboard_input(&mut self, game: &GameView) {
         let Ok(scene) = game.get::<WorldScene>() else {
@@ -124,9 +125,9 @@ impl MyGame {
         let cam_handle = match scene.world.get::<CameraControl>(self.camera1) {
             Some(controller) => match controller.handler.as_any().downcast_ref::<FreeFlyCamera>() {
                 Some(handle) => handle,
-                None => return
+                None => return,
             },
-            None => return
+            None => return,
         };
 
         let forward = cam_handle.forward();
@@ -155,23 +156,23 @@ impl MyGame {
         }
 
         if input.is_key_pressed(KeyCode::ArrowDown) {
-                game.update_entity_position(&self.truck, Vector3::new(0.0, 0.0, -speed * dt));
+            game.update_entity_position(&self.truck, Vector3::new(0.0, 0.0, -speed * dt));
         }
 
         if input.is_key_pressed(KeyCode::KeyW) {
-            update_freefly_position!(self.camera1, forward * speed * dt);
+            FreeFlyCamera::update_position(self.camera1, forward * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyS) {
-            update_freefly_position!(self.camera1, -forward * speed * dt);
+            FreeFlyCamera::update_position(self.camera1, -forward * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyA) {
-            update_freefly_position!(self.camera1, -right * speed * dt);
+            FreeFlyCamera::update_position(self.camera1, -right * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyD) {
-            update_freefly_position!(self.camera1, right * speed * dt);
+            FreeFlyCamera::update_position(self.camera1, right * speed * dt);
         }
 
         if input.is_key_pressed(KeyCode::KeyE) {
@@ -179,7 +180,7 @@ impl MyGame {
             let transform = Transform {
                 position: vec3(0.0, 30.0, -self.h),
                 rotation: Quaternion::one(),
-                scale: vec3(1.0, 1.0, 1.0) 
+                scale: vec3(1.0, 1.0, 1.0),
             };
 
             if let Some(block) = self.block.clone() {
@@ -191,38 +192,46 @@ impl MyGame {
 
 impl Gear for MyGame {
     async fn setup(&mut self, game: &GameView) {
-
         let transform = Transform {
             position: vec3(0.0, 0.0, 0.0),
             rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0) 
+            scale: vec3(1.0, 1.0, 1.0),
         };
 
-        self.truck = Entity::new()
-            .insert(transform);
+        self.truck = Entity::new().insert(transform);
 
-        self.camera1 = game.spawn_entity((Camera::new(), Transform::identity(), CameraControl { handler: Box::new(FreeFlyCamera::new()) }));
+        self.camera1 = game.spawn_entity((
+            Camera::new(),
+            Transform::identity(),
+            CameraControl {
+                handler: Box::new(FreeFlyCamera::new()),
+            },
+        ));
         game.set_default_camera(&self.camera1);
 
-        self.camera2 = game.spawn_entity((Camera::new(), CameraControl { handler: Box::new(CameraFollow{
-            target: self.truck,
-            position_offset: vec3(0.0, 20.0, -60.0),
-            rotation_offset: Quaternion::one()
-        })
-        }));
+        self.camera2 = game.spawn_entity((
+            Camera::new(),
+            CameraControl {
+                handler: Box::new(CameraFollow {
+                    target: self.truck,
+                    position_offset: vec3(0.0, 20.0, -60.0),
+                    rotation_offset: Quaternion::one(),
+                }),
+            },
+        ));
 
         let block = game.load_obj_model("truck/semi.obj");
-        self.block = Some(RenderObject {
-            lods: vec![block]
-        });
+        self.block = Some(RenderObject { lods: vec![block] });
 
         let truck_lod0 = game.load_obj_model("truck/semi.obj");
 
         let truck_lod1 = game.load_obj_model("truck/semi_lod1.obj");
 
         let truck_lod2 = game.load_obj_model("truck/semi_lod2.obj");
-        
-        self.truck.insert(RenderObject {lods: vec![truck_lod0, truck_lod1, truck_lod2]});
+
+        self.truck.insert(RenderObject {
+            lods: vec![truck_lod0, truck_lod1, truck_lod2],
+        });
 
         // miku //
 
@@ -235,14 +244,13 @@ impl Gear for MyGame {
         const SPACE_BETWEEN: f32 = 15.0;
         const NUM_INSTANCES_PER_ROW: usize = 50;
 
-        let positions = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x_pos = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z_pos = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    vec3(x_pos, 0.0, z_pos)
-                })
-            });
+        let positions = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                let x_pos = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z_pos = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                vec3(x_pos, 0.0, z_pos)
+            })
+        });
 
         for position in positions {
             let transform = Transform {
@@ -260,23 +268,23 @@ impl Gear for MyGame {
 
         // random scene //
 
-        let transform = Transform { 
+        let transform = Transform {
             position: vec3(0.0, 0.0, 40.0),
             rotation: Quaternion::one(),
-            scale: vec3(7.0, 7.0, 7.0)
+            scale: vec3(7.0, 7.0, 7.0),
         };
 
         let scene3 = game.load_obj_model("scene3/scene3.obj");
-        game.spawn_entity(( RenderObject{ lods: vec![scene3] }, transform ));
+        game.spawn_entity((RenderObject { lods: vec![scene3] }, transform));
 
         let transform = Transform {
             position: vec3(0.0, 0.0, 0.0),
             rotation: Quaternion::one(),
-            scale: vec3(1.0, 1.0, 1.0)
+            scale: vec3(1.0, 1.0, 1.0),
         };
 
         let scene1 = game.load_obj_model("scene1/scene1.obj");
-        let s1e = game.spawn_entity((RenderObject{ lods: vec![scene1] }, transform));
+        let s1e = game.spawn_entity((RenderObject { lods: vec![scene1] }, transform));
 
         log!(LogKind::Info, "scene1 entity = {:?}", s1e);
 
@@ -297,7 +305,9 @@ impl Gear for MyGame {
         let landscape_model3d = game.add_model3d("landscape", landscape_mesh);
 
         let entity = Entity::new()
-            .insert(RenderObject{lods: vec![landscape_model3d]})
+            .insert(RenderObject {
+                lods: vec![landscape_model3d],
+            })
             .insert(landscape)
             .insert(Transform::identity());
 
@@ -312,18 +322,21 @@ impl Gear for MyGame {
 
 #[tokio::main]
 pub async fn main() {
-    Game::new().setup(|game| {
-        game.add_gear("render".into(), Render::default());
-        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
-            return;
-        };
-        scene.add_gui(EngineStats::new());
-        scene.add_gui(TerminalGui::new(default_terminal_commands()));
-    }).setup(|game| {
-        if let Ok(mygame) = MyGame::new() {
-            game.add_gear("mygame".into(), mygame);
-        }
-    }).run();
+    Game::new()
+        .setup(|game| {
+            game.add_gear("render".into(), Render::default());
+            let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
+            scene.add_gui(EngineStats::new());
+            scene.add_gui(TerminalGui::new(default_terminal_commands()));
+        })
+        .setup(|game| {
+            if let Ok(mygame) = MyGame::new() {
+                game.add_gear("mygame".into(), mygame);
+            }
+        })
+        .run();
 }
 
 #[cfg(test)]
@@ -337,11 +350,16 @@ mod tests {
                 if let Ok(mygame) = MyGame::new() {
                     game.add_gear("mygame".into(), mygame);
                 }
-            }).setup(|game| {
+            })
+            .setup(|game| {
                 if let Err(err) = game.components.with::<WorldScene, _>(|scene| {
                     scene.add_gui(EngineStats::new());
                 }) {
-                    log!(LogKind::Error, "Failed to add EngineStats to scene: {}", err);
+                    log!(
+                        LogKind::Error,
+                        "Failed to add EngineStats to scene: {}",
+                        err
+                    );
                 }
             });
 

@@ -226,6 +226,7 @@ impl Game {
             }
         }
 
+        commands.sort_by_key(|c| c.priority());
         for cmd in commands {
             cmd.apply(self);
         }
