@@ -133,11 +133,11 @@ impl MyGame {
         let forward = cam_handle.forward();
         let right = cam_handle.right();
 
-        if input.is_key_pressed(KeyCode::KeyX) {
+        if input.pressed(KeyCode::KeyX) {
             game.load_obj_model("scene1/scene1.obj");
         }
 
-        if input.is_key_pressed(KeyCode::KeyC) {
+        if input.pressed(KeyCode::KeyC) {
             let Some(active_camera) = scene.active_camera else {
                 return;
             };
@@ -151,31 +151,31 @@ impl MyGame {
             game.set_default_camera(&camera);
         }
 
-        if input.is_key_pressed(KeyCode::ArrowUp) {
+        if input.active(KeyCode::ArrowUp) {
             game.update_entity_position(&self.truck, Vector3::new(0.0, 0.0, speed * dt));
         }
 
-        if input.is_key_pressed(KeyCode::ArrowDown) {
+        if input.active(KeyCode::ArrowDown) {
             game.update_entity_position(&self.truck, Vector3::new(0.0, 0.0, -speed * dt));
         }
 
-        if input.is_key_pressed(KeyCode::KeyW) {
+        if input.active(KeyCode::KeyW) {
             FreeFlyCamera::update_position(self.camera1, forward * speed * dt);
         }
 
-        if input.is_key_pressed(KeyCode::KeyS) {
+        if input.active(KeyCode::KeyS) {
             FreeFlyCamera::update_position(self.camera1, -forward * speed * dt);
         }
 
-        if input.is_key_pressed(KeyCode::KeyA) {
+        if input.active(KeyCode::KeyA) {
             FreeFlyCamera::update_position(self.camera1, -right * speed * dt);
         }
 
-        if input.is_key_pressed(KeyCode::KeyD) {
+        if input.active(KeyCode::KeyD) {
             FreeFlyCamera::update_position(self.camera1, right * speed * dt);
         }
 
-        if input.is_key_pressed(KeyCode::KeyE) {
+        if input.active(KeyCode::KeyE) {
             self.h += 1.0;
             let transform = Transform {
                 position: vec3(0.0, 30.0, -self.h),

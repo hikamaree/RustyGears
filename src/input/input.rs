@@ -35,7 +35,9 @@ pub struct MouseDelta {
 /// Mouse deltas are reset every frame by the main loop or input system.
 pub struct Input {
     mouse_delta: MouseDelta,
-    pressed_keys: HashSet<KeyCode>
+    active: HashSet<KeyCode>,
+    pressed: HashSet<KeyCode>,
+    released: HashSet<KeyCode>,
 }
 
 impl Input {
@@ -46,11 +48,11 @@ impl Input {
             dy: 0.0
         };
 
-        let pressed_keys = HashSet::new();
-
         Self {
             mouse_delta,
-            pressed_keys,
+            active: HashSet::new(),
+            pressed: HashSet::new(),
+            released: HashSet::new(),
         }
     }
 
@@ -66,43 +68,74 @@ impl Input {
         self.mouse_delta.dy += dy;
     }
 
-    /// Resets the mouse delta back to zero.
+    /// Resets the mouse delta and per-frame key states.
     ///
-    /// This is typically called at the end of a frame to prepare for the next update cycle.
-    pub(crate) fn reset_mouse_delta(&mut self) {
+    /// Clears the sets of keys pressed and released this frame.
+    /// Typically called at the end of a frame to prepare for the next update cycle.
+    pub(crate) fn reset(&mut self) {
         self.mouse_delta.dx = 0.0;
         self.mouse_delta.dy = 0.0;
+        self.pressed.clear();
+        self.released.clear();
     }
 
     /// Marks a key as currently pressed.
     ///
-    /// Called when a key press event is received.
+    /// Updates both the `active` set and the `pressed` set if the key
+    /// was not already active. Called when a key press event is received.
     ///
     /// # Arguments
     /// * `key` - The key code of the pressed key.
     pub(crate) fn press_key(&mut self, key: KeyCode) {
-        self.pressed_keys.insert(key);        
+        if !self.active(key) {
+            self.pressed.insert(key);
+        }
+        self.active.insert(key);        
     }
 
     /// Marks a key as released.
     ///
+    /// Removes the key from the `active` set and adds it to the `released` set.
     /// Called when a key release event is received.
     ///
     /// # Arguments
-    /// * `key` - A reference to the released key code.
-    pub(crate) fn release_key(&mut self, key: &KeyCode) {
-        self.pressed_keys.remove(key);        
+    /// * `key` - The key code of the released key.
+    pub(crate) fn release_key(&mut self, key: KeyCode) {
+        self.active.remove(&key);        
+        self.released.insert(key);
     }
 
-    /// Returns true if the specified key is currently being held down.
+    /// Returns true if the specified key is currently held down.
     ///
     /// # Arguments
     /// * `key` - The key code to query.
     ///
     /// # Returns
-    /// `true` if the key is pressed, otherwise `false`.
-    pub fn is_key_pressed(&self, key: KeyCode) -> bool {
-        self.pressed_keys.contains(&key)
+    /// `true` if the key is active (held down), otherwise `false`.
+    pub fn active(&self, key: KeyCode) -> bool {
+        self.active.contains(&key)
+    }
+
+    /// Returns true if the specified key was pressed this frame.
+    ///
+    /// # Arguments
+    /// * `key` - The key code to query.
+    ///
+    /// # Returns
+    /// `true` if the key was pressed during the current frame, otherwise `false`.
+    pub fn pressed(&self, key: KeyCode) -> bool {
+        self.pressed.contains(&key)
+    }
+
+    /// Returns true if the specified key was released this frame.
+    ///
+    /// # Arguments
+    /// * `key` - The key code to query.
+    ///
+    /// # Returns
+    /// `true` if the key was released during the current frame, otherwise `false`.
+    pub fn released(&self, key: KeyCode) -> bool {
+        self.released.contains(&key)
     }
 
     /// Returns the current accumulated mouse delta since the last reset.

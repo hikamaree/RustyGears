@@ -69,7 +69,7 @@ impl ApplicationHandler for Game {
                 };
 
                 if let Ok(mut input) = self.components.get_mut::<Input>() {
-                    input.reset_mouse_delta();
+                    input.reset();
                 };
             }
 
@@ -88,7 +88,7 @@ impl ApplicationHandler for Game {
 
                 match state {
                     winit::event::ElementState::Pressed => input.press_key(key),
-                    winit::event::ElementState::Released => input.release_key(&key),
+                    winit::event::ElementState::Released => input.release_key(key),
                 }
             }
 
