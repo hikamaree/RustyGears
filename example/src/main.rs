@@ -15,6 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use rusty_gears::math::Euler;
 use rusty_gears::math::InnerSpace;
 use rusty_gears::math::One;
 use rusty_gears::math::Quaternion;
@@ -96,9 +97,10 @@ impl MyGame {
             }
 
             let flat_forward = flat_forward.normalize();
-            let new_rotation_offset = Quaternion::from_angle_y(
-                -Rad(flat_forward.z.atan2(flat_forward.x) + std::f32::consts::FRAC_PI_2)
-            );
+            let new_rotation_offset = Quaternion::from_angle_y(-Rad(flat_forward
+                .z
+                .atan2(flat_forward.x)
+                + std::f32::consts::FRAC_PI_2));
 
             CameraFollow::set_position_offset(self.camera2, new_position_offset);
             CameraFollow::set_rotation_offset(self.camera2, new_rotation_offset);
@@ -220,7 +222,7 @@ impl Gear for MyGame {
             },
         ));
 
-        let block = game.load_obj_model("truck/semi.obj");
+        let block = game.load_obj_model("ball/ball.obj");
         self.block = Some(RenderObject { lods: vec![block] });
 
         let truck_lod0 = game.load_obj_model("truck/semi.obj");
@@ -312,6 +314,69 @@ impl Gear for MyGame {
             .insert(Transform::identity());
 
         log!(LogKind::Info, "landscape loaded as {:?}", entity);
+
+        // lights //
+
+        let big_block = game.load_obj_model("kocka/kocka.obj");
+        let bb_render = RenderObject {
+            lods: vec![big_block],
+        };
+
+        Entity::new()
+            .insert(bb_render)
+            .insert(Transform {
+            position: vec3(0.0, 180.0, 0.0),
+            rotation: Quaternion::one(),
+            scale: vec3(50.0, 1.0, 50.0),
+        });
+
+        Entity::new()
+            .insert(PointLight {
+                color: [1.0, 1.0, 1.0],
+                intensity: 2.0,
+                radius: 20.0,
+            })
+            .insert(Transform {
+                position: vec3(-15.0, 200.0, 0.0),
+                rotation: Quaternion::one(),
+                scale: vec3(1.0, 1.0, 1.0),
+            })
+            .insert(self.block.clone().unwrap());
+
+        Entity::new()
+            .insert(DirectionalLight {
+                color: [0.0, 1.0, 0.0],
+                intensity: 0.1,
+            })
+            .insert(Transform {
+                position: vec3(0.0, 200.0, 20.0),
+                rotation: Quaternion::from(Euler {
+                    x: Rad(std::f32::consts::FRAC_PI_2),
+                    y: Rad(0.0),
+                    z: Rad(0.0),
+                }),
+                scale: vec3(1.0, 1.0, 1.0),
+            })
+            .insert(self.block.clone().unwrap());
+
+        Entity::new()
+            .insert(SpotLight {
+                color: [0.0, 0.0, 1.0],
+                intensity: 1.0,
+                radius: 40.0,
+                inner_angle: 10f32.to_radians(),
+                outer_angle: 20f32.to_radians(),
+            })
+            .insert(Transform {
+                position: vec3(15.0, 200.0, -5.0),
+                rotation: Quaternion::from(Euler {
+                    x: Rad(std::f32::consts::FRAC_PI_4),
+                    y: Rad(-std::f32::consts::FRAC_PI_4),
+                    z: Rad(0.0),
+                }),
+                scale: vec3(1.0, 1.0, 1.0),
+            })
+            .insert(self.block.clone().unwrap());
     }
 
     async fn update(&mut self, game: GameView) {

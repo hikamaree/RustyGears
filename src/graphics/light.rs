@@ -15,32 +15,41 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use cgmath::InnerSpace;
 use crate::Transform;
+use cgmath::InnerSpace;
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct LightUniform {
-    pub position: [f32; 3],
-    pub _padding: u32,
-    pub color: [f32; 3],
-    pub _padding2: u32,
-}
+/// Maximum number of supported lights in a single frame.
+pub(crate) const MAX_LIGHTS: usize = 64;
 
+/// Common interface for all light types.
+///
+/// Each light must be able to convert itself into a GPU-friendly
+/// representation (`GpuLight`) for use in shaders.
 pub trait Light {
+    /// Converts the light into a `GpuLight` using its world transform.
     fn to_gpu(&self, transform: &Transform) -> GpuLight;
 }
 
+/// GPU-compatible enumeration of light types.
+///
+/// Matches shader definitions for identifying the light behavior.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum GpuLightType {
+    /// Omnidirectional point light that emits from a single position.
     Point = 0,
+    /// Directional light that simulates sunlight or distant sources.
     Directional = 1,
+    /// Spotlight with a cone-shaped area of effect.
     Spot = 2,
 }
 
+/// GPU-side representation of a light source.
+///
+/// All light types (point, directional, spot) share this packed layout.
+/// Sent directly to shaders as part of a uniform buffer.
 #[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GpuLight {
     pub position: [f32; 3],
     pub radius: f32,
@@ -52,6 +61,20 @@ pub struct GpuLight {
     pub _padding: [u32; 2],
 }
 
+impl GpuLight {
+    pub const NULL: GpuLight = GpuLight {
+        position: [0.0; 3],
+        radius: 0.0,
+        color: [0.0; 3],
+        intensity: 0.0,
+        direction: [0.0; 3],
+        light_type: 0,
+        spot_angles: [0.0; 2],
+        _padding: [0; 2],
+    };
+}
+
+/// A point light emitting in all directions from a single position.
 #[derive(Clone, Copy)]
 pub struct PointLight {
     pub color: [f32; 3],
@@ -59,12 +82,14 @@ pub struct PointLight {
     pub radius: f32,
 }
 
+/// A directional light that emits uniformly along a direction.
 #[derive(Clone, Copy)]
 pub struct DirectionalLight {
     pub color: [f32; 3],
     pub intensity: f32,
 }
 
+/// A spotlight emitting within a cone defined by inner and outer angles.
 #[derive(Clone, Copy)]
 pub struct SpotLight {
     pub color: [f32; 3],
@@ -113,10 +138,7 @@ impl Light for SpotLight {
             intensity: self.intensity,
             direction: (-transform.forward()).normalize().into(),
             light_type: GpuLightType::Spot as u32,
-            spot_angles: [
-                self.inner_angle.cos(),
-                self.outer_angle.cos(),
-            ],
+            spot_angles: [self.inner_angle.cos(), self.outer_angle.cos()],
             _padding: [0; 2],
         }
     }

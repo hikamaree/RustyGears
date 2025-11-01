@@ -20,6 +20,7 @@ use crate::EguiRenderer;
 use crate::DrawModel;
 use crate::BufferStrategy;
 use crate::Buffer;
+use crate::GpuLight;
 use crate::Graphics;
 use crate::InstanceRaw;
 use crate::Game;
@@ -50,6 +51,11 @@ pub struct RenderCommand {
     ///
     /// Batches help reduce GPU state changes by grouping compatible draw calls together.
     pub batches: Vec<RenderBatch>,
+    /// A list of GPU-ready lights used for shading.
+    ///
+    /// Each `GpuLight` holds preprocessed light data (point, directional, or spot)
+    /// sent to shaders for lighting calculations.
+    pub lights: Vec<GpuLight>,
 }
 
 impl Command for RenderCommand {
@@ -136,6 +142,12 @@ impl Command for RenderCommand {
                             }
                         }
                     }
+                }
+
+                if let Some(light_buffer) = graphics.buffers.get_mut("light") {
+                    let mut gpu_lights = self.lights.clone();
+                    gpu_lights.resize(crate::MAX_LIGHTS, GpuLight::NULL);
+                    light_buffer.write(&graphics.queue, bytemuck::cast_slice(&gpu_lights));
                 }
             }
         });

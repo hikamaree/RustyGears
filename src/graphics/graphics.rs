@@ -15,10 +15,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::GpuLight;
 use crate::InstanceRaw;
 use crate::Camera;
 use crate::DEFAULT_CAMERA_BUFFER_SIZE;
-use crate::LightUniform;
 use crate::BufferStrategy;
 use crate::Buffer;
 use crate::graphics::pipeline::*;
@@ -330,22 +330,10 @@ impl Graphics {
 
         self.create_buffer(
             "light",
-            std::mem::size_of::<LightUniform>(),
+            crate::MAX_LIGHTS * std::mem::size_of::<GpuLight>(),
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             BufferStrategy::Single,
         );
-
-        let light_uniform = LightUniform {
-            position: [0.0, 100.0, -20.0],
-            _padding: 0,
-            color: [0.0, 0.0, 0.0],
-            _padding2: 0,
-        };
-
-
-        if let Some(light_buffer) = self.buffers.get_mut("light") {
-            light_buffer.write(&self.queue, bytemuck::cast_slice(&[light_uniform]));
-        }
 
         let buffers = std::mem::take(&mut self.buffers);
 

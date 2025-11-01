@@ -16,6 +16,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::CommandFunction;
+use crate::DirectionalLight;
+use crate::GpuLight;
+use crate::Light;
+use crate::PointLight;
 use crate::RenderObject;
 use crate::Camera;
 use crate::Model3d;
@@ -27,6 +31,7 @@ use crate::MeshRenderRange;
 use crate::GameView;
 use crate::Gear;
 use crate::InstanceRaw;
+use crate::SpotLight;
 use crate::Transform;
 use crate::WorldScene;
 
@@ -81,17 +86,17 @@ impl Render {
     ///   active camera, and shared rendering resources./
     fn render(&mut self, game: &GameView) {
         let Ok(scene) = game.get::<WorldScene>() else {
-            crate::send_command(RenderCommand { batches: vec![] });
+            crate::send_command(RenderCommand { batches: vec![], lights: vec![] });
             return;
         };
 
         let Some(camera_entity) = scene.active_camera else {
-            crate::send_command(RenderCommand { batches: vec![] });
+            crate::send_command(RenderCommand { batches: vec![], lights: vec![] });
             return;
         };
 
         let Some(camera) = scene.world.get::<Camera>(camera_entity) else {
-            crate::send_command(RenderCommand { batches: vec![] });
+            crate::send_command(RenderCommand { batches: vec![], lights: vec![] });
             return;
         };
 
@@ -207,7 +212,36 @@ impl Render {
             .chain(transparent_render_data)
             .collect();
 
-        crate::send_command(RenderCommand { batches });
+
+        let mut lights: Vec<GpuLight> = Vec::new();
+
+        lights.extend(
+            scene
+            .world
+            .query2::<Transform, PointLight>()
+            .into_iter()
+            .map(|(_ent, transform, light)| light.to_gpu(transform)),
+        );
+
+        lights.extend(
+            scene
+            .world
+            .query2::<Transform, DirectionalLight>()
+            .into_iter()
+            .map(|(_ent, transform, light)| light.to_gpu(transform)),
+        );
+
+        lights.extend(
+            scene
+            .world
+            .query2::<Transform, SpotLight>()
+            .into_iter()
+            .map(|(_ent, transform, light)| light.to_gpu(transform)),
+        );
+
+        lights.truncate(64);
+
+        crate::send_command(RenderCommand { batches, lights });
         crate::send_command(CommandFunction {
             run: Box::new(move |game: &mut crate::Game| {
                 let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
