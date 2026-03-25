@@ -15,9 +15,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub const DEFAULT_INSTANCE_BUFFER_SIZE: usize = 32 * 1024 * 1024;
-pub const DEFAULT_CAMERA_BUFFER_SIZE: usize = 80;
-
 /// Defines the buffer usage strategy:
 /// - `Single`: Single buffer (no rotation).
 /// - `Double`: Double buffering (helps avoid GPU stalls).
@@ -42,7 +39,6 @@ pub struct Buffer {
 }
 
 impl Buffer {
-
     /// Creates a new buffer (or multiple buffers) according to the selected strategy.
     ///
     /// # Arguments
@@ -63,7 +59,7 @@ impl Buffer {
             BufferStrategy::Double => 2,
             BufferStrategy::Triple => 3,
         };
-        
+
         let buffers = (0..count)
             .map(|i| {
                 device.create_buffer(&wgpu::BufferDescriptor {
@@ -74,7 +70,7 @@ impl Buffer {
                 })
             })
             .collect();
-            
+
         Self {
             buffers,
             current_idx: 0,
@@ -89,13 +85,13 @@ impl Buffer {
     pub fn current(&self) -> &wgpu::Buffer {
         &self.buffers[self.current_idx]
     }
-    
+
     /// Advances to the next buffer (for double/triple buffering) and returns it.
     pub fn next(&mut self) -> &wgpu::Buffer {
         self.current_idx = (self.current_idx + 1) % self.buffers.len();
         self.current()
     }
-    
+
     /// Writes raw byte data into the current buffer.
     ///
     /// # Arguments

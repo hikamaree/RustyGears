@@ -19,6 +19,8 @@
 struct Camera {
     view_pos: vec4<f32>,
     view_proj: mat4x4<f32>,
+    light_count: f32,
+    _padding: vec3<f32>,
 };
 @group(1) @binding(0)
 var<uniform> camera: Camera;
@@ -118,7 +120,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 	var color_accum = vec3<f32>(0.05, 0.05, 0.05);
 
-	for (var i: u32 = 0u; i < 64u; i = i + 1u) {
+	let num_lights = u32(camera.light_count);
+	for (var i: u32 = 0u; i < num_lights; i = i + 1u) {
 		let light = lights[i];
 
 		if (light.intensity < 0.01) {

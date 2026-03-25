@@ -15,56 +15,85 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use once_cell::sync::OnceCell;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use crate::Texture;
 
 static DEFAULT_MATERIAL: OnceCell<Arc<Material>> = OnceCell::new();
 
-/// A GPU-ready material that contains textures and render-time parameters.
-///
-/// `Material` encapsulates the data required to render a surface, including its
-/// diffuse, normal, and dissolve (transparency) textures. It also stores the precomputed
-/// `wgpu::BindGroup` used to bind the material to the GPU pipeline.
-///
-/// This is typically created per unique material defined in a model file (e.g., `.mtl`).
+#[derive(Debug, Clone)]
+pub enum TextureSource {
+    File(PathBuf),
+    Color([f32; 4]),
+}
+
+#[derive(Debug, Clone)]
+pub struct MaterialData {
+    pub name: String,
+    pub diffuse: Option<TextureSource>,
+    pub normal: Option<TextureSource>,
+    pub dissolve: Option<(TextureSource, f32)>,
+    pub dissolve_only: f32,
+    pub use_weighted: bool,
+}
+
+impl MaterialData {
+    pub fn new(name: String) -> Self {
+        Self {
+            name,
+            diffuse: None,
+            normal: None,
+            dissolve: None,
+            dissolve_only: 1.0,
+            use_weighted: false,
+        }
+    }
+
+    pub fn with_diffuse(mut self, source: Option<TextureSource>) -> Self {
+        self.diffuse = source;
+        self
+    }
+
+    pub fn with_normal(mut self, source: Option<TextureSource>) -> Self {
+        self.normal = source;
+        self
+    }
+
+    pub fn with_dissolve(mut self, source: Option<TextureSource>, dissolve: f32) -> Self {
+        self.dissolve = source.map(|s| (s, dissolve));
+        self.dissolve_only = dissolve;
+        self
+    }
+
+    pub fn use_weighted_blended(&self) -> bool {
+        self.use_weighted
+    }
+
+    pub fn with_weighted_blended(mut self, use_weighted: bool) -> Self {
+        self.use_weighted = use_weighted;
+        self
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Material {
-    pub name: String,
-    pub diffuse_texture: Option<Texture>,
-    pub normal_texture: Option<Texture>,
-    pub dissolve_texture: Option<Texture>,
+    pub data: Arc<MaterialData>,
+    pub diffuse_texture: Option<Arc<Texture>>,
+    pub normal_texture: Option<Arc<Texture>>,
+    pub dissolve_texture: Option<Arc<Texture>>,
     pub bind_group: wgpu::BindGroup,
-    pub dissolve: f32,
 }
 
 impl Material {
-    /// Constructs a new `Material` and its GPU bind group.
-    ///
-    /// Any missing texture will be substituted with a dummy texture to ensure
-    /// the bind group is fully populated and valid.
-    ///
-    /// # Arguments
-    ///
-    /// * `device` - The GPU device used to create resources.
-    /// * `queue` - The command queue to upload texture data.
-    /// * `name` - Material name, used for labeling.
-    /// * `diffuse_texture` - Optional diffuse (albedo) texture.
-    /// * `normal_texture` - Optional normal map.
-    /// * `dissolve_texture` - Optional alpha mask for transparency.
-    /// * `dissolve` - Default dissolve value (used when texture is not present).
-    /// * `layout` - Bind group layout defining expected bindings.
-    ///
-    /// # Returns
-    /// A fully constructed `Material` instance.
     pub fn new(
+        data: MaterialData,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        name: &str,
-        diffuse_texture: Option<Texture>,
-        normal_texture: Option<Texture>,
-        dissolve_texture: Option<Texture>,
-        dissolve: f32,
+        diffuse_texture: Option<Arc<Texture>>,
+        normal_texture: Option<Arc<Texture>>,
+        dissolve_texture: Option<Arc<Texture>>,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let dummy = Texture::default(device, queue);
@@ -91,7 +120,7 @@ impl Material {
             });
         }
 
-        if let Some(ref normal_texture) = diffuse_texture {
+        if let Some(ref normal_texture) = normal_texture {
             entries.push(wgpu::BindGroupEntry {
                 binding: 2,
                 resource: wgpu::BindingResource::TextureView(&normal_texture.view),
@@ -134,60 +163,49 @@ impl Material {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &entries,
-            label: Some(name),
+            label: Some(&data.name),
         });
 
         Self {
-            name: String::from(name),
+            data: Arc::new(data),
             diffuse_texture,
             normal_texture,
             dissolve_texture,
-            dissolve,
             bind_group,
         }
     }
 
-    /// Returns `true` if the material uses a dissolve texture (alpha mask).
     pub fn has_transparency_texture(&self) -> bool {
         self.dissolve_texture.is_some()
     }
 
     pub fn use_weighted_blended(&self) -> bool {
-        // TODO
-        false
+        self.data.use_weighted_blended()
     }
 
-    /// Returns a lazily initialized global fallback material.
-    ///
-    /// This function attempts to load a material using `assets/default.png` for diffuse,
-    /// and falls back to white if not available. Normal and dissolve textures are optional.
-    /// The resulting material is stored globally and reused.
-    ///
-    /// # Arguments
-    /// - `device`: The GPU device.
-    /// - `queue`: The GPU queue.
-    /// - `layout`: The bind group layout used for materials.
-    ///
-    /// # Returns
-    /// `Arc<Material>` representing a global fallback material.
+    pub fn dissolve(&self) -> f32 {
+        self.data.dissolve_only
+    }
+
     pub fn default(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
     ) -> Arc<Material> {
-        DEFAULT_MATERIAL.get_or_init(|| {
-            let material = Material::new(
-                device,
-                queue,
-                "default",
-                None,
-                None,
-                None,
-                1.0,
-                layout,
-            );
+        DEFAULT_MATERIAL
+            .get_or_init(|| {
+                let material = Material::new(
+                    MaterialData::new(String::from("default")),
+                    device,
+                    queue,
+                    None,
+                    None,
+                    None,
+                    layout,
+                );
 
-            Arc::new(material)
-        }).clone()
+                Arc::new(material)
+            })
+            .clone()
     }
 }

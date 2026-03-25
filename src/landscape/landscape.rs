@@ -15,6 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::render::gpu_resources::GpuResources;
+use crate::render::render_resources::RenderResources;
 use crate::GameView;
 use crate::Material;
 use std::sync::Arc;
@@ -25,12 +27,12 @@ use cgmath::InnerSpace;
 
 use wgpu::util::DeviceExt;
 
-use crate::ModelVertex;
-use crate::Mesh;
-use crate::Model;
-use crate::RenderTag;
 use crate::BoundingSphere;
-
+use crate::Mesh;
+use crate::MeshData;
+use crate::Model;
+use crate::ModelVertex;
+use crate::RenderTag;
 
 #[derive(Debug, Clone)]
 pub struct Landscape {
@@ -41,8 +43,12 @@ pub struct Landscape {
 }
 
 impl Landscape {
-    pub fn from_heightmap(path: &str, cell_size: f32, max_height: f32) -> Result<Landscape, Box<dyn std::error::Error>> {
-        let img = image::open(path)?.to_luma8(); 
+    pub fn from_heightmap(
+        path: &str,
+        cell_size: f32,
+        max_height: f32,
+    ) -> Result<Landscape, Box<dyn std::error::Error>> {
+        let img = image::open(path)?.to_luma8();
 
         let (width, height) = img.dimensions();
 
@@ -167,37 +173,55 @@ impl Landscape {
             radius: max_radius,
         };
 
-        let Ok(graphics) = game.get::<crate::Graphics>() else {
-            return Err("Failed to get Graphics component".to_string());
+        let Ok(gpu) = game.get::<GpuResources>() else {
+            return Err("Failed to get GpuResources component".to_string());
         };
 
-        let vertex_buffer = graphics.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("landscape_vertex_buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let Ok(resources) = game.get::<RenderResources>() else {
+            return Err("Failed to get RenderResources component".to_string());
+        };
 
-        let index_buffer = graphics.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("landscape_index_buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let vertex_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("landscape_vertex_buffer"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+        let index_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("landscape_index_buffer"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+        let mesh_data = MeshData {
+            name: "landscape_mesh".to_string(),
+            vertices: vec![],
+            indices: indices.clone(),
+            bounding_sphere,
+            render_tag: RenderTag::Opaque,
+            material: 0,
+        };
 
         let mesh = Mesh {
-            name: "landscape_mesh".to_string(),
+            data: Arc::new(mesh_data),
             vertex_buffer: Arc::new(vertex_buffer),
             index_buffer: Arc::new(index_buffer),
             num_elements: indices.len() as u32,
             material: 0,
-            bounding_sphere,
-            render_tag: RenderTag::Opaque,
         };
 
-        let Some(texture_layout) = graphics.bind_group_layouts.get(&crate::BindGroupLayoutKey::Texture) else {
+        let Some(texture_layout) = resources
+            .layouts
+            .get_opt::<crate::render::layout::TextureLayout>()
+        else {
             return Err("Missing texture bind group layout".into());
         };
 
-        let material = Material::default(&graphics.device, &graphics.queue, texture_layout);
+        let material = Material::default(&gpu.device, &gpu.queue, texture_layout);
 
         Ok(Model {
             meshes: vec![mesh.into()],

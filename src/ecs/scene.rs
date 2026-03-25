@@ -17,18 +17,19 @@
 
 use std::collections::HashMap;
 
-use crate::CameraControl;
-use crate::EntityBuilder;
-use crate::World;
-use crate::Entity;
-use crate::Transform;
 use crate::Camera;
-use crate::Model;
+use crate::CameraControl;
+use crate::Entity;
+use crate::EntityBuilder;
 use crate::Gui;
+use crate::Model;
+use crate::ModelData;
+use crate::Transform;
+use crate::World;
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct Model3d {
-    pub path: String
+    pub path: String,
 }
 
 /// Represents the state of a scene in the game engine using an ECS-based architecture.
@@ -50,6 +51,7 @@ pub struct Model3d {
 pub struct WorldScene {
     pub world: World,
     pub models3d: HashMap<Model3d, Model>,
+    pub pending_model_data: HashMap<Model3d, ModelData>,
     pub active_camera: Option<Entity>,
     pub render_gui: Vec<Box<dyn Gui + Send + Sync>>,
 }
@@ -62,6 +64,25 @@ impl WorldScene {
     /// - `object`: The `RenderObject` to add.
     pub fn add_model3d(&mut self, name: Model3d, model: Model) {
         self.models3d.insert(name, model);
+    }
+
+    /// Adds CPU-side model data that needs GPU upload.
+    ///
+    /// # Parameters
+    /// - `name`: A unique string identifier for the model.
+    /// - `data`: The CPU-side model data.
+    pub fn add_pending_model_data(&mut self, name: Model3d, data: ModelData) {
+        self.pending_model_data.insert(name, data);
+    }
+
+    /// Drains all pending model data for GPU upload.
+    ///
+    /// # Returns
+    /// - Iterator of (Model3d, ModelData) pairs.
+    pub fn drain_pending_model_data(
+        &mut self,
+    ) -> std::collections::hash_map::Drain<'_, Model3d, ModelData> {
+        self.pending_model_data.drain()
     }
 
     /// Retrieves a reference to a render object by name.
@@ -123,8 +144,7 @@ impl WorldScene {
     /// # Returns
     /// - `Some(&Camera)` if an active camera is set and found, or `None` otherwise.
     pub fn active_camera(&self) -> Option<&Camera> {
-        self.active_camera
-            .and_then(|e| self.world.get::<Camera>(e))
+        self.active_camera.and_then(|e| self.world.get::<Camera>(e))
     }
 
     /// Retrieves a mutable reference to the active camera, if one exists.

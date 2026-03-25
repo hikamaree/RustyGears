@@ -15,15 +15,32 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-mod game;
-mod gameview;
-mod gameloop;
-mod gear;
-mod components;
-mod gamewindow;
+use std::sync::Arc;
 
-pub use game::*;
-pub use gameview::*;
-pub use gear::*;
-pub use gamewindow::*;
-pub(crate) use components::*;
+#[derive(Clone)]
+pub struct GpuResources {
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
+    pub adapter: Arc<wgpu::Adapter>,
+    instance: wgpu::Instance,
+}
+
+impl GpuResources {
+    pub fn new(
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    ) -> Self {
+        Self {
+            instance,
+            adapter: Arc::new(adapter),
+            device: Arc::new(device),
+            queue: Arc::new(queue),
+        }
+    }
+
+    pub fn instance(&self) -> &wgpu::Instance {
+        &self.instance
+    }
+}

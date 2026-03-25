@@ -15,8 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use std::sync::Arc;
 use std::ops::Range;
+use std::sync::Arc;
 
 use crate::InstanceRaw;
 use crate::Model3d;
@@ -69,24 +69,29 @@ pub struct ModelRenderData {
     pub lod_index: usize,
 }
 
-/// A batch of models that share the same render pipeline and camera.
-///
-/// Each `RenderBatch` contains all instance data, mesh visibility info,
-/// and associated rendering metadata needed to draw a group of models
-/// using the same `RenderTag` (i.e., pipeline configuration).
-///
-/// These batches are grouped by the `Render` gear when preparing a `RenderCommand` to optimize rendering.
-///
-/// # Fields
-/// - `prepared_models`: Models and their per-instance data that passed frustum culling.
-/// - `tag`: The render pipeline tag used to select the appropriate GPU pipeline.
-#[derive(Debug)]
-pub struct RenderBatch {
-    /// A list of models and associated instance data that are ready to be drawn.
-    /// Each entry contains the mesh, instance transforms, and per-mesh visibility info.
-    pub prepared_models: Vec<ModelRenderData>,
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+pub struct BufferKey {
+    pub model3d: Model3d,
+    pub lod_index: usize,
+    pub mesh_index: usize,
+}
 
-    /// Identifies the render pipeline (shaders, layout, etc.) to use for this batch.
-    /// Models with the same `RenderTag` can be drawn together.
-    pub tag: RenderTag,
+impl BufferKey {
+    pub fn new(model3d: Model3d, lod_index: usize, mesh_index: usize) -> Self {
+        Self {
+            model3d,
+            lod_index,
+            mesh_index,
+        }
+    }
+}
+
+impl std::fmt::Display for BufferKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}:lod{}:mesh{}",
+            self.model3d.path, self.lod_index, self.mesh_index
+        )
+    }
 }

@@ -377,6 +377,18 @@ impl Gear for MyGame {
                 scale: vec3(1.0, 1.0, 1.0),
             })
             .insert(self.block.clone().unwrap());
+
+        Entity::new()
+            .insert(Transform {
+                position: vec3(-15.0, 190.0, 0.0),
+                rotation: Quaternion::from(Euler {
+                    x: Rad(std::f32::consts::FRAC_PI_4),
+                    y: Rad(-std::f32::consts::FRAC_PI_4),
+                    z: Rad(0.0),
+                }),
+                scale: vec3(1.0, 1.0, 1.0),
+            })
+            .insert(self.block.clone().unwrap());
     }
 
     async fn update(&mut self, game: GameView) {
@@ -389,7 +401,7 @@ impl Gear for MyGame {
 pub async fn main() {
     Game::new()
         .setup(|game| {
-            game.add_gear("render".into(), Render::default());
+            game.add_gear_sync("render".into(), Render::default());
             let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
                 return;
             };

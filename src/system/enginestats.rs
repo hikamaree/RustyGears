@@ -15,13 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use egui::Area;
 use egui::Color32;
 use egui::RichText;
-use egui::Area;
 
-use crate::Graphics;
-use crate::Gui;
+use crate::render::render_state::RenderState;
 use crate::GameView;
+use crate::Gui;
 use crate::Time;
 
 use super::gpu::GpuInfo;
@@ -54,7 +54,7 @@ impl Gui for EngineStats {
             return;
         };
 
-        let Ok(graphics) = game.get::<Graphics>() else {
+        let Ok(render_state) = game.get::<RenderState>() else {
             return;
         };
 
@@ -70,27 +70,38 @@ impl Gui for EngineStats {
                             ui.set_min_width(200.0);
                             ui.label(
                                 RichText::new(format!("FPS: {}", time.fps()))
-                                .monospace()
-                                .color(Color32::WHITE),
+                                    .monospace()
+                                    .color(Color32::WHITE),
                             );
                             ui.label(
                                 RichText::new(format!("{}", self.gpu.display()))
-                                .monospace()
-                                .color(Color32::WHITE),
+                                    .monospace()
+                                    .color(Color32::WHITE),
                             );
                             ui.label(
-                                RichText::new(format!("Rendering:\n  Triangles: {}", graphics.t_count))
+                                RichText::new(format!(
+                                    "Rendering:\n  Triangles: {}",
+                                    render_state.t_count
+                                ))
                                 .monospace()
                                 .color(Color32::WHITE),
                             );
                             ui.label(
                                 RichText::new(format!("Frametime: {}", time.frametime()))
-                                .monospace()
-                                .color(Color32::WHITE)
+                                    .monospace()
+                                    .color(Color32::WHITE),
                             );
-                            ui.label(RichText::new("Gear update times:").monospace().color(Color32::WHITE));
+                            ui.label(
+                                RichText::new("Gear update times:")
+                                    .monospace()
+                                    .color(Color32::WHITE),
+                            );
                             for (gear, micros) in time.gear_update_times() {
-                                ui.label(RichText::new(format!("  {}: {:.0}", gear, micros)).monospace().color(Color32::WHITE));
+                                ui.label(
+                                    RichText::new(format!("  {}: {:.0}", gear, micros))
+                                        .monospace()
+                                        .color(Color32::WHITE),
+                                );
                             }
                         });
                     });

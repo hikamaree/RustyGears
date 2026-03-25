@@ -15,252 +15,200 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::CommandFunction;
-use crate::DirectionalLight;
-use crate::GpuLight;
-use crate::Light;
-use crate::PointLight;
-use crate::RenderObject;
+use std::sync::Arc;
+use crate::registry::RegisterPass;
 use crate::Camera;
-use crate::Model3d;
-use crate::RenderBatch;
-use crate::RenderTag;
-use crate::RenderCommand;
-use crate::ModelRenderData;
-use crate::MeshRenderRange;
 use crate::GameView;
 use crate::Gear;
-use crate::InstanceRaw;
-use crate::SpotLight;
-use crate::Transform;
+use crate::render::ExecuteRender;
 use crate::WorldScene;
 
-use std::sync::Arc;
-use std::collections::HashMap;
+use crate::render::passes::WeightedPass;
+use crate::render::passes::TransparentPass;
+use crate::render::passes::ShadowPass;
+use crate::render::passes::OpaquePass;
 
-use cgmath::InnerSpace;
-use cgmath::Matrix4;
+use crate::render::gpu_resources::GpuResources;
+use crate::render::render_resources::RenderResources;
+use crate::render::render_state::RenderState;
+use crate::render::window_state::WindowState;
+use crate::EguiRenderer;
 
-use rayon::iter::ParallelIterator;
-use rayon::iter::IntoParallelIterator;
 
-/// A gear responsible for preparing and sending render commands to the renderer.
-///
-/// The `Render` gear collects visible models from the scene based on the active camera's view
-/// frustum and sends a [`RenderCommand`] containing instance data for rendering.
-///
-/// It performs visibility checks (frustum culling) on a per-mesh basis and groups instances
-/// into contiguous draw ranges to optimize GPU instancing. The result is a list of [`ModelRenderData`]
-/// objects, one for each visible renderable object.
-///
-/// # Note
-/// This gear should typically be the **only** producer of [`RenderCommand`]s in the system.
-/// If you are writing a custom rendering system, you may choose to replace or extend this behavior,
-/// but under normal usage, avoid emitting [`RenderCommand`]s from other gears.
-///
-/// # Fields
-/// - `sender`: A command sender used to pass prepared [`RenderCommand`]s to the main game loop or renderer.
 #[derive(Debug, Default)]
 pub struct Render;
 
 impl Render {
-    /// Prepares and submits a [`RenderCommand`] containing all visible model instances in the scene.
-    ///
-    /// This method performs the following steps:
-    /// - Extracts the active camera and uses it for visibility determination (if present).
-    /// - Iterates over all [`ModelInstance`] components in the world and selects the appropriate LOD
-    ///   based on the instance's distance from the camera.
-    /// - Applies frustum culling using each mesh's bounding sphere.
-    /// - Separates opaque and transparent meshes based on their [`RenderTag`].
-    /// - Groups visible opaque instances by `(model_name, lod_index, mesh_index)` for efficient instanced rendering.
-    /// - Sorts transparent instances back-to-front based on their depth along the camera's viewing direction,
-    ///   ensuring correct rendering order for alpha blending.
-    /// - Constructs [`RenderBatch`] structures containing instance and mesh range data.
-    /// - Sends a [`RenderCommand`] through the internal channel for execution in the rendering thread.
-    ///
-    /// If no active camera is present, the function will submit an empty `RenderCommand`
-    /// and trigger a redraw, but no objects will be rendered.
-    ///
-    /// # Parameters
-    /// - `game`: A read-only reference to the current [`GameView`], which contains the scene graph,
-    ///   active camera, and shared rendering resources./
-    fn render(&mut self, game: &GameView) {
-        let Ok(scene) = game.get::<WorldScene>() else {
-            crate::send_command(RenderCommand { batches: vec![], lights: vec![] });
-            return;
+    pub fn init(game: &mut crate::Game) {
+        let (device, _queue, config, window) = {
+            let gpu = match game.components.get::<GpuResources>() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            let window = match game.components.get::<WindowState>() {
+                Ok(w) => w,
+                Err(_) => return,
+            };
+            let game_window = match game.components.get::<crate::GameWindow>() {
+                Ok(w) => w,
+                Err(_) => return,
+            };
+            (
+                gpu.device.clone(),
+                gpu.queue.clone(),
+                window.config.clone(),
+                game_window.window().clone(),
+            )
         };
 
-        let Some(camera_entity) = scene.active_camera else {
-            crate::send_command(RenderCommand { batches: vec![], lights: vec![] });
-            return;
-        };
+        let layouts = crate::render::layout::LayoutRegistry::new(&device);
+        let render_resources = RenderResources::new(layouts);
 
-        let Some(camera) = scene.world.get::<Camera>(camera_entity) else {
-            crate::send_command(RenderCommand { batches: vec![], lights: vec![] });
-            return;
-        };
+        let depth_texture = crate::Texture::create_depth_texture(
+            &device,
+            &config,
+            "depth_texture",
+        );
+        let projection = crate::Projection::new(
+            config.width,
+            config.height,
+            cgmath::Deg(45.0),
+            0.1,
+            1000.0,
+        );
 
-        let camera_transform = scene.get_camera_transform(camera_entity);
+        let render_state = RenderState::new(depth_texture, projection);
 
-        let view_matrix = camera.calc_matrix(&camera_transform);
+        let egui = EguiRenderer::new(
+            &device,
+            config.format,
+            None,
+            1,
+            &window,
+        );
 
-        let (opaque_batches, mut transparent_instances): (Vec<_>, Vec<_>) = scene
-            .world
-            .query2::<RenderObject, Transform>()
-            .into_par_iter()
-            .map(|(_ent, render_obj, transform)| {
-                if render_obj.lods.len() == 0 {
-                    return (vec![], vec![]);
-                }
-                let dist = (camera_transform.position - transform.position).magnitude();
-                let lod_index = match dist {
-                    d if d < 100.0 => 0,
-                    d if d < 300.0 => 1.min(render_obj.lods.len() - 1),
-                    d if d < 500.0 => 2.min(render_obj.lods.len() - 1),
-                    _ => render_obj.lods.len() - 1,
-                };
+        game.components.insert(render_resources);
+        game.components.insert(render_state);
+        game.components.insert(egui);
 
-                let model3d = render_obj.lods[lod_index].clone();
+        const DEFAULT_CAMERA_BUFFER_SIZE: usize = 128;
 
-                let Some(lod_model) = scene.get_model3d(&model3d) else {
-                    return (vec![], vec![]);
-                };
+        let resources = game.components.get::<RenderResources>().unwrap();
+        let state = game.components.get_mut::<RenderState>().unwrap();
+        let gpu = game.components.get::<GpuResources>().unwrap();
 
-                let raw = transform.raw();
-                let model_mat = Matrix4::from(raw.model);
+        resources.create_buffer(
+            &gpu.device,
+            "camera",
+            DEFAULT_CAMERA_BUFFER_SIZE,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            crate::BufferStrategy::Single,
+        );
 
-                let mut local_opaque = Vec::new();
-                let mut local_transparent = Vec::new();
+        resources.create_buffer(
+            &gpu.device,
+            "light",
+            crate::MAX_LIGHTS * std::mem::size_of::<crate::GpuLight>(),
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            crate::BufferStrategy::Single,
+        );
 
-                for (mesh_index, mesh) in lod_model.meshes.iter().enumerate() {
-                    let center_local = mesh.bounding_sphere.center.extend(1.0);
-                    let center_world = model_mat * center_local;
+        resources.create_buffer(
+            &gpu.device,
+            "shadow_camera",
+            DEFAULT_CAMERA_BUFFER_SIZE,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            crate::BufferStrategy::Single,
+        );
 
-                    let scale = model_mat.x.truncate().magnitude()
-                        .max(model_mat.y.truncate().magnitude())
-                        .max(model_mat.z.truncate().magnitude());
-
-                    let radius = mesh.bounding_sphere.radius * scale;
-
-                    if !camera.can_see4(center_world, radius) {
-                        continue;
-                    }
-
-                    match mesh.render_tag {
-                        RenderTag::Opaque => {
-                            local_opaque.push((model3d.clone(), lod_index, mesh_index, raw));
-                        }
-                        RenderTag::SortedTransparent => {
-                            let center_view = view_matrix * center_world;
-                            let depth = -center_view.z;
-
-                            local_transparent.push((depth, model3d.clone(), lod_index, mesh_index, raw));
-                        }
-                        _ => {}
-                    }
-                }
-
-                (local_opaque, local_transparent)
-            }).reduce(|| (Vec::new(), Vec::new()),
-                |mut acc, (opaque, transparent)| {
-                    acc.0.extend(opaque);
-                    acc.1.extend(transparent);
-                    acc
-                },
+        if let Some(bind_group) = resources.create_bind_group::<crate::render::layout::LightLayout>(
+            &gpu.device,
+            "light",
+        ) {
+            state.registry.write().unwrap().register_bind_group(
+                crate::render::registry::BindGroupId::Light,
+                bind_group,
             );
-
-        let mut opaque_group_map: HashMap<(Model3d, usize, usize), Vec<InstanceRaw>> = HashMap::with_capacity(opaque_batches.len() / 2);
-        for (model3d, lod, mesh_idx, raw) in opaque_batches {
-            opaque_group_map.entry((model3d.clone(), lod, mesh_idx)).or_default().push(raw);
         }
 
-        let mut opaque_render_data = vec![];
-        for ((model3d, lod, mesh_idx), instances) in opaque_group_map {
-            opaque_render_data.push(RenderBatch {
-                tag: RenderTag::Opaque,
-                prepared_models: vec![ModelRenderData {
-                    model3d,
-                    lod_index: lod,
-                    instance_data: Arc::from(instances.clone()),
-                    mesh_ranges: vec![MeshRenderRange {
-                        mesh_index: mesh_idx,
-                        visible_instance_ranges: vec![0..instances.len() as u32],
-                    }],
-                }],
-            });
+        if let Some(bind_group) = resources.create_bind_group::<crate::render::layout::CameraLayout>(
+            &gpu.device,
+            "camera",
+        ) {
+            state.registry.write().unwrap().register_bind_group(
+                crate::render::registry::BindGroupId::Camera,
+                bind_group,
+            );
         }
 
-        transparent_instances.sort_by(|a, b| b.0.total_cmp(&a.0));
+        if let Some(bind_group) = resources.create_bind_group::<crate::render::layout::CameraLayout>(
+            &gpu.device,
+            "shadow_camera",
+        ) {
+            state.registry.write().unwrap().register_bind_group(
+                crate::render::registry::BindGroupId::ShadowCamera,
+                bind_group,
+            );
+        }
+    }
 
-        let transparent_render_data = transparent_instances.into_iter().map(|(_, model3d, lod, mesh_idx, raw)| {
-            RenderBatch {
-                tag: RenderTag::SortedTransparent,
-                prepared_models: vec![ModelRenderData {
-                    model3d: model3d.clone(),
-                    lod_index: lod,
-                    instance_data: Arc::from([raw]),
-                    mesh_ranges: vec![MeshRenderRange {
-                        mesh_index: mesh_idx,
-                        visible_instance_ranges: vec![0..1],
-                    }],
-                }],
+    pub fn collect_render_data(game: &GameView) -> Option<ExecuteRender> {
+        let scene = game.get::<WorldScene>().ok()?;
+        let camera_entity = scene.active_camera?;
+        let camera_transform = scene.get_camera_transform(camera_entity);
+        let camera = scene.world.get::<Camera>(camera_entity)?;
+
+        let lights = crate::render::collect_lights(&scene);
+        let camera_uniform = camera.get_uniform(lights.len() as u32);
+
+        let state = game.get::<crate::render::RenderState>().ok()?;
+        let pass_registry = state.registry.clone();
+
+        let passes: Vec<_> = {
+            let registry = pass_registry.read().unwrap();
+            registry.iter_passes()
+        };
+
+        let mut sorted_passes = passes;
+        sorted_passes.sort_by_key(|p| p.order());
+
+        let mut collected_data = Vec::new();
+        for pass in sorted_passes {
+            if !pass.should_run(&scene) {
+                continue;
             }
-        });
+            let data = pass.collect(&scene, camera, &camera_transform);
+            collected_data.push((pass.id(), data));
+        }
 
-        let batches: Vec<RenderBatch> = opaque_render_data
-            .into_iter()
-            .chain(transparent_render_data)
-            .collect();
-
-
-        let mut lights: Vec<GpuLight> = Vec::new();
-
-        lights.extend(
-            scene
-            .world
-            .query2::<Transform, PointLight>()
-            .into_iter()
-            .map(|(_ent, transform, light)| light.to_gpu(transform)),
-        );
-
-        lights.extend(
-            scene
-            .world
-            .query2::<Transform, DirectionalLight>()
-            .into_iter()
-            .map(|(_ent, transform, light)| light.to_gpu(transform)),
-        );
-
-        lights.extend(
-            scene
-            .world
-            .query2::<Transform, SpotLight>()
-            .into_iter()
-            .map(|(_ent, transform, light)| light.to_gpu(transform)),
-        );
-
-        lights.truncate(64);
-
-        crate::send_command(RenderCommand { batches, lights });
-        crate::send_command(CommandFunction {
-            run: Box::new(move |game: &mut crate::Game| {
-                let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
-                    return;
-                };
-
-                let _ = game.components.with::<crate::Graphics, _>(|graphics| {
-                    if let Some(camera) = scene.world.get_mut::<crate::Camera>(camera_entity) {
-                        camera.update_view_proj(&camera_transform, &graphics.projection);
-                        graphics.update(camera);
-                    }
-                });
-            }),
-        });
+        Some(ExecuteRender::new(
+            camera_entity,
+            camera_transform,
+            camera_uniform,
+            collected_data,
+            lights,
+        ))
     }
 }
 
 impl Gear for Render {
-    async fn update(&mut self, mut game: GameView) {
-        self.render(&mut game);
+    async fn setup(&mut self, _game: &GameView) {
+        crate::send_command(crate::CommandFunction {
+            run: Box::new(move |game| {
+                Self::init(game);
+            }),
+        });
+
+        crate::send_command(RegisterPass { render_pass: Arc::new(ShadowPass::new()) });
+        crate::send_command(RegisterPass { render_pass: Arc::new(OpaquePass::new()) });
+        crate::send_command(RegisterPass { render_pass: Arc::new(WeightedPass::new()) });
+        crate::send_command(RegisterPass { render_pass: Arc::new(TransparentPass::new()) });
+    }
+
+    async fn update(&mut self, game: GameView) {
+        let Some(render_cmd) = Self::collect_render_data(&game) else {
+            return;
+        };
+        crate::send_command(render_cmd);
     }
 }

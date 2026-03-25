@@ -15,15 +15,13 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-mod game;
-mod gameview;
-mod gameloop;
-mod gear;
-mod components;
-mod gamewindow;
+mod material;
+mod model;
+mod renderer;
 
-pub use game::*;
-pub use gameview::*;
-pub use gear::*;
-pub use gamewindow::*;
-pub(crate) use components::*;
+pub use material::*;
+pub use model::*;
+pub use renderer::*;
+
+pub use material::{MaterialData, TextureSource};
+pub use model::MeshData;

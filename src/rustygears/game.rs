@@ -115,16 +115,43 @@ impl Game {
     ///
     /// # Arguments
     /// * `id` - A unique identifier for the gear.
-    /// * `gear` - An instance of a type that implements the `Gear` trait.
+    /// * `gear` - An instance of a type that implements the [`Gear`] trait.
     ///
     /// # Returns
     /// A mutable reference to the `Game` instance to allow method chaining.
-    pub fn add_gear<T: Gear + Send + Sync + 'static>(&mut self, id: String, mut gear: T) -> &mut Self {
+    pub fn add_gear<T: Gear + Send + Sync + 'static>(&mut self, id: String, gear: T) -> &mut Self {
+        self.add_gear_impl(id, gear, false)
+    }
+
+    /// Adds a new gear synchronously, waiting for setup to complete before returning.
+    ///
+    /// Unlike [`add_gear`][Self::add_gear], this method blocks until the gear's [`Gear::setup`]
+    /// method has finished executing. Any commands sent during setup are also processed
+    /// before this method returns.
+    ///
+    /// Use this for gears that must be fully initialized before other setup functions run,
+    /// such as the Render gear which needs to create GPU resources before the game loop starts.
+    ///
+    /// # Arguments
+    /// * `id` - A unique identifier for the gear.
+    /// * `gear` - An instance of a type that implements the [`Gear`] trait.
+    ///
+    /// # Returns
+    /// A mutable reference to the `Game` instance to allow method chaining.
+    pub fn add_gear_sync<T: Gear + Send + Sync + 'static>(&mut self, id: String, gear: T) -> &mut Self {
+        self.add_gear_impl(id, gear, true)
+    }
+
+    fn add_gear_impl<T: Gear + Send + Sync + 'static>(&mut self, id: String, mut gear: T, wait_for_setup: bool) -> &mut Self {
         let gameview = GameView::new(self.components.clone());
         let handle = tokio::runtime::Handle::current();
+        
+        let (setup_done_tx, setup_done_rx) = std::sync::mpsc::channel();
+        
         std::thread::spawn(move || {
             handle.spawn(async move {
                 gear.setup(&gameview).await;
+                let _ = setup_done_tx.send(());
                 crate::log!(crate::LogKind::Info, "Gear {} is ready", id);
 
                 let (gear_sender, gear_receiver) = crossbeam::channel::unbounded();
@@ -149,6 +176,13 @@ impl Game {
                 }
             });
         });
+
+        if wait_for_setup {
+            setup_done_rx.recv().unwrap();
+            while let Ok(cmd) = self.command_receiver.try_recv() {
+                cmd.apply(self);
+            }
+        }
 
         self
     }

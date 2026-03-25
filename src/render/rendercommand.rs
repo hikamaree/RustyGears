@@ -15,177 +15,334 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use egui_wgpu::ScreenDescriptor;
+use crate::render::gpu_resources::GpuResources;
+use crate::render::pass::PassContext;
+use crate::render::pass::PassData;
+use crate::render::pass_id::PassId;
+use crate::render::render_resources::RenderResources;
+use crate::render::render_state::RenderState;
+use crate::render::targets::RenderTargetPool;
+use crate::render::window_state::WindowState;
+use crate::Camera;
+use crate::Command;
 use crate::EguiRenderer;
-use crate::DrawModel;
-use crate::BufferStrategy;
-use crate::Buffer;
-use crate::GpuLight;
-use crate::Graphics;
-use crate::InstanceRaw;
 use crate::Game;
 use crate::GameView;
-use crate::Command;
+use crate::GameWindow;
+use crate::GpuLight;
 use crate::WorldScene;
-use crate::RenderBatch;
+use egui_wgpu::ScreenDescriptor;
 
-/// A render command containing all data necessary to draw the entire frame.
-///
-/// This is the top-level command issued to the renderer each frame,
-/// typically produced by the `Render` gear. It consists of one or more `RenderBatch`es,
-/// each of which groups models by compatible pipeline and camera settings to improve draw efficiency.
-///
-/// # Note
-/// This command should **only** be constructed and sent by the default `Render` gear.
-/// If you're implementing a custom rendering pipeline or replacing the default renderer,
-/// you may emit your own `RenderCommand`, but in most cases users **should not** send
-/// this command manually.
-///
-/// # Fields
-/// - `batches`: A list of render batches grouped by pipeline and camera. Each batch
-///   contains preprocessed model/instance data ready to be drawn.
 #[derive(Debug)]
-pub struct RenderCommand {
-    /// A list of render batches, each representing a group of models that share the same
-    /// render pipeline and camera.
-    ///
-    /// Batches help reduce GPU state changes by grouping compatible draw calls together.
-    pub batches: Vec<RenderBatch>,
-    /// A list of GPU-ready lights used for shading.
-    ///
-    /// Each `GpuLight` holds preprocessed light data (point, directional, or spot)
-    /// sent to shaders for lighting calculations.
+pub struct ExecuteRender {
+    pub camera_entity: crate::Entity,
+    pub camera_transform: crate::Transform,
+    pub camera_uniform: Box<[u8]>,
+    pub collected_data: Vec<(PassId, PassData)>,
     pub lights: Vec<GpuLight>,
 }
 
-impl Command for RenderCommand {
+impl ExecuteRender {
+    pub fn new(
+        camera_entity: crate::Entity,
+        camera_transform: crate::Transform,
+        camera_uniform: Box<[u8]>,
+        collected_data: Vec<(PassId, PassData)>,
+        lights: Vec<GpuLight>,
+    ) -> Self {
+        Self {
+            camera_entity,
+            camera_transform,
+            camera_uniform,
+            collected_data,
+            lights,
+        }
+    }
+}
+
+impl Command for ExecuteRender {
     fn apply(self: Box<Self>, game: &mut Game) {
-        let Ok(scene) = game.components.get::<WorldScene>() else {
-            return;
+        let (output, view) = {
+            let Ok(window) = game.components.get::<WindowState>() else {
+                return;
+            };
+            match window.surface.get_current_texture() {
+                Ok(frame) => {
+                    let view = frame
+                        .texture
+                        .create_view(&wgpu::TextureViewDescriptor::default());
+                    (frame, view)
+                }
+                Err(e) => {
+                    crate::log!(
+                        crate::LogKind::Error,
+                        "Failed to get surface texture: {e:?}"
+                    );
+                    return;
+                }
+            }
         };
 
-        let Ok(graphics) = game.components.get::<Graphics>() else {
-            return;
+        let encoder = {
+            let Ok(gpu) = game.components.get::<GpuResources>() else {
+                return;
+            };
+            gpu.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Render Encoder"),
+                })
         };
 
-        let output = match graphics.surface.get_current_texture() {
-            Ok(frame) => frame,
+        let mut encoder = encoder;
+
+        let projection = {
+            let Ok(state) = game.components.get::<RenderState>() else {
+                return;
+            };
+            state.projection.clone()
+        };
+
+        {
+            let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+                return;
+            };
+            if let Some(camera) = scene.world.get_mut::<Camera>(self.camera_entity) {
+                camera.update_view_proj(&self.camera_transform, &projection);
+            }
+
+            if !scene.pending_model_data.is_empty() {
+                if let (Ok(gpu), Ok(res)) = (
+                    game.components.get::<GpuResources>(),
+                    game.components.get::<RenderResources>(),
+                ) {
+                    upload_pending_models(&*gpu, &*res, &mut scene);
+                }
+            }
+        }
+
+        {
+            let Ok(gpu) = game.components.get::<GpuResources>() else {
+                return;
+            };
+            let Ok(res) = game.components.get::<RenderResources>() else {
+                return;
+            };
+            if let Some(camera_buffer) = res.get_buffer("camera") {
+                gpu.queue
+                    .write_buffer(&camera_buffer.current(), 0, &self.camera_uniform);
+            }
+        }
+
+        let data_to_execute = self.collected_data;
+
+        let gameview = GameView::new(game.components.clone());
+
+        let _ = game.components.with::<RenderState, _>(|render_state| {
+            render_state.t_count = 0;
+
+            let (camera_bg, light_bg, shadow_camera_bg) = {
+                let registry = render_state.registry.read().unwrap();
+                (
+                    registry
+                        .get_bind_group(crate::render::registry::BindGroupId::Camera)
+                        .cloned(),
+                    registry
+                        .get_bind_group(crate::render::registry::BindGroupId::Light)
+                        .cloned(),
+                    registry
+                        .get_bind_group(crate::render::registry::BindGroupId::ShadowCamera)
+                        .cloned(),
+                )
+            };
+
+            let (camera_bg, light_bg, shadow_camera_bg) =
+                match (camera_bg, light_bg, shadow_camera_bg) {
+                    (Some(c), Some(l), Some(s)) => (c, l, s),
+                    _ => return,
+                };
+
+            let passes_to_run: Vec<_> = {
+                let registry = render_state.registry.read().unwrap();
+                data_to_execute
+                    .iter()
+                    .filter_map(|(id, data)| registry.get_pass(id).map(|p| (p, data)))
+                    .collect()
+            };
+
+            let mut passes_to_run: Vec<_> = passes_to_run
+                .into_iter()
+                .map(|(pass, data)| (pass.clone(), pass.id(), pass.order(), data))
+                .collect();
+
+            passes_to_run.sort_by_key(|(_, _, order, _)| *order);
+
+            let gpu = match game.components.get::<GpuResources>() {
+                Ok(g) => g,
+                Err(_) => return,
+            };
+            let window = match game.components.get::<WindowState>() {
+                Ok(w) => w,
+                Err(_) => return,
+            };
+            let resources = match game.components.get::<RenderResources>() {
+                Ok(r) => r,
+                Err(_) => return,
+            };
+
+            let depth_view = render_state.depth_texture.view.clone();
+            let config_width = window.config.width;
+            let config_height = window.config.height;
+
+            let scene = game.components.get::<WorldScene>().unwrap();
+
+            let gpu_queue = gpu.queue.clone();
+
+            let mut target_pool = RenderTargetPool::new();
+
+            let mut ctx = PassContext {
+                encoder: &mut encoder,
+                scene: &*scene,
+                camera_bind_group: &camera_bg,
+                light_bind_group: &light_bg,
+                shadow_camera_bind_group: &shadow_camera_bg,
+                lights: &self.lights,
+                targets: &mut target_pool,
+                screen_view: &view,
+                depth_view: &depth_view,
+                screen_size: (config_width, config_height),
+                shadow_view: None,
+            };
+
+            let mut shadow_view = None;
+
+            for (pass, pass_id, _order, data) in passes_to_run {
+                pass.execute(
+                    &mut ctx,
+                    &*gpu,
+                    &window.config,
+                    &*resources,
+                    render_state,
+                    data,
+                );
+                if pass_id == crate::render::pass_id::PassId::SHADOW {
+                    if let Some(shadow_target) =
+                        ctx.targets.get(crate::render::targets::OutputHandle(0))
+                    {
+                        shadow_view = Some(shadow_target.view.clone());
+                    }
+                    ctx.shadow_view = shadow_view.clone();
+                }
+            }
+
+            resources.update_buffer("light", |light_buffer| {
+                let mut gpu_lights = self.lights.clone();
+                gpu_lights.resize(crate::MAX_LIGHTS, GpuLight::NULL);
+                light_buffer.write(&gpu_queue, bytemuck::cast_slice(&gpu_lights));
+            });
+        });
+
+        let game_window = match game.components.get::<GameWindow>() {
+            Ok(w) => w,
             Err(e) => {
-                crate::log!(crate::LogKind::Error, "Failed to get surface texture: {e:?}");
+                crate::log!(crate::LogKind::Error, "UI: failed to get GameWindow: {}", e);
                 return;
             }
         };
 
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = graphics.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
-        });
-
-        drop(graphics);
-
-        let _ = game.components.with::<Graphics, _>(|graphics| {
-            graphics.t_count = 0;
-
-            if let (Some(camera_bg), Some(light_bg)) = (
-                graphics.bind_groups.get(&crate::BindGroupLayoutKey::Camera),
-                graphics.bind_groups.get(&crate::BindGroupLayoutKey::Light)
-            ) {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Main Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &graphics.depth_texture.view,
-                        depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Clear(1.0), store: wgpu::StoreOp::Store }),
-                        stencil_ops: None,
-                    }),
-                    occlusion_query_set: None,
-                    timestamp_writes: None,
-                });
-
-                for batch in &self.batches {
-                    if let Some(pipeline) = graphics.pipelines.get(&batch.tag) {
-                        render_pass.set_pipeline(pipeline);
-
-                        for model_data in &batch.prepared_models {
-                            let key = format!("{:?}:lod{}:mesh{}", model_data.model3d, model_data.lod_index, model_data.mesh_ranges[0].mesh_index);
-                            let buffer = graphics.buffers.entry(key)
-                                .and_modify(|b| {
-                                    b.ensure_capacity(&graphics.device, model_data.instance_data.len() * std::mem::size_of::<InstanceRaw>());
-                                    b.next();
-                                    b.write(&graphics.queue, bytemuck::cast_slice(&model_data.instance_data));
-                                }).or_insert_with(|| {
-                                    Buffer::new(
-                                        &graphics.device,
-                                        model_data.instance_data.len().next_power_of_two() * std::mem::size_of::<InstanceRaw>(),
-                                        wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                                        BufferStrategy::Triple,
-                                        "majmun",
-                                    )
-                                });
-                            render_pass.set_vertex_buffer(1, buffer.current().slice(..));
-
-                            if let Some(render_object) = scene.models3d.get(&model_data.model3d) {
-                                graphics.t_count += render_pass.draw_model_instanced(
-                                    render_object,
-                                    camera_bg,
-                                    light_bg,
-                                    &model_data.mesh_ranges,
-                                );
-                            }
-                        }
-                    }
-                }
-
-                if let Some(light_buffer) = graphics.buffers.get_mut("light") {
-                    let mut gpu_lights = self.lights.clone();
-                    gpu_lights.resize(crate::MAX_LIGHTS, GpuLight::NULL);
-                    light_buffer.write(&graphics.queue, bytemuck::cast_slice(&gpu_lights));
-                }
+        let screen_descriptor = {
+            let Ok(window) = game.components.get::<WindowState>() else {
+                return;
+            };
+            ScreenDescriptor {
+                size_in_pixels: [(&*window).config.width, (&*window).config.height],
+                pixels_per_point: game_window.scale_factor() as f32,
             }
-        });
-
-        drop(scene);
-
-        let gameview = GameView::new(game.components.clone());
-
-        let Ok(graphics) = game.components.get::<Graphics>() else {
-            return;
         };
 
-        let screen_descriptor = ScreenDescriptor {
-            size_in_pixels: [graphics.config.width, graphics.config.height],
-            pixels_per_point: graphics.window.scale_factor() as f32,
+        let (gpu_device, gpu_queue) = match game.components.get::<GpuResources>() {
+            Ok(g) => (g.device.clone(), g.queue.clone()),
+            Err(e) => {
+                crate::log!(
+                    crate::LogKind::Error,
+                    "UI: failed to get GpuResources: {}",
+                    e
+                );
+                return;
+            }
         };
 
-        let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
-            return;
+        let mut scene = match game.components.get_mut::<WorldScene>() {
+            Ok(s) => s,
+            Err(e) => {
+                crate::log!(crate::LogKind::Error, "UI: failed to get WorldScene: {}", e);
+                return;
+            }
         };
 
         let _ = game.components.with::<EguiRenderer, _>(|gui| {
             gui.draw(
-                &graphics.device,
-                &graphics.queue,
+                &gpu_device,
+                &gpu_queue,
                 &mut encoder,
-                &graphics.window,
-                &view, screen_descriptor,
+                game_window.window(),
+                &view,
+                screen_descriptor,
                 &mut scene.render_gui,
                 &gameview,
             );
         });
 
-        graphics.queue.submit(Some(encoder.finish()));
+        gpu_queue.submit(Some(encoder.finish()));
         output.present();
     }
 
     fn priority(&self) -> crate::CommandPriority {
         crate::CommandPriority::High
+    }
+}
+
+fn upload_pending_models(gpu: &GpuResources, resources: &RenderResources, scene: &mut WorldScene) {
+    let layout = match resources
+        .layouts
+        .get_opt::<crate::render::layout::TextureLayout>()
+    {
+        Some(l) => l.clone(),
+        None => return,
+    };
+
+    let device = gpu.device.clone();
+    let queue = gpu.queue.clone();
+
+    let pending: Vec<_> = scene.drain_pending_model_data().collect();
+
+    for (model3d, model_data) in pending {
+        let layout = layout.clone();
+        let device = device.clone();
+        let queue = queue.clone();
+
+        std::thread::spawn(move || {
+            let resources =
+                crate::model::SimpleGpuResources::new((*device).clone(), (*queue).clone());
+            match model_data.into_gpu(&resources, &layout) {
+                Ok(model) => {
+                    crate::send_command(crate::CommandFunction {
+                        run: Box::new(move |game| {
+                            let Ok(mut scene) = game.components.get_mut::<WorldScene>() else {
+                                return;
+                            };
+                            scene.add_model3d(model3d, model);
+                        }),
+                    });
+                }
+                Err(e) => {
+                    crate::log!(
+                        crate::LogKind::Error,
+                        "Failed to upload model '{}': {}",
+                        model3d.path,
+                        e
+                    );
+                }
+            }
+        });
     }
 }

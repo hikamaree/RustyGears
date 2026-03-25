@@ -16,7 +16,6 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 mod camera;
-mod graphics;
 mod physics;
 mod time;
 mod rustygears;
@@ -24,6 +23,9 @@ mod system;
 mod winit;
 mod scene;
 mod ecs;
+mod model;
+mod texture;
+mod light;
 mod render;
 mod input;
 mod terminal;
@@ -34,8 +36,6 @@ pub mod math {
     pub use cgmath::*;
 }
 
-pub use graphics::*;
-
 pub use time::Time;
 pub use rustygears::*;
 pub use winit::*;
@@ -43,6 +43,9 @@ pub use system::*;
 pub use camera::*;
 pub use scene::*;
 pub use ecs::*;
+pub use model::*;
+pub use texture::*;
+pub use light::*;
 pub use render::*;
 pub use input::*;
 pub use terminal::*;

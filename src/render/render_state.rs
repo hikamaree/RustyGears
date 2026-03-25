@@ -15,25 +15,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-mod graphics;
-mod model;
-mod buffer;
-mod texture;
-mod pipeline;
-mod eguirender;
-mod gui;
-mod vertex;
-mod renderbatch;
-mod light;
-mod material;
+use super::registry::PassRegistry;
+use crate::Projection;
+use crate::Texture;
+use std::sync::Arc;
+use std::sync::RwLock;
 
-pub use graphics::*;
-pub use buffer::*;
-pub use model::*;
-pub use texture::*;
-pub use eguirender::*;
-pub use gui::*;
-pub use vertex::*;
-pub use renderbatch::*;
-pub use light::*;
-pub use material::*;
+pub struct RenderState {
+    pub registry: Arc<RwLock<PassRegistry>>,
+    pub t_count: u32,
+    pub depth_texture: Texture,
+    pub projection: Projection,
+}
+
+impl RenderState {
+    pub fn new(depth_texture: Texture, projection: Projection) -> Self {
+        Self {
+            registry: Arc::new(RwLock::new(PassRegistry::new())),
+            t_count: 0,
+            depth_texture,
+            projection,
+        }
+    }
+}

@@ -15,11 +15,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use image::GenericImageView;
 use std::sync::Arc;
 use std::sync::OnceLock;
-use wgpu::Queue;
 use wgpu::Device;
-use image::GenericImageView;
+use wgpu::Queue;
+
+/// A trait for renderer-agnostic texture metadata.
+///
+/// This allows code to query texture properties without depending on wgpu types.
+pub trait TextureData: Send + Sync {
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    fn is_normal_map(&self) -> bool;
+}
 
 /// A GPU-resident texture with associated view and sampler.
 ///
@@ -29,14 +38,28 @@ use image::GenericImageView;
 ///
 /// `Texture` instances are typically used for material inputs such as diffuse, normal, and dissolve maps,
 /// but they can also be used as render targets or for procedurally generated data.
-///
-/// `Texture` objects are used for material textures (diffuse, normal, dissolve), 
-/// render targets, and procedural texture creation.
 #[derive(Debug, Clone)]
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    pub width: u32,
+    pub height: u32,
+    pub is_normal_map: bool,
+}
+
+impl TextureData for Texture {
+    fn width(&self) -> u32 {
+        self.width
+    }
+
+    fn height(&self) -> u32 {
+        self.height
+    }
+
+    fn is_normal_map(&self) -> bool {
+        self.is_normal_map
+    }
 }
 
 /// A lazily initialized global fallback texture used when actual textures are missing.
@@ -104,6 +127,9 @@ impl Texture {
             texture,
             view,
             sampler,
+            width: size.width,
+            height: size.height,
+            is_normal_map: false,
         }
     }
 
@@ -118,10 +144,22 @@ impl Texture {
     ///
     /// # Returns
     /// A `Texture` if loading succeeded, or an error message.
-    pub fn from_bytes(device: &Device, queue: &Queue, bytes: &[u8], label: &str, is_normal_map: bool) -> Result<Self, String> {
+    pub fn from_bytes(
+        device: &Device,
+        queue: &Queue,
+        bytes: &[u8],
+        label: &str,
+        is_normal_map: bool,
+    ) -> Result<Self, String> {
         let img = image::load_from_memory(bytes)
             .map_err(|err| format!("Failed to decode image: {}", err))?;
-        Ok(Self::from_image(device, queue, &img, Some(label), is_normal_map))
+        Ok(Self::from_image(
+            device,
+            queue,
+            &img,
+            Some(label),
+            is_normal_map,
+        ))
     }
 
     /// Creates a texture from a decoded image.
@@ -135,7 +173,13 @@ impl Texture {
     ///
     /// # Returns
     /// A fully constructed `Texture` ready for use.
-    pub fn from_image(device: &Device, queue: &Queue, img: &image::DynamicImage, label: Option<&str>, is_normal_map: bool) -> Self {
+    pub fn from_image(
+        device: &Device,
+        queue: &Queue,
+        img: &image::DynamicImage,
+        label: Option<&str>,
+        is_normal_map: bool,
+    ) -> Self {
         let dimensions = img.dimensions();
         let rgba = img.to_rgba8();
 
@@ -149,6 +193,16 @@ impl Texture {
         } else {
             wgpu::TextureFormat::Rgba8UnormSrgb
         };
+
+        let view_formats: Vec<wgpu::TextureFormat> = if is_normal_map {
+            vec![wgpu::TextureFormat::Rgba8Unorm]
+        } else {
+            vec![
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                wgpu::TextureFormat::Rgba8Unorm,
+            ]
+        };
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label,
             size,
@@ -157,7 +211,7 @@ impl Texture {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+            view_formats: &view_formats,
         });
 
         queue.write_texture(
@@ -191,6 +245,9 @@ impl Texture {
             texture,
             view,
             sampler,
+            width: dimensions.0,
+            height: dimensions.1,
+            is_normal_map,
         }
     }
 
@@ -207,7 +264,13 @@ impl Texture {
     ///
     /// # Returns
     /// A simple solid-color `Texture`.
-    pub fn from_color(device: &Device, queue: &Queue, color: [f32; 4], label: Option<&str>, is_normal_map: bool) -> Self {
+    pub fn from_color(
+        device: &Device,
+        queue: &Queue,
+        color: [f32; 4],
+        label: Option<&str>,
+        is_normal_map: bool,
+    ) -> Self {
         let rgba = [
             (color[0] * 255.0) as u8,
             (color[1] * 255.0) as u8,
@@ -227,6 +290,15 @@ impl Texture {
             wgpu::TextureFormat::Rgba8UnormSrgb
         };
 
+        let view_formats: Vec<wgpu::TextureFormat> = if is_normal_map {
+            vec![wgpu::TextureFormat::Rgba8Unorm]
+        } else {
+            vec![
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                wgpu::TextureFormat::Rgba8Unorm,
+            ]
+        };
+
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label,
             size,
@@ -235,7 +307,7 @@ impl Texture {
             dimension: wgpu::TextureDimension::D2,
             format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            view_formats: &[],
+            view_formats: &view_formats,
         });
 
         queue.write_texture(
@@ -270,6 +342,9 @@ impl Texture {
             texture,
             view,
             sampler,
+            width: 1,
+            height: 1,
+            is_normal_map,
         }
     }
 
@@ -287,14 +362,16 @@ impl Texture {
     /// # Returns
     /// A shared [`Arc<Texture>`] fallback texture.
     pub fn default(device: &wgpu::Device, queue: &wgpu::Queue) -> Arc<Texture> {
-        DEFAULT_TEXTURE.get_or_init(|| {
-            Arc::new(Texture::from_color(
+        DEFAULT_TEXTURE
+            .get_or_init(|| {
+                Arc::new(Texture::from_color(
                     device,
                     queue,
                     [0.5, 0.5, 0.5, 1.0],
                     Some("dummy_fallback"),
                     false,
-            ))
-        }).clone()
+                ))
+            })
+            .clone()
     }
 }

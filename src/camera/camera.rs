@@ -15,21 +15,21 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use cgmath::EuclideanSpace;
-use crate::Transform;
-use cgmath::Vector4;
-use cgmath::Matrix;
-use std::sync::atomic::Ordering;
-use std::sync::atomic::AtomicU64;
 use crate::Projection;
-use cgmath::vec4;
-use cgmath::Zero;
+use crate::Transform;
 use cgmath::vec3;
-use cgmath::Vector3;
-use cgmath::Point3;
-use cgmath::Matrix4;
-use cgmath::SquareMatrix;
+use cgmath::vec4;
+use cgmath::EuclideanSpace;
 use cgmath::InnerSpace;
+use cgmath::Matrix;
+use cgmath::Matrix4;
+use cgmath::Point3;
+use cgmath::SquareMatrix;
+use cgmath::Vector3;
+use cgmath::Vector4;
+use cgmath::Zero;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 static ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -48,7 +48,6 @@ pub struct Camera {
 }
 
 impl Camera {
-
     /// Creates a new camera with an initial position, yaw, and pitch values.
     ///
     /// # Arguments
@@ -82,7 +81,11 @@ impl Camera {
     /// A view matrix that determines how objects will be rendered in relation to the camera.
     pub fn calc_matrix(&self, transform: &Transform) -> Matrix4<f32> {
         let forward = transform.forward();
-        Matrix4::look_to_rh(Point3::from_vec(transform.position), forward, Vector3::unit_y())
+        Matrix4::look_to_rh(
+            Point3::from_vec(transform.position),
+            forward,
+            Vector3::unit_y(),
+        )
     }
 
     /// Updates the camera's view frustum planes from the current view-projection matrix.
@@ -138,7 +141,9 @@ impl Camera {
     /// - `true` if the sphere is at least partially inside the view frustum.
     /// - `false` if the sphere is completely outside the frustum and can be culled.
     pub fn can_see4(&self, center: Vector4<f32>, radius: f32) -> bool {
-        self.frustum.iter().all(|plane| plane.dot(center) >= -radius)
+        self.frustum
+            .iter()
+            .all(|plane| plane.dot(center) >= -radius)
     }
 
     /// Updates the camera's view and projection matrix.
@@ -151,7 +156,8 @@ impl Camera {
             transform.position.y,
             transform.position.z,
             1.0,
-        ).into();
+        )
+        .into();
         let view = self.calc_matrix(transform);
         self.view_proj = (projection.calc_matrix() * view).into();
         self.update_frustum();
@@ -159,18 +165,43 @@ impl Camera {
 
     /// Returns the camera's uniform containing view and projection data.
     ///
+    /// # Arguments
+    /// * `light_count` - The number of active lights to include in the uniform.
+    ///
     /// # Returns
-    /// A uniform that contains the camera's position and matrices as a byte slice.
-    pub fn get_uniform(&self) -> Box<[u8]> {
+    /// A uniform that contains the camera's position, matrices, and light count as a byte slice.
+    /// Must be 112 bytes (28 floats) due to WGSL struct alignment requirements.
+    pub fn get_uniform(&self, light_count: u32) -> Box<[u8]> {
         bytemuck::cast_slice(&[
             self.view_position[0],
             self.view_position[1],
             self.view_position[2],
             self.view_position[3],
-            self.view_proj[0][0], self.view_proj[0][1], self.view_proj[0][2], self.view_proj[0][3],
-            self.view_proj[1][0], self.view_proj[1][1], self.view_proj[1][2], self.view_proj[1][3],
-            self.view_proj[2][0], self.view_proj[2][1], self.view_proj[2][2], self.view_proj[2][3],
-            self.view_proj[3][0], self.view_proj[3][1], self.view_proj[3][2], self.view_proj[3][3],
-        ]).into()
+            self.view_proj[0][0],
+            self.view_proj[0][1],
+            self.view_proj[0][2],
+            self.view_proj[0][3],
+            self.view_proj[1][0],
+            self.view_proj[1][1],
+            self.view_proj[1][2],
+            self.view_proj[1][3],
+            self.view_proj[2][0],
+            self.view_proj[2][1],
+            self.view_proj[2][2],
+            self.view_proj[2][3],
+            self.view_proj[3][0],
+            self.view_proj[3][1],
+            self.view_proj[3][2],
+            self.view_proj[3][3],
+            light_count as f32,
+            0.0f32,
+            0.0f32,
+            0.0f32, // padding for vec4 alignment
+            0.0f32,
+            0.0f32,
+            0.0f32,
+            0.0f32, // Extra padding to match WGSL struct size (112 bytes)
+        ])
+        .into()
     }
 }

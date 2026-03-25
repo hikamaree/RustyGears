@@ -18,8 +18,8 @@
 use std::collections::HashMap;
 
 use crate::Entity;
-use std::any::TypeId;
 use std::any::Any;
+use std::any::TypeId;
 
 /// Marker trait for all types that can be used as components in the ECS.
 ///
@@ -46,7 +46,9 @@ impl ComponentStorage {
     ///
     /// Used internally by the `World` to initialize its component store.
     fn new() -> Self {
-        Self { data: HashMap::new() }
+        Self {
+            data: HashMap::new(),
+        }
     }
 
     /// Inserts a pre-allocated component vector for a specific component type.
@@ -146,7 +148,8 @@ impl World {
     /// - `Some(&T)` if the component exists.
     /// - `None` otherwise.
     pub fn get<T: Component>(&self, entity: Entity) -> Option<&T> {
-        self.storage.get_slice::<T>()
+        self.storage
+            .get_slice::<T>()
             .and_then(|vec| vec.get(entity.id() as usize).and_then(|opt| opt.as_ref()))
     }
 
@@ -156,8 +159,10 @@ impl World {
     /// - `Some(&mut T)` if the component exists.
     /// - `None` otherwise.
     pub fn get_mut<T: Component>(&mut self, entity: Entity) -> Option<&mut T> {
-        self.storage.get_slice_mut::<T>()
-            .and_then(|vec| vec.get_mut(entity.id() as usize).and_then(|opt| opt.as_mut()))
+        self.storage.get_slice_mut::<T>().and_then(|vec| {
+            vec.get_mut(entity.id() as usize)
+                .and_then(|opt| opt.as_mut())
+        })
     }
 
     /// Removes a component of a specific type from an entity.
@@ -180,13 +185,31 @@ impl World {
         self.get::<T>(entity).is_some()
     }
 
+    /// Checks whether the given entity has a component by TypeId.
+    ///
+    /// # Returns
+    /// `true` if the component exists, `false` otherwise.
+    pub fn has_by_id(&self, entity: Entity, type_id: std::any::TypeId) -> bool {
+        if let Some(slice) = self.storage.data.get(&type_id) {
+            if let Some(slice) = slice.downcast_ref::<Vec<Option<()>>>() {
+                let idx = entity.id() as usize;
+                if idx < slice.len() {
+                    return slice[idx].is_some();
+                }
+            }
+        }
+        false
+    }
+
     /// Queries all entities that have a component of type `T`.
     ///
     /// # Returns
     /// A vector of `(Entity, &T)` pairs for all matching entities.
     pub fn query1<'a, T: Component>(&'a self) -> Vec<(Entity, &'a T)> {
         match self.storage.get_slice::<T>() {
-            Some(slice) => slice.iter().enumerate()
+            Some(slice) => slice
+                .iter()
+                .enumerate()
                 .filter_map(|(i, opt)| opt.as_ref().map(|c| (Entity::get(i as u64), c)))
                 .collect(),
             None => vec![],
@@ -223,7 +246,9 @@ impl World {
     ///
     /// # Returns
     /// A vector of `(Entity, &A, &B, &C)` for all matching entities.
-    pub fn query3<'a, A: Component, B: Component, C: Component>(&'a self) -> Vec<(Entity, &'a A, &'a B, &'a C)> {
+    pub fn query3<'a, A: Component, B: Component, C: Component>(
+        &'a self,
+    ) -> Vec<(Entity, &'a A, &'a B, &'a C)> {
         let a = self.storage.get_slice::<A>();
         let b = self.storage.get_slice::<B>();
         let c = self.storage.get_slice::<C>();

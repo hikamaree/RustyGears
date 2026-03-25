@@ -213,8 +213,8 @@ impl GameView {
 
     /// Loads a `.obj` model from disk and registers it in the scene.
     ///
-    /// The model is loaded on a background thread and automatically added
-    /// to the ECS render registry upon completion.
+    /// The model is loaded on a background thread. GPU upload happens automatically
+    /// when Graphics processes pending models.
     ///
     /// Returns a [`Model3d`] handle immediately, which can be attached to entities.
     ///
@@ -225,17 +225,31 @@ impl GameView {
     /// ```
     pub fn load_obj_model(&self, path: &str) -> Model3d {
         let path = path.to_string();
-        let game = self.clone();
+        let _game = self.clone();
 
         let model_handle = Model3d { path: path.clone() };
+        let model_handle_clone = model_handle.clone();
 
         std::thread::spawn(move || {
-            match Model::from_obj(&path, &game) {
-                Ok(model) => {
-                    game.add_model3d(&path, model);
+            match crate::ModelData::from_obj(&path) {
+                Ok(model_data) => {
+                    crate::send_command(crate::CommandFunction {
+                        run: Box::new(move |game| {
+                            let Ok(mut scene) = game.components.get_mut::<crate::WorldScene>()
+                            else {
+                                return;
+                            };
+                            scene.add_pending_model_data(model_handle_clone.clone(), model_data);
+                        }),
+                    });
                 }
                 Err(e) => {
-                    crate::log!(crate::LogKind::Error, "Failed to load model '{}': {}", path, e);
+                    crate::log!(
+                        crate::LogKind::Error,
+                        "Failed to load model '{}': {}",
+                        path,
+                        e
+                    );
                 }
             }
             crate::log!(crate::LogKind::Info, "Finished loading: {}", path);
@@ -288,8 +302,15 @@ impl<A: crate::Component, B: crate::Component, C: crate::Component> ComponentsTu
     }
 }
 
-impl<A: crate::Component, B: crate::Component, C: crate::Component, D: crate::Component> ComponentsTuple for (A, B, C, D) {
+impl<A: crate::Component, B: crate::Component, C: crate::Component, D: crate::Component>
+    ComponentsTuple for (A, B, C, D)
+{
     fn into_vec(self) -> Vec<Box<dyn ComponentInsert>> {
-        vec![Box::new(self.0), Box::new(self.1), Box::new(self.2), Box::new(self.3)]
+        vec![
+            Box::new(self.0),
+            Box::new(self.1),
+            Box::new(self.2),
+            Box::new(self.3),
+        ]
     }
 }
