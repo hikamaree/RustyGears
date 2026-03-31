@@ -18,6 +18,7 @@
 mod render;
 mod rendercommand;
 
+pub mod graph;
 pub mod passes;
 
 pub mod filter;

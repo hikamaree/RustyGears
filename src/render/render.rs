@@ -164,21 +164,25 @@ impl Render {
         let state = game.get::<crate::render::RenderState>().ok()?;
         let pass_registry = state.registry.clone();
 
-        let passes: Vec<_> = {
+        let execution_order = {
             let registry = pass_registry.read().unwrap();
-            registry.iter_passes()
+            registry.graph().execution_order().to_vec()
         };
 
-        let mut sorted_passes = passes;
-        sorted_passes.sort_by_key(|p| p.order());
-
         let mut collected_data = Vec::new();
-        for pass in sorted_passes {
+        for pass_id in execution_order {
+            let pass = {
+                let registry = pass_registry.read().unwrap();
+                match registry.get_pass(&pass_id) {
+                    Some(p) => p,
+                    None => continue,
+                }
+            };
             if !pass.should_run(&scene) {
                 continue;
             }
             let data = pass.collect(&scene, camera, &camera_transform);
-            collected_data.push((pass.id(), data));
+            collected_data.push((pass_id, data));
         }
 
         Some(ExecuteRender::new(
@@ -203,6 +207,17 @@ impl Gear for Render {
         crate::send_command(RegisterPass { render_pass: Arc::new(OpaquePass::new()) });
         crate::send_command(RegisterPass { render_pass: Arc::new(WeightedPass::new()) });
         crate::send_command(RegisterPass { render_pass: Arc::new(TransparentPass::new()) });
+        crate::send_command(crate::CommandFunction {
+            run: Box::new(|game| {
+                let Ok(state) = game.components.get_mut::<crate::render::RenderState>() else {
+                    return;
+                };
+                let mut registry = state.registry.write().unwrap();
+                if let Err(e) = registry.validate() {
+                    crate::log!(crate::LogKind::Error, "Invalid render graph: {}", e);
+                }
+            }),
+        });
     }
 
     async fn update(&mut self, game: GameView) {

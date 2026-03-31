@@ -10,6 +10,7 @@ use crate::GpuLight;
 use crate::ModelRenderData;
 use crate::Transform;
 use crate::WorldScene;
+use std::collections::HashMap;
 
 pub struct PassContext<'a> {
     pub encoder: &'a mut wgpu::CommandEncoder,
@@ -22,7 +23,13 @@ pub struct PassContext<'a> {
     pub screen_view: &'a wgpu::TextureView,
     pub depth_view: &'a wgpu::TextureView,
     pub screen_size: (u32, u32),
-    pub shadow_view: Option<wgpu::TextureView>,
+    pub input_views: &'a mut HashMap<PassId, wgpu::TextureView>,
+}
+
+impl<'a> PassContext<'a> {
+    pub fn get_input(&self, id: PassId) -> Option<&wgpu::TextureView> {
+        self.input_views.get(&id)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -30,15 +37,19 @@ pub struct PassData {
     pub model_data: Vec<ModelRenderData>,
 }
 
+impl Clone for PassData {
+    fn clone(&self) -> Self {
+        Self {
+            model_data: self.model_data.clone(),
+        }
+    }
+}
+
 pub trait RenderPass: Send + Sync + 'static {
     fn id(&self) -> PassId;
 
     fn name(&self) -> &'static str {
         self.id().as_str()
-    }
-
-    fn order(&self) -> u32 {
-        100
     }
 
     fn filter(&self) -> &EntityFilter;
@@ -84,7 +95,7 @@ pub trait RenderPass: Send + Sync + 'static {
     );
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct PassOutput {
     pub id: PassId,
     pub descriptor: crate::render::targets::TargetDescriptor,

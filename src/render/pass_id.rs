@@ -46,4 +46,6 @@ impl PassId {
     pub const OPAQUE: Self = Self("opaque");
     pub const TRANSPARENT: Self = Self("transparent");
     pub const WEIGHTED: Self = Self("weighted");
+    pub const WEIGHTED_ACCUM: Self = Self("weighted_accum");
+    pub const WEIGHTED_REVEALAGE: Self = Self("weighted_revealage");
 }

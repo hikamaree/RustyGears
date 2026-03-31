@@ -53,6 +53,15 @@ pub struct MeshRenderRange {
     pub visible_instance_ranges: Vec<Range<u32>>,
 }
 
+impl Clone for MeshRenderRange {
+    fn clone(&self) -> Self {
+        Self {
+            mesh_index: self.mesh_index,
+            visible_instance_ranges: self.visible_instance_ranges.clone(),
+        }
+    }
+}
+
 /// Represents a single model to be rendered, along with its instance transforms
 /// and per-mesh visibility data. Used by the renderer to issue draw calls.
 ///
@@ -61,7 +70,7 @@ pub struct MeshRenderRange {
 /// - `mesh_ranges`: Per-mesh visibility ranges, used for culling and draw call batching.
 /// - `model3d`: The model identifier (resource handle).
 /// - `lod_index`: Selected LOD level for this draw.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ModelRenderData {
     pub instance_data: Arc<[InstanceRaw]>,
     pub mesh_ranges: Vec<MeshRenderRange>,

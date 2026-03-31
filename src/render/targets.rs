@@ -3,11 +3,23 @@ use std::collections::HashMap;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct OutputHandle(pub usize);
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum TargetSize {
     Screen,
     Fixed(u32, u32),
     Fraction(f32),
+}
+
+impl Eq for TargetSize {}
+
+impl std::fmt::Debug for TargetSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetSize::Screen => write!(f, "Screen"),
+            TargetSize::Fixed(w, h) => write!(f, "Fixed({w}, {h})"),
+            TargetSize::Fraction(r) => write!(f, "Fraction({r})"),
+        }
+    }
 }
 
 impl PartialEq for TargetSize {
@@ -20,8 +32,6 @@ impl PartialEq for TargetSize {
         }
     }
 }
-
-impl Eq for TargetSize {}
 
 impl std::hash::Hash for TargetSize {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -41,14 +51,15 @@ impl std::hash::Hash for TargetSize {
 }
 
 impl TargetSize {
-    fn resolve(&self, screen_width: u32, screen_height: u32) -> (u32, u32) {
+    pub fn resolve(&self, screen_width: u32, screen_height: u32) -> (u32, u32) {
         match self {
             TargetSize::Screen => (screen_width, screen_height),
             TargetSize::Fixed(w, h) => (*w, *h),
-            TargetSize::Fraction(f) => (
-                (screen_width as f32 * f) as u32,
-                (screen_height as f32 * f) as u32,
-            ),
+            TargetSize::Fraction(f) => {
+                let w = (screen_width as f32 * f) as u32;
+                let h = (screen_height as f32 * f) as u32;
+                (w.max(1), h.max(1))
+            }
         }
     }
 }
@@ -59,6 +70,17 @@ pub struct TargetDescriptor {
     pub size: TargetSize,
     pub sample_count: u32,
     pub usage: wgpu::TextureUsages,
+}
+
+impl std::fmt::Debug for TargetDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TargetDescriptor")
+            .field("format", &self.format)
+            .field("size", &self.size)
+            .field("sample_count", &self.sample_count)
+            .field("usage", &self.usage)
+            .finish()
+    }
 }
 
 pub struct RenderTarget {

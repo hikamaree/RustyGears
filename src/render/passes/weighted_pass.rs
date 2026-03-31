@@ -5,6 +5,7 @@ use crate::render::gpu_resources::GpuResources;
 use crate::render::lod::select_lod_by_position;
 use crate::render::pass::PassContext;
 use crate::render::pass::PassData;
+use crate::render::pass::PassOutput;
 use crate::render::pass::RenderPass;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
@@ -155,10 +156,6 @@ impl RenderPass for WeightedPass {
         "Weighted"
     }
 
-    fn order(&self) -> u32 {
-        175
-    }
-
     fn filter(&self) -> &'static EntityFilter {
         static FILTER: std::sync::LazyLock<EntityFilter> =
             std::sync::LazyLock::new(EntityFilter::new);
@@ -167,6 +164,35 @@ impl RenderPass for WeightedPass {
 
     fn sort(&self) -> &dyn SortStrategy {
         &self.sort
+    }
+
+    fn outputs(&self) -> Vec<PassOutput> {
+        vec![
+            PassOutput {
+                id: PassId::WEIGHTED_ACCUM,
+                descriptor: TargetDescriptor {
+                    format: crate::Texture::ACCUM_FORMAT,
+                    size: TargetSize::Screen,
+                    sample_count: 1,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                },
+            },
+            PassOutput {
+                id: PassId::WEIGHTED_REVEALAGE,
+                descriptor: TargetDescriptor {
+                    format: crate::Texture::REVEALAGE_FORMAT,
+                    size: TargetSize::Screen,
+                    sample_count: 1,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                },
+            },
+        ]
+    }
+
+    fn inputs(&self) -> Vec<PassId> {
+        vec![PassId::OPAQUE]
     }
 
     fn collect(

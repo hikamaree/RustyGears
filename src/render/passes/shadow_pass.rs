@@ -156,10 +156,6 @@ impl RenderPass for ShadowPass {
         "Shadow"
     }
 
-    fn order(&self) -> u32 {
-        50
-    }
-
     fn filter(&self) -> &'static EntityFilter {
         static FILTER: std::sync::LazyLock<EntityFilter> =
             std::sync::LazyLock::new(EntityFilter::new);
@@ -181,6 +177,10 @@ impl RenderPass for ShadowPass {
                     | wgpu::TextureUsages::TEXTURE_BINDING,
             },
         }]
+    }
+
+    fn inputs(&self) -> Vec<PassId> {
+        vec![]
     }
 
     fn should_run(&self, scene: &WorldScene) -> bool {

@@ -163,18 +163,15 @@ impl Command for ExecuteRender {
 
             let passes_to_run: Vec<_> = {
                 let registry = render_state.registry.read().unwrap();
-                data_to_execute
-                    .iter()
-                    .filter_map(|(id, data)| registry.get_pass(id).map(|p| (p, data)))
-                    .collect()
+                let execution_order = registry.graph().execution_order().to_vec();
+                let mut result = Vec::new();
+                for pass_id in execution_order {
+                    if let Some(pass) = data_to_execute.iter().find(|(id, _)| *id == pass_id) {
+                        result.push((registry.get_pass(&pass_id).unwrap(), pass_id, &pass.1));
+                    }
+                }
+                result
             };
-
-            let mut passes_to_run: Vec<_> = passes_to_run
-                .into_iter()
-                .map(|(pass, data)| (pass.clone(), pass.id(), pass.order(), data))
-                .collect();
-
-            passes_to_run.sort_by_key(|(_, _, order, _)| *order);
 
             let gpu = match game.components.get::<GpuResources>() {
                 Ok(g) => g,
@@ -199,6 +196,9 @@ impl Command for ExecuteRender {
 
             let mut target_pool = RenderTargetPool::new();
 
+            let mut input_views: std::collections::HashMap<PassId, wgpu::TextureView> =
+                std::collections::HashMap::new();
+
             let mut ctx = PassContext {
                 encoder: &mut encoder,
                 scene: &*scene,
@@ -210,28 +210,30 @@ impl Command for ExecuteRender {
                 screen_view: &view,
                 depth_view: &depth_view,
                 screen_size: (config_width, config_height),
-                shadow_view: None,
+                input_views: &mut input_views,
             };
 
-            let mut shadow_view = None;
+            for (pass, _pass_id, data) in passes_to_run {
+                for output in pass.outputs() {
+                    let handle = ctx.targets.allocate(
+                        &gpu.device,
+                        &output.descriptor,
+                        ctx.screen_size.0,
+                        ctx.screen_size.1,
+                    );
+                    if let Some(target) = ctx.targets.get(handle) {
+                        ctx.input_views.insert(output.id, target.view.clone());
+                    }
+                }
 
-            for (pass, pass_id, _order, data) in passes_to_run {
                 pass.execute(
                     &mut ctx,
                     &*gpu,
                     &window.config,
                     &*resources,
                     render_state,
-                    data,
+                    &data,
                 );
-                if pass_id == crate::render::pass_id::PassId::SHADOW {
-                    if let Some(shadow_target) =
-                        ctx.targets.get(crate::render::targets::OutputHandle(0))
-                    {
-                        shadow_view = Some(shadow_target.view.clone());
-                    }
-                    ctx.shadow_view = shadow_view.clone();
-                }
             }
 
             resources.update_buffer("light", |light_buffer| {

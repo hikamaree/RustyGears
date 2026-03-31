@@ -5,6 +5,7 @@ use crate::render::gpu_resources::GpuResources;
 use crate::render::lod::select_lod_by_position;
 use crate::render::pass::PassContext;
 use crate::render::pass::PassData;
+use crate::render::pass::PassOutput;
 use crate::render::pass::RenderPass;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
@@ -130,10 +131,6 @@ impl RenderPass for TransparentPass {
         "Transparent"
     }
 
-    fn order(&self) -> u32 {
-        200
-    }
-
     fn filter(&self) -> &'static EntityFilter {
         static FILTER: std::sync::LazyLock<EntityFilter> =
             std::sync::LazyLock::new(EntityFilter::new);
@@ -142,6 +139,14 @@ impl RenderPass for TransparentPass {
 
     fn sort(&self) -> &dyn SortStrategy {
         &self.sort
+    }
+
+    fn outputs(&self) -> Vec<PassOutput> {
+        vec![]
+    }
+
+    fn inputs(&self) -> Vec<PassId> {
+        vec![PassId::OPAQUE, PassId::WEIGHTED]
     }
 
     fn collect(
@@ -277,7 +282,11 @@ impl RenderPass for TransparentPass {
             };
 
             for mesh_range in &model_data.mesh_ranges {
-                let key = BufferKey::new(model_data.model3d.clone(), model_data.lod_index, mesh_range.mesh_index);
+                let key = BufferKey::new(
+                    model_data.model3d.clone(),
+                    model_data.lod_index,
+                    mesh_range.mesh_index,
+                );
                 let key_str = key.to_string();
 
                 let instance_count = mesh_range
