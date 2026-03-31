@@ -9,7 +9,6 @@ use crate::render::pass::PassOutput;
 use crate::render::pass::RenderPass;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
-use crate::render::render_state::RenderState;
 use crate::render::sort::DepthSortBackToFront;
 use crate::render::sort::SortStrategy;
 use crate::render::targets::TargetDescriptor;
@@ -209,7 +208,7 @@ impl RenderPass for WeightedPass {
         for (entity, render_obj, transform) in
             scene.world.query2::<RenderObject, Transform>().iter()
         {
-            if !filter.is_empty() && !filter.matches(scene, *entity) {
+            if !filter.matches(scene, *entity) {
                 continue;
             }
 
@@ -269,7 +268,6 @@ impl RenderPass for WeightedPass {
         gpu: &GpuResources,
         _config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
-        _state: &mut RenderState,
         data: &PassData,
     ) {
         self.ensure_pipeline(gpu, resources);
@@ -376,7 +374,7 @@ impl RenderPass for WeightedPass {
                     model_data.lod_index,
                     mesh_range.mesh_index,
                 );
-                let key_str = format!("weighted:{}", key);
+                let key_str = key.to_string();
 
                 let instance_count = mesh_range
                     .visible_instance_ranges

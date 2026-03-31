@@ -80,8 +80,8 @@ impl Gui for EngineStats {
                             );
                             ui.label(
                                 RichText::new(format!(
-                                    "Rendering:\n  Triangles: {}",
-                                    render_state.t_count
+                                    "Rendering:\n  Frame: {}\n  Triangles: {}",
+                                    render_state.frame_count, render_state.triangles_rendered
                                 ))
                                 .monospace()
                                 .color(Color32::WHITE),

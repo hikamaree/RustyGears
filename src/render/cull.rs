@@ -1,3 +1,4 @@
+use crate::render::lod::select_lod_by_position;
 use cgmath::{InnerSpace, Matrix, Matrix4, Vector3, Vector4};
 
 pub fn calculate_model_scale(model_mat: &Matrix4<f32>) -> f32 {
@@ -54,4 +55,28 @@ pub fn is_in_frustum(
         }
     }
     true
+}
+
+pub fn select_model_lod(
+    render_obj: &crate::RenderObject,
+    object_pos: Vector3<f32>,
+    view_pos: Vector3<f32>,
+) -> Option<(crate::Model3d, usize)> {
+    if render_obj.lods.is_empty() {
+        return None;
+    }
+    let lod_index = select_lod_by_position(view_pos, object_pos, render_obj.lods.len());
+    Some((render_obj.lods[lod_index].clone(), lod_index))
+}
+
+pub fn get_mesh_world_bounds(
+    mesh: &crate::model::Mesh,
+    model_mat: &Matrix4<f32>,
+) -> (Vector3<f32>, f32) {
+    let scale = calculate_model_scale(model_mat);
+    transform_bounding_sphere(
+        mesh.data.bounding_sphere.center,
+        mesh.data.bounding_sphere.radius * scale,
+        model_mat,
+    )
 }

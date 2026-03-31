@@ -21,7 +21,6 @@ use crate::render::pass::PassData;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
 use crate::render::render_state::RenderState;
-use crate::render::targets::RenderTargetPool;
 use crate::render::window_state::WindowState;
 use crate::Camera;
 use crate::Command;
@@ -133,26 +132,37 @@ impl Command for ExecuteRender {
             }
         }
 
-        let data_to_execute = self.collected_data;
-
         let gameview = GameView::new(game.components.clone());
 
         let _ = game.components.with::<RenderState, _>(|render_state| {
-            render_state.t_count = 0;
+            render_state.frame_count += 1;
+            render_state.triangles_rendered = 0;
 
-            let (camera_bg, light_bg, shadow_camera_bg) = {
+            let (camera_bg, light_bg, shadow_camera_bg, passes_to_run) = {
                 let registry = render_state.registry.read().unwrap();
-                (
-                    registry
-                        .get_bind_group(crate::render::registry::BindGroupId::Camera)
-                        .cloned(),
-                    registry
-                        .get_bind_group(crate::render::registry::BindGroupId::Light)
-                        .cloned(),
-                    registry
-                        .get_bind_group(crate::render::registry::BindGroupId::ShadowCamera)
-                        .cloned(),
-                )
+
+                let camera_bg = registry
+                    .get_bind_group(crate::render::registry::BindGroupId::Camera)
+                    .cloned();
+                let light_bg = registry
+                    .get_bind_group(crate::render::registry::BindGroupId::Light)
+                    .cloned();
+                let shadow_camera_bg = registry
+                    .get_bind_group(crate::render::registry::BindGroupId::ShadowCamera)
+                    .cloned();
+
+                let order = registry.graph().execution_order();
+                let mut result = Vec::new();
+                for pass_id in order {
+                    if let Some((_, data)) =
+                        self.collected_data.iter().find(|(id, _)| *id == *pass_id)
+                    {
+                        if let Some(p) = registry.get_pass(pass_id) {
+                            result.push((p, *pass_id, data));
+                        }
+                    }
+                }
+                (camera_bg, light_bg, shadow_camera_bg, result)
             };
 
             let (camera_bg, light_bg, shadow_camera_bg) =
@@ -160,18 +170,6 @@ impl Command for ExecuteRender {
                     (Some(c), Some(l), Some(s)) => (c, l, s),
                     _ => return,
                 };
-
-            let passes_to_run: Vec<_> = {
-                let registry = render_state.registry.read().unwrap();
-                let execution_order = registry.graph().execution_order().to_vec();
-                let mut result = Vec::new();
-                for pass_id in execution_order {
-                    if let Some(pass) = data_to_execute.iter().find(|(id, _)| *id == pass_id) {
-                        result.push((registry.get_pass(&pass_id).unwrap(), pass_id, &pass.1));
-                    }
-                }
-                result
-            };
 
             let gpu = match game.components.get::<GpuResources>() {
                 Ok(g) => g,
@@ -194,10 +192,22 @@ impl Command for ExecuteRender {
 
             let gpu_queue = gpu.queue.clone();
 
-            let mut target_pool = RenderTargetPool::new();
-
-            let mut input_views: std::collections::HashMap<PassId, wgpu::TextureView> =
+            let mut allocated_views: std::collections::HashMap<PassId, wgpu::TextureView> =
                 std::collections::HashMap::new();
+
+            for (pass, _pass_id, _data) in &passes_to_run {
+                for output in pass.outputs() {
+                    let handle = render_state.target_pool.allocate(
+                        &gpu.device,
+                        &output.descriptor,
+                        config_width,
+                        config_height,
+                    );
+                    if let Some(target) = render_state.target_pool.get(handle) {
+                        allocated_views.insert(output.id, target.view.clone());
+                    }
+                }
+            }
 
             let mut ctx = PassContext {
                 encoder: &mut encoder,
@@ -206,34 +216,17 @@ impl Command for ExecuteRender {
                 light_bind_group: &light_bg,
                 shadow_camera_bind_group: &shadow_camera_bg,
                 lights: &self.lights,
-                targets: &mut target_pool,
+                targets: &mut render_state.target_pool,
+                frame_counter: &mut render_state.triangles_rendered,
                 screen_view: &view,
                 depth_view: &depth_view,
                 screen_size: (config_width, config_height),
-                input_views: &mut input_views,
+                input_views: &mut allocated_views,
+                config: &render_state.config,
             };
 
             for (pass, _pass_id, data) in passes_to_run {
-                for output in pass.outputs() {
-                    let handle = ctx.targets.allocate(
-                        &gpu.device,
-                        &output.descriptor,
-                        ctx.screen_size.0,
-                        ctx.screen_size.1,
-                    );
-                    if let Some(target) = ctx.targets.get(handle) {
-                        ctx.input_views.insert(output.id, target.view.clone());
-                    }
-                }
-
-                pass.execute(
-                    &mut ctx,
-                    &*gpu,
-                    &window.config,
-                    &*resources,
-                    render_state,
-                    &data,
-                );
+                pass.execute(&mut ctx, &*gpu, &window.config, &*resources, &data);
             }
 
             resources.update_buffer("light", |light_buffer| {

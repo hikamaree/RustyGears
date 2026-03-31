@@ -9,7 +9,6 @@ use crate::render::pass::PassOutput;
 use crate::render::pass::RenderPass;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
-use crate::render::render_state::RenderState;
 use crate::render::sort::NoSort;
 use crate::render::sort::SortStrategy;
 use crate::BufferKey;
@@ -238,7 +237,7 @@ impl RenderPass for OpaquePass {
             .query2::<RenderObject, crate::Transform>()
             .iter()
         {
-            if !filter.is_empty() && !filter.matches(scene, *entity) {
+            if !filter.matches(scene, *entity) {
                 continue;
             }
 
@@ -285,14 +284,17 @@ impl RenderPass for OpaquePass {
 
         let mut model_data: Vec<ModelRenderData> = group_map
             .into_iter()
-            .map(|((model3d, lod, mesh_idx), instances)| ModelRenderData {
-                model3d,
-                lod_index: lod,
-                instance_data: Arc::from(instances.clone()),
-                mesh_ranges: vec![MeshRenderRange {
-                    mesh_index: mesh_idx,
-                    visible_instance_ranges: vec![0..instances.len() as u32],
-                }],
+            .map(|((model3d, lod, mesh_idx), instances)| {
+                let instance_count = instances.len() as u32;
+                ModelRenderData {
+                    model3d,
+                    lod_index: lod,
+                    instance_data: Arc::from(instances),
+                    mesh_ranges: vec![MeshRenderRange {
+                        mesh_index: mesh_idx,
+                        visible_instance_ranges: vec![0..instance_count],
+                    }],
+                }
             })
             .collect();
 
@@ -307,7 +309,6 @@ impl RenderPass for OpaquePass {
         gpu: &GpuResources,
         config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
-        state: &mut RenderState,
         data: &PassData,
     ) {
         self.ensure_pipeline(gpu, config, resources);
@@ -318,31 +319,31 @@ impl RenderPass for OpaquePass {
             None => return,
         };
 
-        let shadow_bind_group = if let (Some(shadow_view), Some(shadow_sampler)) = (
-            ctx.get_input(PassId::SHADOW).cloned(),
+        let shadow_bind_group = match (
+            ctx.get_input(PassId::SHADOW),
             self.shadow_sampler.read().unwrap().as_ref(),
         ) {
-            Some(
-                gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            (Some(shadow_view), Some(shadow_sampler)) => {
+                let layout = resources
+                    .layouts
+                    .get_opt::<crate::render::layout::ShadowTextureLayout>()
+                    .unwrap();
+                Some(gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("Shadow Bind Group"),
-                    layout: resources
-                        .layouts
-                        .get_opt::<crate::render::layout::ShadowTextureLayout>()
-                        .unwrap(),
+                    layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&shadow_view),
+                            resource: wgpu::BindingResource::TextureView(shadow_view),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
                             resource: wgpu::BindingResource::Sampler(shadow_sampler),
                         },
                     ],
-                }),
-            )
-        } else {
-            None
+                }))
+            }
+            _ => None,
         };
 
         let mut render_pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -351,12 +352,7 @@ impl RenderPass for OpaquePass {
                 view: ctx.screen_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(ctx.clear_color()),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -425,7 +421,7 @@ impl RenderPass for OpaquePass {
                 );
 
                 render_pass.set_vertex_buffer(1, buffer.current().slice(..));
-                state.t_count += render_pass.draw_mesh_instanced(
+                *ctx.frame_counter += render_pass.draw_mesh_instanced(
                     &model.meshes[mesh_range.mesh_index],
                     &model.materials[model.meshes[mesh_range.mesh_index].material],
                     ctx.camera_bind_group,

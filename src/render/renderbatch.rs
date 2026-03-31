@@ -95,6 +95,20 @@ impl BufferKey {
     }
 }
 
+impl BufferKey {
+    pub fn for_pass(
+        model3d: Model3d,
+        lod_index: usize,
+        mesh_index: usize,
+        pass_prefix: &str,
+    ) -> String {
+        format!(
+            "{}:{}:lod{}:mesh{}",
+            pass_prefix, model3d.path, lod_index, mesh_index
+        )
+    }
+}
+
 impl std::fmt::Display for BufferKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

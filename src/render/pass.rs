@@ -5,6 +5,7 @@ use crate::render::render_resources::RenderResources;
 use crate::render::render_state::RenderState;
 use crate::render::sort::SortStrategy;
 use crate::render::targets::RenderTargetPool;
+use crate::render::RenderConfig;
 use crate::Camera;
 use crate::GpuLight;
 use crate::ModelRenderData;
@@ -20,15 +21,34 @@ pub struct PassContext<'a> {
     pub shadow_camera_bind_group: &'a wgpu::BindGroup,
     pub lights: &'a [GpuLight],
     pub targets: &'a mut RenderTargetPool,
+    pub frame_counter: &'a mut u32,
     pub screen_view: &'a wgpu::TextureView,
     pub depth_view: &'a wgpu::TextureView,
     pub screen_size: (u32, u32),
     pub input_views: &'a mut HashMap<PassId, wgpu::TextureView>,
+    pub config: &'a RenderConfig,
 }
 
 impl<'a> PassContext<'a> {
     pub fn get_input(&self, id: PassId) -> Option<&wgpu::TextureView> {
         self.input_views.get(&id)
+    }
+
+    pub fn clear_color(&self) -> wgpu::Color {
+        self.config.clear_color
+    }
+
+    pub fn shadow_config(&self) -> (u32, f32, f32, f32) {
+        (
+            self.config.shadow_cascade_resolution,
+            self.config.shadow_frustum_size,
+            self.config.shadow_frustum_near,
+            self.config.shadow_frustum_far,
+        )
+    }
+
+    pub fn shadow_cascade_resolution(&self) -> u32 {
+        self.config.shadow_cascade_resolution
     }
 }
 
@@ -90,7 +110,6 @@ pub trait RenderPass: Send + Sync + 'static {
         gpu: &GpuResources,
         config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
-        state: &mut RenderState,
         data: &PassData,
     );
 }
@@ -102,7 +121,7 @@ pub struct PassOutput {
 }
 
 impl PassData {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Self::default()
     }
 }

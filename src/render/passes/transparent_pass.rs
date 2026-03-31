@@ -9,7 +9,6 @@ use crate::render::pass::PassOutput;
 use crate::render::pass::RenderPass;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
-use crate::render::render_state::RenderState;
 use crate::render::sort::DepthSortBackToFront;
 use crate::render::sort::SortStrategy;
 use crate::BufferKey;
@@ -167,7 +166,7 @@ impl RenderPass for TransparentPass {
             .query2::<RenderObject, crate::Transform>()
             .iter()
         {
-            if !filter.is_empty() && !filter.matches(scene, *entity) {
+            if !filter.matches(scene, *entity) {
                 continue;
             }
 
@@ -235,7 +234,6 @@ impl RenderPass for TransparentPass {
         gpu: &GpuResources,
         config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
-        state: &mut RenderState,
         data: &PassData,
     ) {
         if data.model_data.is_empty() {
@@ -322,7 +320,7 @@ impl RenderPass for TransparentPass {
                 let material = &model.materials[mesh.material];
 
                 render_pass.set_vertex_buffer(1, buffer.current().slice(..));
-                state.t_count += render_pass.draw_mesh_instanced(
+                *ctx.frame_counter += render_pass.draw_mesh_instanced(
                     mesh,
                     material,
                     ctx.camera_bind_group,

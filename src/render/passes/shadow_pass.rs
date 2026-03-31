@@ -7,7 +7,6 @@ use crate::render::pass::PassOutput;
 use crate::render::pass::RenderPass;
 use crate::render::pass_id::PassId;
 use crate::render::render_resources::RenderResources;
-use crate::render::render_state::RenderState;
 use crate::render::sort::NoSort;
 use crate::render::sort::SortStrategy;
 use crate::render::targets::TargetDescriptor;
@@ -108,6 +107,7 @@ impl ShadowPass {
 
     fn calc_light_view_proj(
         &self,
+        ctx: &PassContext,
         light_position: Vector3<f32>,
         light_forward: Vector3<f32>,
     ) -> Matrix4<f32> {
@@ -117,12 +117,11 @@ impl ShadowPass {
             Vector3::unit_y(),
         );
 
-        let left = -150.0f32;
-        let right = 150.0f32;
-        let bottom = -150.0f32;
-        let top = 150.0f32;
-        let near = 0.1f32;
-        let far = 400.0f32;
+        let (_resolution, size, near, far) = ctx.shadow_config();
+        let left = -size;
+        let right = size;
+        let bottom = -size;
+        let top = size;
 
         let ortho = Matrix4::new(
             2.0 / (right - left),
@@ -193,7 +192,7 @@ impl RenderPass for ShadowPass {
         _camera: &Camera,
         _camera_transform: &Transform,
     ) -> PassData {
-        PassData { model_data: vec![] }
+        PassData::empty()
     }
 
     fn execute(
@@ -202,7 +201,6 @@ impl RenderPass for ShadowPass {
         gpu: &GpuResources,
         _config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
-        _state: &mut RenderState,
         _data: &PassData,
     ) {
         self.ensure_pipeline(gpu, resources);
@@ -213,11 +211,12 @@ impl RenderPass for ShadowPass {
             None => return,
         };
 
+        let resolution = ctx.shadow_cascade_resolution();
         let shadow_target = ctx.targets.allocate(
             &gpu.device,
             &TargetDescriptor {
                 format: wgpu::TextureFormat::Depth32Float,
-                size: TargetSize::Fixed(self.cascade_resolution, self.cascade_resolution),
+                size: TargetSize::Fixed(resolution, resolution),
                 sample_count: 1,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -231,14 +230,13 @@ impl RenderPass for ShadowPass {
             None => return,
         };
 
-        let light_entity = {
-            let mut entity = None;
-            for (e, _light, _transform) in ctx.scene.world.query2::<DirectionalLight, Transform>() {
-                entity = Some(e);
-                break;
-            }
-            entity
-        };
+        let light_entity = ctx
+            .scene
+            .world
+            .query2::<DirectionalLight, Transform>()
+            .iter()
+            .next()
+            .map(|(e, _, _)| *e);
 
         let Some(light_entity) = light_entity else {
             return;
@@ -247,7 +245,8 @@ impl RenderPass for ShadowPass {
         let light_transform = ctx.scene.get_camera_transform(light_entity);
         let light_forward = light_transform.forward();
 
-        let light_view_proj = self.calc_light_view_proj(light_transform.position, light_forward);
+        let light_view_proj =
+            self.calc_light_view_proj(ctx, light_transform.position, light_forward);
 
         let frustum_planes = compute_frustum_planes(&light_view_proj);
 

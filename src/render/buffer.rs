@@ -87,6 +87,7 @@ impl Buffer {
     }
 
     /// Advances to the next buffer (for double/triple buffering) and returns it.
+    /// The returned buffer is the new current buffer after advancing.
     pub fn next(&mut self) -> &wgpu::Buffer {
         self.current_idx = (self.current_idx + 1) % self.buffers.len();
         self.current()

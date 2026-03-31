@@ -64,20 +64,16 @@ impl Render {
         let layouts = crate::render::layout::LayoutRegistry::new(&device);
         let render_resources = RenderResources::new(layouts);
 
+        let render_config = crate::render::RenderConfig::default();
+
         let depth_texture = crate::Texture::create_depth_texture(
             &device,
             &config,
             "depth_texture",
         );
-        let projection = crate::Projection::new(
-            config.width,
-            config.height,
-            cgmath::Deg(45.0),
-            0.1,
-            1000.0,
-        );
+        let projection = render_config.projection(config.width, config.height);
 
-        let render_state = RenderState::new(depth_texture, projection);
+        let render_state = RenderState::new(depth_texture, projection, render_config);
 
         let egui = EguiRenderer::new(
             &device,
@@ -164,26 +160,21 @@ impl Render {
         let state = game.get::<crate::render::RenderState>().ok()?;
         let pass_registry = state.registry.clone();
 
-        let execution_order = {
+        let collected_data = {
             let registry = pass_registry.read().unwrap();
-            registry.graph().execution_order().to_vec()
-        };
-
-        let mut collected_data = Vec::new();
-        for pass_id in execution_order {
-            let pass = {
-                let registry = pass_registry.read().unwrap();
-                match registry.get_pass(&pass_id) {
-                    Some(p) => p,
-                    None => continue,
+            let order = registry.graph().execution_order();
+            
+            let mut collected = Vec::new();
+            for pass_id in order {
+                if let Some(pass) = registry.get_pass(pass_id) {
+                    if pass.should_run(&scene) {
+                        let data = pass.collect(&scene, camera, &camera_transform);
+                        collected.push((*pass_id, data));
+                    }
                 }
-            };
-            if !pass.should_run(&scene) {
-                continue;
             }
-            let data = pass.collect(&scene, camera, &camera_transform);
-            collected_data.push((pass_id, data));
-        }
+            collected
+        };
 
         Some(ExecuteRender::new(
             camera_entity,

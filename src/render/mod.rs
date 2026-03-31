@@ -17,6 +17,7 @@
 
 mod render;
 mod rendercommand;
+mod config;
 
 pub mod graph;
 pub mod passes;
@@ -45,6 +46,7 @@ pub mod window_state;
 pub mod render_resources;
 pub mod render_state;
 
+pub use config::RenderConfig;
 pub use filter::EntityFilter;
 pub use framedata::collect_lights;
 pub use layout::LayoutRegistry;
