@@ -38,7 +38,13 @@ impl WeightedPass {
     }
 
     fn ensure_pipeline(&self, gpu: &GpuResources, resources: &RenderResources) {
-        if self.pipeline.read().unwrap().is_some() {
+        if self
+            .pipeline
+            .read()
+            .ok()
+            .map(|p| p.is_some())
+            .unwrap_or(false)
+        {
             return;
         }
 
@@ -142,7 +148,14 @@ impl WeightedPass {
                 cache: None,
             });
 
-        *self.pipeline.write().unwrap() = Some(pipeline);
+        if let Ok(mut pipeline_guard) = self.pipeline.write() {
+            *pipeline_guard = Some(pipeline);
+        } else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire pipeline write lock"
+            );
+        }
     }
 }
 
@@ -272,7 +285,13 @@ impl RenderPass for WeightedPass {
     ) {
         self.ensure_pipeline(gpu, resources);
 
-        let pipeline_guard = self.pipeline.read().unwrap();
+        let Ok(pipeline_guard) = self.pipeline.read() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire pipeline read lock"
+            );
+            return;
+        };
         let pipeline = match pipeline_guard.as_ref() {
             Some(p) => p,
             None => return,

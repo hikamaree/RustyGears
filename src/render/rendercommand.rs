@@ -139,7 +139,16 @@ impl Command for ExecuteRender {
             render_state.triangles_rendered = 0;
 
             let (camera_bg, light_bg, shadow_camera_bg, passes_to_run) = {
-                let registry = render_state.registry.read().unwrap();
+                let registry = match render_state.registry.read() {
+                    Ok(r) => r,
+                    Err(_) => {
+                        crate::log!(
+                            crate::LogKind::Error,
+                            "Failed to acquire registry read lock"
+                        );
+                        return;
+                    }
+                };
 
                 let camera_bg = registry
                     .get_bind_group(crate::render::registry::BindGroupId::Camera)
@@ -188,7 +197,13 @@ impl Command for ExecuteRender {
             let config_width = window.config.width;
             let config_height = window.config.height;
 
-            let scene = game.components.get::<WorldScene>().unwrap();
+            let scene = match game.components.get::<WorldScene>() {
+                Ok(s) => s,
+                Err(_) => {
+                    crate::log!(crate::LogKind::Error, "Failed to get WorldScene component");
+                    return;
+                }
+            };
 
             let gpu_queue = gpu.queue.clone();
 

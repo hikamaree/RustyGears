@@ -82,7 +82,13 @@ impl Command for RegisterPass {
             crate::log!(crate::LogKind::Error, "RenderState is not initialized!");
             return;
         };
-        let mut registry = state.registry.write().unwrap();
+        let Ok(mut registry) = state.registry.write() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire registry write lock"
+            );
+            return;
+        };
         if let Err(e) = registry.register_pass(self.render_pass) {
             crate::log!(crate::LogKind::Error, "Failed to register pass: {}", e);
         }

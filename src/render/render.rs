@@ -89,9 +89,18 @@ impl Render {
 
         const DEFAULT_CAMERA_BUFFER_SIZE: usize = 128;
 
-        let resources = game.components.get::<RenderResources>().unwrap();
-        let state = game.components.get_mut::<RenderState>().unwrap();
-        let gpu = game.components.get::<GpuResources>().unwrap();
+        let Ok(resources) = game.components.get::<RenderResources>() else {
+            crate::log!(crate::LogKind::Error, "Failed to get RenderResources");
+            return;
+        };
+        let Ok(state) = game.components.get_mut::<RenderState>() else {
+            crate::log!(crate::LogKind::Error, "Failed to get RenderState");
+            return;
+        };
+        let Ok(gpu) = game.components.get::<GpuResources>() else {
+            crate::log!(crate::LogKind::Error, "Failed to get GpuResources");
+            return;
+        };
 
         resources.create_buffer(
             &gpu.device,
@@ -121,30 +130,42 @@ impl Render {
             &gpu.device,
             "light",
         ) {
-            state.registry.write().unwrap().register_bind_group(
-                crate::render::registry::BindGroupId::Light,
-                bind_group,
-            );
+            if let Ok(mut registry) = state.registry.write() {
+                registry.register_bind_group(
+                    crate::render::registry::BindGroupId::Light,
+                    bind_group,
+                );
+            } else {
+                crate::log!(crate::LogKind::Error, "Failed to acquire registry write lock");
+            }
         }
 
         if let Some(bind_group) = resources.create_bind_group::<crate::render::layout::CameraLayout>(
             &gpu.device,
             "camera",
         ) {
-            state.registry.write().unwrap().register_bind_group(
-                crate::render::registry::BindGroupId::Camera,
-                bind_group,
-            );
+            if let Ok(mut registry) = state.registry.write() {
+                registry.register_bind_group(
+                    crate::render::registry::BindGroupId::Camera,
+                    bind_group,
+                );
+            } else {
+                crate::log!(crate::LogKind::Error, "Failed to acquire registry write lock");
+            }
         }
 
         if let Some(bind_group) = resources.create_bind_group::<crate::render::layout::CameraLayout>(
             &gpu.device,
             "shadow_camera",
         ) {
-            state.registry.write().unwrap().register_bind_group(
-                crate::render::registry::BindGroupId::ShadowCamera,
-                bind_group,
-            );
+            if let Ok(mut registry) = state.registry.write() {
+                registry.register_bind_group(
+                    crate::render::registry::BindGroupId::ShadowCamera,
+                    bind_group,
+                );
+            } else {
+                crate::log!(crate::LogKind::Error, "Failed to acquire registry write lock");
+            }
         }
     }
 
@@ -161,7 +182,10 @@ impl Render {
         let pass_registry = state.registry.clone();
 
         let collected_data = {
-            let registry = pass_registry.read().unwrap();
+            let Ok(registry) = pass_registry.read() else {
+                crate::log!(crate::LogKind::Error, "Failed to acquire registry read lock");
+                return None;
+            };
             let order = registry.graph().execution_order();
             
             let mut collected = Vec::new();
@@ -203,7 +227,10 @@ impl Gear for Render {
                 let Ok(state) = game.components.get_mut::<crate::render::RenderState>() else {
                     return;
                 };
-                let mut registry = state.registry.write().unwrap();
+                let Ok(mut registry) = state.registry.write() else {
+                    crate::log!(crate::LogKind::Error, "Failed to acquire registry write lock");
+                    return;
+                };
                 if let Err(e) = registry.validate() {
                     crate::log!(crate::LogKind::Error, "Invalid render graph: {}", e);
                 }

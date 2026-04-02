@@ -330,6 +330,10 @@ impl Gear for MyGame {
             scale: vec3(50.0, 1.0, 50.0),
         });
 
+        let Some(block) = self.block.as_ref() else {
+            return;
+        };
+
         Entity::new()
             .insert(PointLight {
                 color: [1.0, 1.0, 1.0],
@@ -341,7 +345,7 @@ impl Gear for MyGame {
                 rotation: Quaternion::one(),
                 scale: vec3(1.0, 1.0, 1.0),
             })
-            .insert(self.block.clone().unwrap());
+            .insert(block.clone());
 
         Entity::new()
             .insert(DirectionalLight {
@@ -357,7 +361,7 @@ impl Gear for MyGame {
                 }),
                 scale: vec3(1.0, 1.0, 1.0),
             })
-            .insert(self.block.clone().unwrap());
+            .insert(block.clone());
 
         Entity::new()
             .insert(SpotLight {
@@ -376,7 +380,7 @@ impl Gear for MyGame {
                 }),
                 scale: vec3(1.0, 1.0, 1.0),
             })
-            .insert(self.block.clone().unwrap());
+            .insert(block.clone());
 
         Entity::new()
             .insert(Transform {
@@ -388,7 +392,7 @@ impl Gear for MyGame {
                 }),
                 scale: vec3(1.0, 1.0, 1.0),
             })
-            .insert(self.block.clone().unwrap());
+            .insert(block.clone());
     }
 
     async fn update(&mut self, game: GameView) {

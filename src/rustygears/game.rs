@@ -178,7 +178,9 @@ impl Game {
         });
 
         if wait_for_setup {
-            setup_done_rx.recv().unwrap();
+            if setup_done_rx.recv().is_err() {
+                crate::log!(crate::LogKind::Error, "Failed to receive setup completion signal");
+            }
             while let Ok(cmd) = self.command_receiver.try_recv() {
                 cmd.apply(self);
             }

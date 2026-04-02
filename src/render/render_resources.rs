@@ -43,21 +43,31 @@ impl RenderResources {
         strategy: BufferStrategy,
     ) {
         let buffer = Buffer::new(device, size, usage, strategy, name);
-        self.buffers
-            .write()
-            .unwrap()
-            .insert(name.to_string(), buffer);
+        if let Ok(mut buffers) = self.buffers.write() {
+            buffers.insert(name.to_string(), buffer);
+        } else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire buffers write lock"
+            );
+        }
     }
 
     pub fn get_buffer(&self, name: &str) -> Option<Buffer> {
-        self.buffers.read().unwrap().get(name).cloned()
+        self.buffers.read().ok()?.get(name).cloned()
     }
 
     pub fn get_or_create_buffer<F>(&self, key: &str, create_fn: F) -> Buffer
     where
         F: FnOnce() -> Buffer,
     {
-        let mut buffers = self.buffers.write().unwrap();
+        let Ok(mut buffers) = self.buffers.write() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire buffers write lock"
+            );
+            return create_fn();
+        };
         buffers
             .entry(key.to_string())
             .or_insert_with(create_fn)
@@ -74,7 +84,13 @@ impl RenderResources {
     where
         F: FnOnce() -> Buffer,
     {
-        let mut buffers = self.buffers.write().unwrap();
+        let Ok(mut buffers) = self.buffers.write() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire buffers write lock"
+            );
+            return create_fn();
+        };
         let buffer = buffers.entry(key.to_string()).or_insert_with(create_fn);
         update_fn(buffer);
         buffer.clone()
@@ -84,7 +100,13 @@ impl RenderResources {
     where
         F: FnOnce(&mut Buffer),
     {
-        let mut buffers = self.buffers.write().unwrap();
+        let Ok(mut buffers) = self.buffers.write() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire buffers write lock"
+            );
+            return;
+        };
         if let Some(buffer) = buffers.get_mut(key) {
             update_fn(buffer);
         }
@@ -98,7 +120,10 @@ impl RenderResources {
     where
         L: 'static,
     {
-        let buffers = self.buffers.read().unwrap();
+        let Ok(buffers) = self.buffers.read() else {
+            crate::log!(crate::LogKind::Error, "Failed to acquire buffers read lock");
+            return None;
+        };
         let buffer = buffers.get(name)?;
         let resource = buffer.current().as_entire_binding();
 

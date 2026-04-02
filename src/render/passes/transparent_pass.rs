@@ -42,7 +42,13 @@ impl TransparentPass {
         config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
     ) {
-        if self.pipeline.read().unwrap().is_some() {
+        if self
+            .pipeline
+            .read()
+            .ok()
+            .map(|p| p.is_some())
+            .unwrap_or(false)
+        {
             return;
         }
 
@@ -117,7 +123,14 @@ impl TransparentPass {
                 cache: None,
             });
 
-        *self.pipeline.write().unwrap() = Some(pipeline);
+        if let Ok(mut pipeline_guard) = self.pipeline.write() {
+            *pipeline_guard = Some(pipeline);
+        } else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire pipeline write lock"
+            );
+        }
     }
 }
 
@@ -242,7 +255,13 @@ impl RenderPass for TransparentPass {
 
         self.ensure_pipeline(gpu, config, resources);
 
-        let pipeline_guard = self.pipeline.read().unwrap();
+        let Ok(pipeline_guard) = self.pipeline.read() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire pipeline read lock"
+            );
+            return;
+        };
         let pipeline = match pipeline_guard.as_ref() {
             Some(p) => p,
             None => return,

@@ -47,7 +47,13 @@ impl OpaquePass {
         config: &wgpu::SurfaceConfiguration,
         resources: &RenderResources,
     ) {
-        if self.pipeline.read().unwrap().is_some() {
+        if self
+            .pipeline
+            .read()
+            .ok()
+            .map(|p| p.is_some())
+            .unwrap_or(false)
+        {
             return;
         }
 
@@ -135,7 +141,15 @@ impl OpaquePass {
                 cache: None,
             });
 
-        *self.pipeline.write().unwrap() = Some(pipeline);
+        if let Ok(mut pipeline_guard) = self.pipeline.write() {
+            *pipeline_guard = Some(pipeline);
+        } else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire pipeline write lock"
+            );
+            return;
+        }
 
         let shadow_sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Shadow Sampler"),
@@ -149,7 +163,14 @@ impl OpaquePass {
             ..Default::default()
         });
 
-        *self.shadow_sampler.write().unwrap() = Some(shadow_sampler.clone());
+        if let Ok(mut shadow_sampler_guard) = self.shadow_sampler.write() {
+            *shadow_sampler_guard = Some(shadow_sampler.clone());
+        } else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire shadow_sampler write lock"
+            );
+        }
 
         let shadow_texture_layout = match resources
             .layouts
@@ -190,7 +211,14 @@ impl OpaquePass {
             ],
         });
 
-        *self.fallback_shadow_bind_group.write().unwrap() = Some(fallback_bind_group);
+        if let Ok(mut fallback_guard) = self.fallback_shadow_bind_group.write() {
+            *fallback_guard = Some(fallback_bind_group);
+        } else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire fallback_shadow_bind_group write lock"
+            );
+        }
     }
 }
 
@@ -313,35 +341,53 @@ impl RenderPass for OpaquePass {
     ) {
         self.ensure_pipeline(gpu, config, resources);
 
-        let pipeline_guard = self.pipeline.read().unwrap();
+        let Ok(pipeline_guard) = self.pipeline.read() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire pipeline read lock"
+            );
+            return;
+        };
         let pipeline = match pipeline_guard.as_ref() {
             Some(p) => p,
             None => return,
         };
 
-        let shadow_bind_group = match (
-            ctx.get_input(PassId::SHADOW),
-            self.shadow_sampler.read().unwrap().as_ref(),
-        ) {
+        let Ok(shadow_sampler_guard) = self.shadow_sampler.read() else {
+            crate::log!(
+                crate::LogKind::Error,
+                "Failed to acquire shadow_sampler read lock"
+            );
+            return;
+        };
+        let shadow_bind_group = match (ctx.get_input(PassId::SHADOW), shadow_sampler_guard.as_ref())
+        {
             (Some(shadow_view), Some(shadow_sampler)) => {
-                let layout = resources
+                match resources
                     .layouts
                     .get_opt::<crate::render::layout::ShadowTextureLayout>()
-                    .unwrap();
-                Some(gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Shadow Bind Group"),
-                    layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(shadow_view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(shadow_sampler),
-                        },
-                    ],
-                }))
+                {
+                    Some(layout) => {
+                        Some(gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                            label: Some("Shadow Bind Group"),
+                            layout,
+                            entries: &[
+                                wgpu::BindGroupEntry {
+                                    binding: 0,
+                                    resource: wgpu::BindingResource::TextureView(shadow_view),
+                                },
+                                wgpu::BindGroupEntry {
+                                    binding: 1,
+                                    resource: wgpu::BindingResource::Sampler(shadow_sampler),
+                                },
+                            ],
+                        }))
+                    }
+                    None => {
+                        crate::log!(crate::LogKind::Error, "Failed to get shadow texture layout");
+                        None
+                    }
+                }
             }
             _ => None,
         };
@@ -374,8 +420,10 @@ impl RenderPass for OpaquePass {
 
         if let Some(shadow_bg) = shadow_bind_group.as_ref() {
             render_pass.set_bind_group(3, Some(shadow_bg), &[]);
-        } else if let Some(fallback) = self.fallback_shadow_bind_group.read().unwrap().as_ref() {
-            render_pass.set_bind_group(3, Some(fallback), &[]);
+        } else if let Ok(fallback_guard) = self.fallback_shadow_bind_group.read() {
+            if let Some(fallback) = fallback_guard.as_ref() {
+                render_pass.set_bind_group(3, Some(fallback), &[]);
+            }
         }
 
         for model_data in &data.model_data {
